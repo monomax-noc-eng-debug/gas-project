@@ -1,0 +1,19 @@
+# --- System & Node ---
+node_modules/
+package.json
+package-lock.json
+.DS_Store
+Thumbs.db
+
+# --- Git & Config ---
+.git/
+.gitignore
+.claspignore
+README.md
+
+# --- Local Development (สำคัญมาก ห้ามเอาขึ้น) ---
+local-server.js
+
+# --- Output/Dist (เผื่ออนาคตมีการ Build) ---
+dist/
+build/

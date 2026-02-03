@@ -1,0 +1,210 @@
+<script>
+  /**
+   * JS_Dashboard.html
+   * Logic สำหรับหน้า Dashboard (Corrected Version)
+   */
+
+  // 🚩 แก้ไข 1: เปลี่ยน const เป็น var เพื่อป้องกัน Error "already declared"
+  var Dashboard = {
+    viewMode: "DAY", // 'DAY' | 'MONTH'
+    data: [],
+
+    init() {
+      // ตั้งค่าวันปัจจุบัน
+      const today = new Date().toISOString().split("T")[0];
+      const thisMonth = today.slice(0, 7);
+
+      const datePicker = document.getElementById("dash-date-picker");
+      const monthPicker = document.getElementById("dash-month-picker");
+
+      if (datePicker) datePicker.value = today;
+      if (monthPicker) monthPicker.value = thisMonth;
+
+      this.loadData();
+    },
+
+    switchMode(mode) {
+      this.viewMode = mode;
+      const datePicker = document.getElementById("dash-date-picker");
+      const monthPicker = document.getElementById("dash-month-picker");
+
+      if (mode === "DAY") {
+        datePicker.classList.remove("hidden");
+        monthPicker.classList.add("hidden");
+      } else {
+        datePicker.classList.add("hidden");
+        monthPicker.classList.remove("hidden");
+      }
+      this.loadData();
+    },
+
+    loadData(forceRefresh = false) {
+      const icon = document.getElementById("dash-refresh-icon");
+      const tbody = document.getElementById("match-table-body"); // แก้ ID ให้ตรงกับ Table Body จริง
+      const dateVal = document.getElementById("dash-date-picker").value;
+      const monthVal = document.getElementById("dash-month-picker").value;
+
+      const filterValue = this.viewMode === "DAY" ? dateVal : monthVal;
+
+      // UI Loading
+      if (icon) icon.classList.add("fa-spin");
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center py-20 text-base-content/40"><span class="loading loading-dots loading-lg"></span></td></tr>`;
+
+      // Call Backend
+      Server.call("getMatches", this.viewMode, filterValue)
+        .then((matches) => {
+          this.data = matches;
+          this.renderTable(matches);
+          if (forceRefresh) UIManager.showToast(`Data Refreshed`, "success");
+        })
+        .catch((err) => {
+          if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-error">Error: ${err.message}</td></tr>`;
+        })
+        .finally(() => {
+          if (icon) icon.classList.remove("fa-spin");
+        });
+    },
+
+    renderTable(matches) {
+      const tbody = document.getElementById("match-table-body");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+
+      if (matches.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center p-4 text-gray-500">No matches found</td></tr>';
+        return;
+      }
+
+      matches.forEach((match) => {
+        const tr = document.createElement("tr");
+        tr.id = `row-${match.id}`;
+        tr.className = "hover";
+
+        // Logic Disable ปุ่ม
+        const isBtnDisabled = (match.signalOwner === "NON" || !match.signalOwner) ? "disabled" : "";
+
+        // Dropdown Options
+        const signalOptions = ["NON", "HOST", "RECEIVE"]
+          .map(opt => `<option value="${opt}" ${match.signalOwner === opt ? "selected" : ""}>${opt}</option>`)
+          .join("");
+
+        tr.innerHTML = `
+        <td class="font-mono text-xs">${match.time}</td>
+        <td>
+          <div class="font-bold text-sm">${match.league}</div>
+          <div class="text-xs text-gray-500">${match.home} vs ${match.away}</div>
+        </td>
+        <td><span class="badge badge-ghost badge-sm">${match.channel}</span></td>
+        
+        <td>
+          <select class="select select-bordered select-xs w-full max-w-[100px]"
+            onchange="Dashboard.updateSignal('${match.id}', this.value)">
+            ${signalOptions}
+          </select>
+        </td>
+
+        <td>
+          <div class="join">
+            <button id="btn-in-${match.id}" class="btn btn-xs btn-success join-item text-white" 
+              ${isBtnDisabled} 
+              onclick="Dashboard.setStatus('${match.id}', 'IN')">IN</button>
+            
+            <button id="btn-out-${match.id}" class="btn btn-xs btn-error join-item text-white" 
+              ${isBtnDisabled} 
+              onclick="Dashboard.setStatus('${match.id}', 'OUT')">OUT</button>
+          </div>
+        </td>
+        
+        <td>
+          <span class="badge ${match.status === "LIVE" ? "badge-success" : match.status === "DONE" ? "badge-neutral" : "badge-ghost"} badge-sm">
+            ${match.status}
+          </span>
+        </td>
+      `;
+        tbody.appendChild(tr);
+      });
+    },
+
+    // ฟังก์ชันอัปเดต Signal Dropdown
+    updateSignal(matchId, newSignal) {
+      Server.call("toggleSignalOwner", matchId, newSignal)
+        .then(() => { /* Success */ })
+        .catch((err) => console.error(err));
+
+      // ควบคุมการเปิด/ปิดปุ่ม In/Out ทันที
+      const btnIn = document.getElementById(`btn-in-${matchId}`);
+      const btnOut = document.getElementById(`btn-out-${matchId}`);
+
+      if (newSignal === "NON") {
+        if (btnIn) btnIn.disabled = true;
+        if (btnOut) btnOut.disabled = true;
+      } else {
+        if (btnIn) btnIn.disabled = false;
+        if (btnOut) btnOut.disabled = false;
+      }
+    },
+
+    // 🚩 แก้ไข 2: เพิ่มฟังก์ชัน setStatus เพื่อรับคำสั่งจากปุ่มใน HTML
+    setStatus(id, type) {
+      // ค้นหาข้อมูล Match เพื่อเอาชื่อมาแสดงใน Modal
+      const match = this.data.find(m => m.id == id);
+      const matchName = match ? `${match.home} vs ${match.away}` : id;
+
+      // เรียก Modal ยืนยัน
+      this.confirmUpdateStatus(id, type, matchName);
+    },
+
+    // Modal ยืนยัน (ถ้าคุณมี UIManager.showModal แล้ว)
+    confirmUpdateStatus(id, type, matchName) {
+      const actionText = type === "IN" ? "Check-In" : "Check-Out";
+
+      // ตรวจสอบว่ามี UIManager.showModal หรือไม่ (เผื่อยังไม่ได้ทำ)
+      if (typeof UIManager.showModal !== 'function') {
+        // Fallback: ถ้าไม่มี Modal ให้บันทึกเลย
+        if (confirm(`Confirm ${actionText} for ${matchName}?`)) {
+          this.executeSetStatus(id, type, actionText);
+        }
+        return;
+      }
+
+      UIManager.showModal({
+        title: `Confirm ${actionText}`,
+        confirmText: `Yes, ${actionText}`,
+        body: `
+          <div class="text-center">
+            <div class="text-4xl mb-2 ${type === "IN" ? "text-success" : "text-error"}">
+              <i class="fas ${type === "IN" ? "fa-check-circle" : "fa-times-circle"}"></i>
+            </div>
+            <p>Are you sure you want to <b>${actionText}</b>?</p>
+            <p class="text-sm opacity-60 mt-2">${matchName}</p>
+          </div>
+        `,
+        onConfirm: () => this.executeSetStatus(id, type, actionText)
+      });
+    },
+
+    // ฟังก์ชันยิง Backend จริงๆ
+    executeSetStatus(id, type, actionText) {
+      UIManager.showLoading();
+      Server.call("setMatchStatus", id, type)
+        .then((res) => {
+          if (res.success) {
+            UIManager.showToast(`${actionText} Successful`, "success");
+            this.loadData(false);
+          } else {
+            UIManager.showToast(res.message, "error");
+          }
+        })
+        .catch((err) => UIManager.showToast(err.message, "error"))
+        .finally(() => UIManager.hideLoading());
+    }
+  };
+
+  // Auto Init (ใส่ไว้เผื่อ JS_App ไม่เรียก แต่ใส่ setTimeout กันชน)
+  document.addEventListener("DOMContentLoaded", () => {
+    if (typeof Dashboard !== 'undefined' && Dashboard.init) {
+      // เช็คว่า JS_App เรียกไปหรือยัง ถ้ายังค่อยเรียก
+      // แต่ปกติ JS_App จะจัดการให้
+    }
+  });
+</script>

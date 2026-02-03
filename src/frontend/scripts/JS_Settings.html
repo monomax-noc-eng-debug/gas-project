@@ -1,0 +1,115 @@
+<script>
+  /**
+   * JS_Settings.html
+   */
+  const SettingsPage = {
+
+    init() {
+      UIManager.showLoading();
+      Server.call('getUserSettings')
+        .then(settings => {
+          this.render(settings);
+        })
+        .catch(err => UIManager.showToast(err.message, 'error'))
+        .finally(() => UIManager.hideLoading());
+    },
+
+    render(data) {
+      // Profile
+      if (data.profile) {
+        document.getElementById('set-name').value = data.profile.name || '';
+        document.getElementById('set-role').innerText = 'Role: ' + (data.profile.role || 'User');
+        const initials = (data.profile.name || 'JS').substring(0, 2).toUpperCase();
+        document.getElementById('set-avatar-txt').innerText = initials;
+      }
+
+      // Theme
+      const isDark = data.theme === 'dark';
+      document.getElementById('set-theme-toggle').checked = isDark;
+      this.updateThemeLabel(isDark);
+      // Apply theme immediately
+      document.documentElement.setAttribute('data-theme', data.theme);
+
+      // Notifications
+      if (data.notifications) {
+        document.getElementById('set-notif-email').checked = data.notifications.email;
+        document.getElementById('set-notif-line').checked = data.notifications.line;
+      }
+    },
+
+    toggleTheme(isDark) {
+      this.updateThemeLabel(isDark);
+      const theme = isDark ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+    },
+
+    updateThemeLabel(isDark) {
+      document.getElementById('set-theme-label').innerText = isDark ? 'Dark Mode' : 'Light Mode';
+    },
+
+    save() {
+      const settings = {
+        theme: document.getElementById('set-theme-toggle').checked ? 'dark' : 'light',
+        notifications: {
+          email: document.getElementById('set-notif-email').checked,
+          line: document.getElementById('set-notif-line').checked
+        },
+        profile: {
+          name: document.getElementById('set-name').value,
+          role: 'Admin' // สมมติว่าแก้ไม่ได้
+        }
+      };
+
+      UIManager.showLoading();
+      Server.call('saveUserSettings', settings)
+        .then(res => {
+          if (res.success) {
+            UIManager.showToast('Settings saved successfully', 'success');
+            // อัปเดตชื่อใน Store (ถ้าจำเป็น)
+            if (typeof Store !== 'undefined' && Store.state) {
+              Store.state.settings = settings;
+              Store.state.currentUser.name = settings.profile.name;
+            }
+          } else {
+            UIManager.showToast('Save failed', 'error');
+          }
+        })
+        .catch(err => UIManager.showToast(err.message, 'error'))
+        .finally(() => UIManager.hideLoading());
+    }
+  };
+
+  /**
+   * ฟังก์ชันสำหรับปุ่ม Sync Calendar (System Management)
+   */
+  async function syncCalendarData() {
+    const btn = document.getElementById('btn-sync-cal');
+    const originalContent = btn.innerHTML;
+
+    // 1. เปลี่ยนสถานะปุ่มเป็น Loading
+    btn.disabled = true;
+    btn.innerHTML = `<span class="loading loading-spinner loading-xs"></span> Processing...`;
+
+    try {
+      // 2. เรียก Backend Function
+      await Server.call('runDailyAutoJob');
+
+      // 3. แจ้งเตือนสำเร็จ
+      UIManager.showToast('✅ Sync ข้อมูลตารางแข่งเรียบร้อยแล้ว!', 'success');
+
+    } catch (err) {
+      console.error(err);
+      UIManager.showToast('❌ เกิดข้อผิดพลาด: ' + err.message, 'error');
+    } finally {
+      // 4. คืนค่าปุ่ม
+      btn.disabled = false;
+      btn.innerHTML = originalContent;
+    }
+  }
+
+  // Auto Init
+  document.addEventListener('DOMContentLoaded', () => {
+    // โหลด Setting ตั้งแต่เปิดเว็บเลยก็ได้ เพื่อ Apply Theme
+    // (แต่ปกติ App.js จะเรียก Router ไปหน้า Dashboard ก่อน หน้า Settings จะ init เมื่อถูกกดเลือก)
+  });
+</script>

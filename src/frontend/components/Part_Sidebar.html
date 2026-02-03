@@ -1,49 +1,70 @@
-<div class="h-screen w-64 bg-slate-900 text-white flex flex-col shadow-xl z-20 transition-all duration-300">
-  <!-- Logo Section -->
-  <div class="h-16 flex items-center justify-center border-b border-slate-700 bg-slate-800">
-    <h1 class="text-xl font-bold tracking-wider text-blue-400">
-      <i class="fas fa-bolt mr-2 text-yellow-500"></i>GAS <span class="text-white">SPA</span>
-    </h1>
+<aside class="menu p-4 w-64 min-h-full bg-base-100 text-base-content border-r border-base-200">
+
+  <div class="flex items-center gap-3 px-2 mb-8 mt-2">
+    <div
+      class="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary to-secondary flex items-center justify-center text-white shadow-lg shadow-primary/30">
+      <i class="fas fa-bolt text-xl"></i>
+    </div>
+    <div>
+      <h1 class="font-bold text-xl tracking-tight">GAS App</h1>
+      <p class="text-xs opacity-60 font-medium">v2.0 Enterprise</p>
+    </div>
   </div>
 
-  <!-- Navigation -->
-  <nav class="flex-1 overflow-y-auto py-4">
-    <ul class="space-y-1 px-3">
+  <ul class="space-y-1">
+    <li>
+      <a onclick="Router.navigateTo('page-dashboard'); closeDrawerOnMobile()" class="active"
+        data-target="page-dashboard">
+        <i class="fas fa-th-large w-5 text-center"></i> Dashboard
+      </a>
+    </li>
+    <li>
+      <a onclick="Router.navigateTo('page-report'); closeDrawerOnMobile()" data-target="page-report">
+        <i class="fas fa-file-invoice w-5 text-center"></i> Reports
+      </a>
+    </li>
+    <li>
+      <a onclick="Router.navigateTo('page-email'); closeDrawerOnMobile()" data-target="page-email">
+        <i class="fas fa-envelope w-5 text-center"></i> Email Center
+      </a>
+    </li>
+    <li>
+      <a onclick="Router.navigateTo('page-history'); closeDrawerOnMobile()" data-target="page-history">
+        <i class="fas fa-history w-5 text-center"></i> History
+      </a>
+    </li>
+  </ul>
 
+  <div class="mt-auto pt-4 border-t border-base-200">
+    <ul class="space-y-1">
       <li>
-        <div
-          class="nav-item flex items-center px-4 py-3 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors group"
-          onclick="Router.navigateTo('page-dashboard')" data-target="page-dashboard">
-          <i class="fas fa-chart-line w-6 text-center text-slate-400 group-hover:text-blue-400 transition-colors"></i>
-          <span class="ml-3 font-medium text-slate-300 group-hover:text-white">Dashboard</span>
-        </div>
+        <a onclick="Router.navigateTo('page-settings'); closeDrawerOnMobile()" data-target="page-settings">
+          <i class="fas fa-cog w-5 text-center"></i> Settings
+        </a>
       </li>
-
-      <li>
-        <div
-          class="nav-item flex items-center px-4 py-3 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors group"
-          onclick="Router.navigateTo('page-report')" data-target="page-report">
-          <i class="fas fa-file-alt w-6 text-center text-slate-400 group-hover:text-blue-400 transition-colors"></i>
-          <span class="ml-3 font-medium text-slate-300 group-hover:text-white">Reports</span>
-        </div>
-      </li>
-
-      <!-- Divider -->
-      <li class="my-4 border-t border-slate-700"></li>
-
-      <li>
-        <div
-          class="flex items-center px-4 py-3 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors group text-slate-400 hover:text-red-400">
-          <i class="fas fa-sign-out-alt w-6 text-center"></i>
-          <span class="ml-3 font-medium">Logout</span>
-        </div>
-      </li>
-
     </ul>
-  </nav>
 
-  <!-- Footer -->
-  <div class="h-12 border-t border-slate-700 flex items-center justify-center bg-slate-800 text-xs text-slate-500">
-    v2.0.0 &copy; 2026
+    <div class="mt-4 p-3 bg-base-200/50 rounded-lg flex items-center gap-3 md:hidden">
+      <div class="avatar placeholder">
+        <div class="bg-neutral text-neutral-content rounded-full w-8">
+          <span class="text-xs">JS</span>
+        </div>
+      </div>
+      <div class="overflow-hidden">
+        <p class="text-sm font-bold truncate">Jane Smith</p>
+        <p class="text-xs opacity-60 truncate">jane@example.com</p>
+      </div>
+    </div>
   </div>
-</div>
+
+</aside>
+
+<script>
+  // ฟังก์ชันปิด Sidebar เมื่อกดเมนู (สำหรับมือถือ)
+  function closeDrawerOnMobile() {
+    const drawer = document.getElementById('my-drawer');
+    if (drawer && window.innerWidth < 1024) { // 1024px คือ breakpoint lg
+      drawer.checked = false;
+    }
+  }
+</script>

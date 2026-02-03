@@ -1,7 +1,7 @@
 <style>
-  /* CSS_Custom.html */
+  /* CSS_Custom.html - DaisyUI Version */
 
-  /* Scrollbar beautification */
+  /* Scrollbar (ถ้าชอบแบบเดิมก็เก็บไว้ได้) */
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -20,33 +20,14 @@
     background: #a8a8a8;
   }
 
-  /* Animations */
-  .fade-in {
-    animation: fadeIn 0.3s ease-in-out;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-
-    to {
-      opacity: 1;
-    }
-  }
-
   /* Utils */
-  [un-cloak] {
-    display: none !important;
-  }
-
   .page-section {
     width: 100%;
     height: 100%;
   }
 
-  .glass {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
+  /* DaisyUI Modal Overlay Fix (เผื่อไว้ถ้าอยากให้ background มืดลงอีก) */
+  .modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
   }
 </style>

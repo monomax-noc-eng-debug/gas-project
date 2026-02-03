@@ -1,32 +1,33 @@
 <script>
-  /**
-   * JS_App.html
-   * App Initialization
-   */
+/**
+ * JS_App.html
+ * จุดเริ่มต้นของ Application (Entry Point)
+ */
 
-  document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Initialize logic
-    console.log('App Initializing...');
+document.addEventListener('DOMContentLoaded', async () => {
+  
+  // 1. แสดง Loading
+  UIManager.showLoading();
 
-    // Default to Dashboard
+  try {
+    // 2. โหลดข้อมูลเริ่มต้น (เรียก Store ที่เราเพิ่งสร้าง)
+    await Store.init();
+
+    // 3. ตั้งค่า Router เริ่มต้น (ไปหน้า Dashboard)
     Router.navigateTo('page-dashboard');
 
-    // 2. Initial Data Fetch (if needed)
-    if (!Store.has('matches')) {
-      UIManager.showLoading();
-      try {
-        const matches = await Server.call('getMatches');
-        Store.set('matches', matches);
-
-        // Trigger a render for dashboard if that's where we are
-        if (typeof renderDashboardTable === 'function') {
-          renderDashboardTable(matches);
-        }
-      } catch (err) {
-        console.error('Failed to load initial data', err);
-      } finally {
-        UIManager.hideLoading();
-      }
+    // (Optional) โหลดข้อมูล Dashboard ทันที
+    if(typeof Dashboard !== 'undefined') {
+        Dashboard.loadData();
     }
-  });
+
+  } catch (err) {
+    console.error('App Start Error:', err);
+    UIManager.showToast('Failed to load application', 'error');
+  } finally {
+    // 4. ปิด Loading
+    UIManager.hideLoading();
+  }
+
+});
 </script>

@@ -1,47 +1,28 @@
-<!-- Global Modal Overlay -->
-<div id="core-modal"
-  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm hidden fade-in">
+<dialog id="core-modal" class="modal">
+  <div class="modal-box w-11/12 max-w-lg p-0 bg-white">
 
-  <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg transform transition-all scale-100 p-0 overflow-hidden">
-
-    <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
-      <h3 id="core-modal-title" class="text-lg font-semibold text-gray-800">Modal Title</h3>
-      <button onclick="UIManager.closeModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
-        <i class="fas fa-times text-xl"></i>
-      </button>
+      <h3 id="core-modal-title" class="text-lg font-bold">Modal Title</h3>
+      <button onclick="UIManager.closeModal()" class="btn btn-sm btn-circle btn-ghost">✕</button>
     </div>
 
-    <!-- Body -->
     <div id="core-modal-body" class="p-6">
-      <!-- Dynamic Content -->
     </div>
 
-    <!-- Footer -->
-    <div class="flex items-center justify-end px-6 py-4 bg-gray-50 gap-3 border-t border-gray-100">
-      <button id="core-modal-cancel"
-        class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-200 transition-colors">
-        Cancel
-      </button>
-      <button id="core-modal-confirm"
-        class="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-md transition-colors">
-        Confirm
-      </button>
+    <div class="modal-action px-6 py-4 bg-gray-50 m-0 border-t border-gray-100">
+      <button id="core-modal-cancel" class="btn btn-ghost hover:bg-gray-200">Cancel</button>
+      <button id="core-modal-confirm" class="btn btn-primary text-white">Confirm</button>
     </div>
-
   </div>
+
+  <form method="dialog" class="modal-backdrop">
+    <button onclick="UIManager.closeModal()">close</button>
+  </form>
+</dialog>
+
+<div id="toast-container" class="toast toast-end z-50">
 </div>
 
-<!-- Global Toasts Container -->
-<div id="toast-container"
-  class="fixed bottom-4 right-4 z-50 flex flex-col items-end pointer-events-none *:pointer-events-auto">
-  <!-- Toasts injected here -->
-</div>
-
-<!-- Global Loader -->
 <div id="global-loader" class="fixed inset-0 z-[60] flex items-center justify-center bg-white/80 hidden">
-  <div class="flex flex-col items-center">
-    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-    <p class="mt-4 text-blue-600 font-semibold animate-pulse">Loading...</p>
-  </div>
+  <span class="loading loading-spinner loading-lg text-primary"></span>
 </div>

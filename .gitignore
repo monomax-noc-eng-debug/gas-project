@@ -1,0 +1,16 @@
+# --- Dependencies ---
+node_modules/
+
+# --- System Files ---
+.DS_Store
+Thumbs.db
+*.log
+
+# --- Local Environment & Secrets ---
+# ป้องกันการหลุดของ Credential ส่วนตัว
+.clasp.json
+creds.json
+
+# --- Build Output ---
+dist/
+build/

@@ -1,0 +1,93 @@
+<div id="page-settings" class="page-section hidden p-6 fade-in h-full flex flex-col max-w-4xl mx-auto w-full">
+
+  <div class="mb-6">
+    <h2 class="text-2xl font-bold text-base-content">Settings</h2>
+    <p class="text-base-content/60 text-sm">Manage your preferences and system config</p>
+  </div>
+
+  <div class="grid grid-cols-1 gap-6">
+
+    <div class="card bg-base-100 shadow-xl border border-base-200">
+      <div class="card-body">
+        <h3 class="card-title text-lg border-b pb-2 mb-4">
+          <i class="fas fa-user-circle mr-2 text-primary"></i> Profile
+        </h3>
+
+        <div class="flex items-center gap-6">
+          <div class="avatar placeholder">
+            <div class="bg-neutral text-neutral-content rounded-full w-20">
+              <span class="text-3xl font-bold" id="set-avatar-txt">JS</span>
+            </div>
+          </div>
+          <div class="flex-1 space-y-3">
+            <div class="form-control w-full max-w-xs">
+              <label class="label"><span class="label-text">Display Name</span></label>
+              <input type="text" id="set-name" class="input input-bordered w-full" />
+            </div>
+            <div class="badge badge-ghost" id="set-role">Role: Loading...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-xl border border-base-200">
+      <div class="card-body">
+        <h3 class="card-title text-lg border-b pb-2 mb-4">
+          <i class="fas fa-sliders-h mr-2 text-secondary"></i> Preferences
+        </h3>
+
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-4">
+            <span class="label-text font-bold w-32">Theme Mode</span>
+            <input type="checkbox" class="toggle toggle-primary" id="set-theme-toggle"
+              onchange="SettingsPage.toggleTheme(this.checked)" />
+            <span class="label-text" id="set-theme-label">Light</span>
+          </label>
+        </div>
+
+        <div class="divider"></div>
+        <h4 class="font-bold text-sm mb-2 text-base-content/70">Notifications</h4>
+
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-4">
+            <input type="checkbox" class="checkbox checkbox-sm checkbox-success" id="set-notif-email" />
+            <span class="label-text">Email Alerts (Summary & Incidents)</span>
+          </label>
+        </div>
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-4">
+            <input type="checkbox" class="checkbox checkbox-sm checkbox-success" id="set-notif-line" />
+            <span class="label-text">LINE Notify (Real-time)</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-xl border border-base-200">
+      <div class="card-body">
+        <h3 class="card-title text-lg border-b pb-2 mb-4 text-accent">
+          <i class="fas fa-server mr-2"></i> System Management
+        </h3>
+
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div>
+            <div class="font-bold">Sync Calendar Data</div>
+            <div class="text-xs text-base-content/60">ดึงข้อมูลตารางแข่งล่าสุดจาก Google Calendar ลงฐานข้อมูล
+              (DB_Matches)</div>
+          </div>
+          <button class="btn btn-accent btn-sm sm:btn-md" onclick="syncCalendarData()" id="btn-sync-cal">
+            <i class="fas fa-sync"></i> Sync Now
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-3 mt-4">
+      <button class="btn btn-ghost" onclick="SettingsPage.init()">Reset</button>
+      <button class="btn btn-primary px-8" onclick="SettingsPage.save()">
+        <i class="fas fa-save"></i> Save Changes
+      </button>
+    </div>
+
+  </div>
+</div>

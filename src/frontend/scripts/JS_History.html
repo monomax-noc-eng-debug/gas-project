@@ -1,0 +1,49 @@
+<script>
+  const HistoryPage = {
+    init() {
+      // Add listener to load data when tab is shown
+      const btn = document.querySelector('[data-target="page-history"]');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          if (document.getElementById('historyTableBody').children[0]?.innerText === 'Loading...') {
+            this.load();
+          }
+        });
+      }
+    },
+
+    load() {
+      const tbody = document.getElementById('historyTableBody');
+      tbody.innerHTML = '<tr><td colspan="3" class="text-center py-10"><span class="loading loading-dots loading-lg"></span></td></tr>';
+
+      Server.call('getShiftHistory')
+        .then(data => {
+          tbody.innerHTML = '';
+          if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center py-10 opacity-50">ไม่พบประวัติ</td></tr>';
+            return;
+          }
+          data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.className = "hover";
+            tr.innerHTML = `
+            <td class="font-bold font-mono text-xs">${row.date}</td>
+            <td>${row.name}</td>
+            <td class="text-center">
+                <a href="${row.pdfUrl}" target="_blank" class="btn btn-xs btn-ghost text-error">
+                   <i class="fas fa-file-pdf"></i> PDF
+                </a>
+            </td>`;
+            tbody.appendChild(tr);
+          });
+        })
+        .catch(err => {
+          tbody.innerHTML = `<tr><td colspan="3" class="text-center text-error py-4">${err.message}</td></tr>`;
+        });
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    HistoryPage.init();
+  });
+</script>

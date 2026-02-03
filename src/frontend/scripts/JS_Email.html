@@ -1,0 +1,143 @@
+<script>
+  /**
+   * JS_Email.html
+   * Handle Email Composer & Preview Logic
+   */
+  const EmailPage = {
+    previewTimeout: null,
+
+    init() {
+      this.loadTemplates();
+    },
+
+    // 1. โหลดรายชื่อ Template
+    loadTemplates() {
+      const select = document.getElementById('email-template');
+
+      // เรียก Backend
+      Server.call('getEmailTemplates')
+        .then(templates => {
+          let html = '<option disabled selected value="">Select a template...</option>';
+          templates.forEach(t => {
+            html += `<option value="${t.id}">${t.name}</option>`;
+          });
+          select.innerHTML = html;
+
+          // ถ้ามี Template ให้เลือกตัวแรกอัตโนมัติเพื่อความสะดวก
+          if (templates.length > 0) {
+            select.value = templates[0].id;
+            this.updatePreview();
+          }
+        })
+        .catch(err => UIManager.showToast("Error loading templates: " + err.message, 'error'));
+    },
+
+    // 2. Debounce: รอให้พิมพ์หยุด 1 วินาทีค่อยโหลด Preview (ลดการเรียก Server รัวๆ)
+    debouncePreview() {
+      if (this.previewTimeout) clearTimeout(this.previewTimeout);
+      this.previewTimeout = setTimeout(() => this.updatePreview(), 1000);
+    },
+
+    // 3. อัปเดตหน้า Preview
+    updatePreview() {
+      const templateId = document.getElementById('email-template').value;
+      const note = document.getElementById('email-note').value;
+
+      if (!templateId) return;
+
+      const loader = document.getElementById('preview-loader');
+      const content = document.getElementById('preview-content');
+      const subject = document.getElementById('preview-subject');
+
+      // Show Loader
+      loader.classList.remove('hidden');
+
+      Server.call('getEmailPreview', templateId, note)
+        .then(res => {
+          subject.innerText = res.subject;
+          content.innerHTML = res.body;
+        })
+        .catch(err => {
+          content.innerHTML = `<p class="text-error">Error loading preview: ${err.message}</p>`;
+        })
+        .finally(() => {
+          loader.classList.add('hidden');
+        });
+    },
+
+    // 4. สั่งสร้าง Draft (Compose)
+    createDraft() {
+      const templateId = document.getElementById('email-template').value;
+      const to = document.getElementById('email-to').value;
+      const cc = document.getElementById('email-cc').value;
+      const note = document.getElementById('email-note').value;
+
+      // Validate
+      if (!templateId) return UIManager.showToast("Please select a template", "warning");
+      if (!to) return UIManager.showToast("Recipient (To) is required", "warning");
+
+      // Show Confirmation Modal
+      UIManager.showModal({
+        title: "Confirm Draft Creation",
+        body: `
+        <div class="text-center">
+          <div class="text-primary text-4xl mb-2"><i class="fas fa-file-signature"></i></div>
+          <p class="font-bold text-lg">Create Draft Email?</p>
+          <p class="text-sm opacity-70 mt-1">
+            This will create a draft in your Gmail.<br>
+            It will <b>NOT</b> be sent immediately.
+          </p>
+          <div class="bg-base-200 p-2 rounded mt-3 text-sm text-left">
+            <b>To:</b> ${to}<br>
+            <b>Template:</b> ${templateId}
+          </div>
+        </div>
+      `,
+        confirmText: "Yes, Create Draft",
+        onConfirm: () => {
+          UIManager.showLoading();
+
+          // เรียก Backend เพื่อสร้าง Draft
+          Server.call('createDraftEmail', templateId, to, cc, note)
+            .then(res => {
+              if (res.success) {
+                // สำเร็จ! แสดง Modal ให้ไปเปิด Gmail
+                UIManager.showModal({
+                  title: "Draft Created Successfully! 🎉",
+                  showCancel: false,
+                  confirmText: "Open Gmail Drafts",
+                  body: `
+                  <div class="text-center">
+                    <i class="fas fa-envelope-open-text text-success text-5xl mb-4"></i>
+                    <p class="text-lg">Your email draft is ready.</p>
+                    <p class="text-sm opacity-60">Please review and click 'Send' in Gmail.</p>
+                  </div>
+                `,
+                  onConfirm: () => {
+                    window.open('https://mail.google.com/mail/u/0/#drafts', '_blank');
+                  }
+                });
+              } else {
+                UIManager.showToast(res.message, "error");
+              }
+            })
+            .catch(err => UIManager.showToast(err.message, "error"))
+            .finally(() => UIManager.hideLoading());
+        }
+      });
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // เริ่มทำงานเมื่อกด Tab Email (Lazy Load)
+    const tabBtn = document.querySelector('[data-target="page-email"]');
+    if (tabBtn) {
+      tabBtn.addEventListener('click', () => {
+        // ถ้ายังไม่มีข้อมูลใน Dropdown ให้โหลดใหม่
+        if (document.getElementById('email-template').children.length <= 1) {
+          EmailPage.init();
+        }
+      });
+    }
+  });
+</script>
