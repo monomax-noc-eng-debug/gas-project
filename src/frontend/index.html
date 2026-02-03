@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GAS SPA Application</title>
+
+  <style>
+    [un-cloak] {
+      display: none;
+    }
+  </style>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
+    rel="stylesheet">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime"></script>
+  <script>
+    window.__unocss = {
+      theme: {
+        fontFamily: {
+          sans: 'Sarabun, sans-serif',
+        },
+        colors: {
+          brand: {
+            50: '#ecfdf5',
+            100: '#d1fae5',
+            500: '#10b981',
+            600: '#059669',
+            900: '#064e3b',
+          }
+        }
+      },
+      shortcuts: {
+        'btn-primary': 'bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors',
+      }
+    }
+  </script>
+
+  <?!= include('frontend/styles/CSS_Custom'); ?>
+</head>
+
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden" un-cloak>
+
+  <?!= include('frontend/components/Part_Sidebar'); ?>
+
+  <div class="flex-1 flex flex-col h-full relative overflow-hidden">
+
+    <?!= include('frontend/components/Part_Navbar'); ?>
+
+    <main class="flex-1 overflow-y-auto relative scroll-smooth p-6">
+
+      <?!= include('frontend/pages/Page_Dashboard'); ?>
+      <?!= include('frontend/pages/Page_Report'); ?>
+
+    </main>
+  </div>
+
+  <?!= include('frontend/components/Part_Modal_Core'); ?>
+
+  <?!= include('frontend/scripts/JS_Core'); ?>
+
+  <?!= include('frontend/scripts/JS_App'); ?>
+
+</body>
+
+</html>

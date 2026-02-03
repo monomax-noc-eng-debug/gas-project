@@ -1,0 +1,192 @@
+<script>
+/**
+ * JS_Core.html
+ * Contains core systems: Server, Router, Store, UIManager
+ */
+
+// --- SERVER ---
+class Server {
+  static call(funcName, ...args) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler((response) => {
+          try {
+            // Attempt to parse JSON if it looks like JSON
+            if (typeof response === 'string' && (response.startsWith('{') || response.startsWith('['))) {
+               resolve(JSON.parse(response));
+            } else {
+               resolve(response);
+            }
+          } catch (e) {
+            resolve(response);
+          }
+        })
+        .withFailureHandler((error) => {
+          console.error('Server Error:', error);
+          UIManager.showToast('Server Error: ' + error.message, 'error');
+          reject(error);
+        })
+        [funcName](...args);
+    });
+  }
+}
+
+// --- STORE ---
+class Store {
+  static _data = {};
+
+  static set(key, value) {
+    this._data[key] = value;
+  }
+
+  static get(key) {
+    return this._data[key];
+  }
+  
+  static has(key) {
+    return this._data.hasOwnProperty(key);
+  }
+}
+
+// --- ROUTER ---
+class Router {
+  static routes = {
+    'page-dashboard': 'Page_Dashboard',
+    'page-report': 'Page_Report'
+  };
+  
+  static activePageId = null;
+
+  static navigateTo(pageId) {
+    if (!this.routes[pageId]) {
+      console.warn(`Route not found: ${pageId}`);
+      return;
+    }
+
+    // Hide all pages
+    document.querySelectorAll('.page-section').forEach(el => {
+      el.classList.add('hidden');
+    });
+
+    // Show target page
+    const targetEl = document.getElementById(pageId);
+    if (targetEl) {
+      targetEl.classList.remove('hidden');
+      this.activePageId = pageId;
+      console.log(`Navigated to: ${pageId}`);
+    } else {
+      console.error(`Page element not found: ${pageId}`);
+    }
+
+    // Update active menu item (assuming simple ID matching for demo)
+    document.querySelectorAll('.nav-item').forEach(el => {
+      el.classList.remove('text-blue-600', 'font-bold', 'bg-blue-50');
+      if (el.dataset.target === pageId) {
+        el.classList.add('text-blue-600', 'font-bold', 'bg-blue-50');
+      }
+    });
+  }
+}
+
+// --- UI MANAGER ---
+class UIManager {
+  
+  static showLoading() {
+    const loader = document.getElementById('global-loader');
+    if (loader) loader.classList.remove('hidden');
+  }
+
+  static hideLoading() {
+    const loader = document.getElementById('global-loader');
+    if (loader) loader.classList.add('hidden');
+  }
+
+  /**
+   * showModal
+   * @param {Object} options
+   * @param {string} options.title - Modal Title
+   * @param {string|HTMLElement} options.body - Modal Body Content
+   * @param {Function} [options.onConfirm] - Confirm button callback
+   * @param {string} [options.confirmText='Confirm'] 
+   * @param {boolean} [options.showCancel=true]
+   */
+  static showModal({ title, body, onConfirm, confirmText = 'Confirm', showCancel = true }) {
+    const modalEl = document.getElementById('core-modal');
+    const titleEl = document.getElementById('core-modal-title');
+    const bodyEl = document.getElementById('core-modal-body');
+    const confirmBtn = document.getElementById('core-modal-confirm');
+    const cancelBtn = document.getElementById('core-modal-cancel');
+    
+    if (!modalEl) return;
+
+    // Set Text
+    if (titleEl) titleEl.textContent = title;
+    
+    // Set Body
+    if (bodyEl) {
+      bodyEl.innerHTML = '';
+      if (typeof body === 'string') {
+        bodyEl.innerHTML = body;
+      } else if (body instanceof HTMLElement) {
+        bodyEl.appendChild(body);
+      }
+    }
+
+    // Setup Buttons
+    if (confirmBtn) {
+      confirmBtn.textContent = confirmText;
+      // Remove old listeners to prevent stacking
+      const newConfirmBtn = confirmBtn.cloneNode(true);
+      confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+      
+      newConfirmBtn.onclick = () => {
+        if (onConfirm) onConfirm();
+        this.closeModal();
+      };
+    }
+    
+    if (cancelBtn) {
+        if (!showCancel) {
+            cancelBtn.classList.add('hidden');
+        } else {
+            cancelBtn.classList.remove('hidden');
+            cancelBtn.onclick = () => this.closeModal();
+        }
+    }
+
+    // Show Modal
+    modalEl.classList.remove('hidden');
+    // Simple z-index handling logic: Modals are high up by default in CSS
+  }
+
+  static closeModal() {
+    const modalEl = document.getElementById('core-modal');
+    if (modalEl) modalEl.classList.add('hidden');
+  }
+
+  static showToast(message, type = 'info') {
+    // Create toast element dynamically
+    const toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) return;
+
+    const toast = document.createElement('div');
+    const bgClass = type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-green-500' : 'bg-gray-800';
+    
+    toast.className = `p-4 mb-3 rounded shadow-lg text-white transition-opacity duration-300 opacity-0 transform translate-y-2 ${bgClass}`;
+    toast.textContent = message;
+
+    toastContainer.appendChild(toast);
+
+    // Animate in
+    requestAnimationFrame(() => {
+        toast.classList.remove('opacity-0', 'translate-y-2');
+    });
+
+    // Remove after 3s
+    setTimeout(() => {
+        toast.classList.add('opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+}
+</script>

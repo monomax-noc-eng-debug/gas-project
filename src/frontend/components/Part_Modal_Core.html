@@ -1,0 +1,47 @@
+<!-- Global Modal Overlay -->
+<div id="core-modal"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm hidden fade-in">
+
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg transform transition-all scale-100 p-0 overflow-hidden">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+      <h3 id="core-modal-title" class="text-lg font-semibold text-gray-800">Modal Title</h3>
+      <button onclick="UIManager.closeModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <i class="fas fa-times text-xl"></i>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div id="core-modal-body" class="p-6">
+      <!-- Dynamic Content -->
+    </div>
+
+    <!-- Footer -->
+    <div class="flex items-center justify-end px-6 py-4 bg-gray-50 gap-3 border-t border-gray-100">
+      <button id="core-modal-cancel"
+        class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-200 transition-colors">
+        Cancel
+      </button>
+      <button id="core-modal-confirm"
+        class="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-md transition-colors">
+        Confirm
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Global Toasts Container -->
+<div id="toast-container"
+  class="fixed bottom-4 right-4 z-50 flex flex-col items-end pointer-events-none *:pointer-events-auto">
+  <!-- Toasts injected here -->
+</div>
+
+<!-- Global Loader -->
+<div id="global-loader" class="fixed inset-0 z-[60] flex items-center justify-center bg-white/80 hidden">
+  <div class="flex flex-col items-center">
+    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    <p class="mt-4 text-blue-600 font-semibold animate-pulse">Loading...</p>
+  </div>
+</div>

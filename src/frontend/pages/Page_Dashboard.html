@@ -1,0 +1,141 @@
+<div id="page-dashboard" class="page-section hidden p-8 fade-in">
+
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h2 class="text-3xl font-bold text-slate-800">Dashboard</h2>
+      <p class="text-slate-500 mt-1">Overview of current match activities</p>
+    </div>
+
+    <button onclick="UIManager.showModal({ title: 'New Match', body: 'Placeholder for form', confirmText: 'Create' })"
+      class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg shadow-lg hover:shadow-xl transition-all flex items-center">
+      <i class="fas fa-plus mr-2"></i> New Match
+    </button>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center">
+      <div class="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-xl mr-4">
+        <i class="fas fa-calendar-check"></i>
+      </div>
+      <div>
+        <p class="text-sm text-slate-500 font-medium">Total Matches</p>
+        <h3 class="text-2xl font-bold text-slate-800">24</h3>
+      </div>
+    </div>
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center">
+      <div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-green-600 text-xl mr-4">
+        <i class="fas fa-check-circle"></i>
+      </div>
+      <div>
+        <p class="text-sm text-slate-500 font-medium">Completed</p>
+        <h3 class="text-2xl font-bold text-slate-800">18</h3>
+      </div>
+    </div>
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center">
+      <div class="w-12 h-12 rounded-full bg-yellow-50 flex items-center justify-center text-yellow-600 text-xl mr-4">
+        <i class="fas fa-clock"></i>
+      </div>
+      <div>
+        <p class="text-sm text-slate-500 font-medium">Pending</p>
+        <h3 class="text-2xl font-bold text-slate-800">6</h3>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data Table -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+      <h3 class="font-bold text-slate-700">Recent Matches</h3>
+      <button onclick="refreshDashboard()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+        <i class="fas fa-sync-alt mr-1"></i> Refresh
+      </button>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-slate-50 text-slate-600 text-sm uppercase tracking-wider">
+            <th class="p-4 font-semibold border-b border-slate-200">ID</th>
+            <th class="p-4 font-semibold border-b border-slate-200">Date</th>
+            <th class="p-4 font-semibold border-b border-slate-200">Team A</th>
+            <th class="p-4 font-semibold border-b border-slate-200">Team B</th>
+            <th class="p-4 font-semibold border-b border-slate-200">Status</th>
+            <th class="p-4 font-semibold border-b border-slate-200 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="dashboard-table-body" class="text-sm text-slate-700 divide-y divide-slate-100">
+          <!-- Populated by JS -->
+          <tr>
+            <td colspan="6" class="p-8 text-center text-slate-400 italic">Loading data...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="p-4 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500">
+      <span>Showing 1-10 of 24</span>
+      <div class="flex space-x-2">
+        <button class="px-3 py-1 border rounded hover:bg-slate-50 disabled:opacity-50">Prev</button>
+        <button class="px-3 py-1 border rounded hover:bg-slate-50">Next</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  /**
+   * Renders the dashboard table
+   * @param {Array} matches 
+   */
+  function renderDashboardTable(matches) {
+    const tbody = document.getElementById('dashboard-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (!matches || matches.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-500">No matches found.</td></tr>';
+      return;
+    }
+
+    matches.forEach(match => {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-blue-50/50 transition-colors group';
+
+      let statusColor = 'bg-gray-100 text-gray-600';
+      if (match.status === 'Completed') statusColor = 'bg-green-100 text-green-700';
+      if (match.status === 'In Progress') statusColor = 'bg-blue-100 text-blue-700';
+      if (match.status === 'Pending') statusColor = 'bg-yellow-100 text-yellow-700';
+
+      tr.innerHTML = `
+            <td class="p-4 font-medium text-slate-900">#${match.id}</td>
+            <td class="p-4">${match.date}</td>
+            <td class="p-4 font-semibold text-slate-800">${match.teamA}</td>
+            <td class="p-4 font-semibold text-slate-800">${match.teamB}</td>
+            <td class="p-4">
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold ${statusColor}">${match.status}</span>
+            </td>
+            <td class="p-4 text-right">
+                <button class="text-slate-400 hover:text-blue-600 transition-colors p-1" title="Edit">
+                    <i class="fas fa-edit"></i>
+                </button>
+            </td>
+        `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function refreshDashboard() {
+    UIManager.showLoading();
+    Server.call('getMatches')
+      .then(data => {
+        Store.set('matches', data);
+        renderDashboardTable(data);
+        UIManager.showToast('Data refreshed', 'success');
+      })
+      .catch(err => console.error(err))
+      .finally(() => UIManager.hideLoading());
+  }
+</script>

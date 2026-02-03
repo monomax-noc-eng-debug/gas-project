@@ -1,0 +1,35 @@
+<div class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm z-10">
+
+  <!-- Left: Breadcrumb or Title -->
+  <div class="flex items-center">
+    <!-- Mobile Toggle (Hidden on Desktop) -->
+    <button class="mr-4 text-slate-500 hover:text-blue-600 md:hidden">
+      <i class="fas fa-bars text-xl"></i>
+    </button>
+
+    <h2 class="text-lg font-semibold text-slate-700" id="header-title">Overview</h2>
+  </div>
+
+  <!-- Right: User/Actions -->
+  <div class="flex items-center space-x-4">
+
+    <button
+      class="w-9 h-9 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors relative"
+      onclick="UIManager.showToast('No new notifications', 'info')">
+      <i class="fas fa-bell"></i>
+      <span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
+    </button>
+
+    <div class="flex items-center pl-4 border-l border-gray-200">
+      <div
+        class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold border-2 border-white shadow-sm">
+        JS
+      </div>
+      <div class="ml-3 hidden sm:block">
+        <p class="text-sm font-medium text-slate-700">Jane Smith</p>
+        <p class="text-xs text-slate-400">Admin</p>
+      </div>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,32 @@
+<script>
+  /**
+   * JS_App.html
+   * App Initialization
+   */
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Initialize logic
+    console.log('App Initializing...');
+
+    // Default to Dashboard
+    Router.navigateTo('page-dashboard');
+
+    // 2. Initial Data Fetch (if needed)
+    if (!Store.has('matches')) {
+      UIManager.showLoading();
+      try {
+        const matches = await Server.call('getMatches');
+        Store.set('matches', matches);
+
+        // Trigger a render for dashboard if that's where we are
+        if (typeof renderDashboardTable === 'function') {
+          renderDashboardTable(matches);
+        }
+      } catch (err) {
+        console.error('Failed to load initial data', err);
+      } finally {
+        UIManager.hideLoading();
+      }
+    }
+  });
+</script>
