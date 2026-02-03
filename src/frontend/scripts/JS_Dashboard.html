@@ -1,39 +1,39 @@
 <script>
   /**
    * JS_Dashboard.html
-   * Logic สำหรับหน้า Dashboard (ฉบับแก้ไข Date & Syntax Error)
+   * Logic สำหรับหน้า Dashboard (Safe Syntax Version)
    */
   var Dashboard = {
-    viewMode: "DAY", 
+    viewMode: "DAY",
     data: [],
     currentUpload: null,
 
-    init() {
-      // ✅ แก้ไข 1: ใช้วันที่แบบ Local Time (แก้ปัญหา Date ไม่ตรง)
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      
-      const today = `${year}-${month}-${day}`;     // YYYY-MM-DD
-      const thisMonth = `${year}-${month}`;        // YYYY-MM
+    init: function () {
+      var now = new Date();
+      var year = now.getFullYear();
+      var month = String(now.getMonth() + 1).padStart(2, '0');
+      var day = String(now.getDate()).padStart(2, '0');
 
-      const datePicker = document.getElementById("dash-date-picker");
-      const monthPicker = document.getElementById("dash-month-picker");
+      var today = year + '-' + month + '-' + day;
+      var thisMonth = year + '-' + month;
+
+      var datePicker = document.getElementById("dash-date-picker");
+      var monthPicker = document.getElementById("dash-month-picker");
 
       if (datePicker) datePicker.value = today;
       if (monthPicker) monthPicker.value = thisMonth;
 
       // เพิ่ม Event Listener สำหรับ Paste รูปภาพ
-      document.addEventListener('paste', (e) => this.handlePaste(e));
-      
+      var self = this;
+      document.addEventListener('paste', function (e) { self.handlePaste(e); });
+
       this.loadData();
     },
 
-    switchMode(mode) {
+    switchMode: function (mode) {
       this.viewMode = mode;
-      const datePicker = document.getElementById("dash-date-picker");
-      const monthPicker = document.getElementById("dash-month-picker");
+      var datePicker = document.getElementById("dash-date-picker");
+      var monthPicker = document.getElementById("dash-month-picker");
 
       if (mode === "DAY") {
         datePicker.classList.remove("hidden");
@@ -45,60 +45,60 @@
       this.loadData();
     },
 
-    loadData(forceRefresh = false) {
-      const icon = document.getElementById("dash-refresh-icon");
-      const tbody = document.getElementById("match-table-body");
-      const dateVal = document.getElementById("dash-date-picker").value;
-      const monthVal = document.getElementById("dash-month-picker").value;
-      const filterValue = this.viewMode === "DAY" ? dateVal : monthVal;
+    loadData: function (forceRefresh) {
+      var icon = document.getElementById("dash-refresh-icon");
+      var tbody = document.getElementById("match-table-body");
+      var dateVal = document.getElementById("dash-date-picker").value;
+      var monthVal = document.getElementById("dash-month-picker").value;
+      var filterValue = this.viewMode === "DAY" ? dateVal : monthVal;
 
       if (icon) icon.classList.add("fa-spin");
-      
-      // แสดง Loading เฉพาะตอนไม่มีข้อมูล หรือกด Refresh
+
       if (forceRefresh || !this.data.length) {
-         if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center py-20"><span class="loading loading-dots loading-lg"></span></td></tr>`;
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-20"><span class="loading loading-dots loading-lg"></span></td></tr>';
       }
 
+      var self = this;
       Server.call("getMatches", this.viewMode, filterValue)
-        .then((matches) => {
-          this.data = matches;
-          this.renderTable(matches);
-          if (forceRefresh) UIManager.showToast(`Updated`, "success");
+        .then(function (matches) {
+          self.data = matches;
+          self.renderTable(matches);
+          if (forceRefresh) UIManager.showToast("Updated", "success");
         })
-        .catch((err) => {
-          if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center py-10 text-error">Error: ${err.message}</td></tr>`;
+        .catch(function (err) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-10 text-error">Error: ' + err.message + '</td></tr>';
         })
-        .finally(() => {
+        .finally(function () {
           if (icon) icon.classList.remove("fa-spin");
         });
     },
 
-    // ฟังก์ชันอัปเดต Signal Dropdown (พร้อม Spinner)
-    updateSignal(id, val) {
-      const selectEl = document.getElementById(`signal-select-${id}`);
-      const containerEl = document.getElementById(`signal-container-${id}`);
-      
+    updateSignal: function (id, val) {
+      var selectEl = document.getElementById('signal-select-' + id);
+      var containerEl = document.getElementById('signal-container-' + id);
+
       if (selectEl) selectEl.disabled = true;
 
-      let spinner = document.createElement("span");
-      spinner.id = `spinner-${id}`;
-      spinner.className = "loading loading-spinner loading-xs text-primary absolute -right-6 top-1/2 transform -translate-y-1/2"; 
+      var spinner = document.createElement("span");
+      spinner.id = 'spinner-' + id;
+      spinner.className = "loading loading-spinner loading-xs text-primary absolute -right-6 top-1/2 transform -translate-y-1/2";
       if (containerEl) containerEl.appendChild(spinner);
 
+      var self = this;
       Server.call("toggleSignalOwner", id, val)
-        .then(() => {
-          this.loadData(false); // โหลดข้อมูลใหม่เพื่ออัปเดตสถานะปุ่ม
+        .then(function () {
+          self.loadData(false);
           UIManager.showToast("Saved", "success");
         })
-        .catch((err) => {
+        .catch(function (err) {
           if (selectEl) selectEl.disabled = false;
           if (containerEl && spinner) spinner.remove();
           UIManager.showToast("Update Failed: " + err.message, "error");
         });
     },
 
-    renderTable(matches) {
-      const tbody = document.getElementById("match-table-body");
+    renderTable: function (matches) {
+      var tbody = document.getElementById("match-table-body");
       if (!tbody) return;
       tbody.innerHTML = "";
 
@@ -107,212 +107,265 @@
         return;
       }
 
-      matches.forEach((match) => {
-        const tr = document.createElement("tr");
+      var self = this;
+      matches.forEach(function (match) {
+        var tr = document.createElement("tr");
         tr.className = "hover";
 
-        // --- Logic Signal Owner ---
-        const signalVal = match.signalOwner || "NON"; 
-        const options = [
+        var signalVal = match.signalOwner || "NON";
+
+        // สร้าง Options
+        var optionsHtml = "";
+        var opts = [
           { val: "NON", label: "ไม่มี" },
           { val: "HOST", label: "noc start" },
           { val: "RECEIVE", label: "cus start" }
-        ].map(opt => `<option value="${opt.val}" ${signalVal === opt.val ? "selected" : ""}>${opt.label}</option>`).join("");
+        ];
+        opts.forEach(function (opt) {
+          var selected = (signalVal === opt.val) ? "selected" : "";
+          optionsHtml += '<option value="' + opt.val + '" ' + selected + '>' + opt.label + '</option>';
+        });
 
-        const hasStart = !!match.start_img;
-        const hasStop = !!match.stop_img;
-        const isStartDone = hasStart || signalVal === "RECEIVE"; // cus start ถือว่า start แล้ว
-        const isComplete = isStartDone && hasStop; 
+        var hasStart = !!match.start_img;
+        var hasStop = !!match.stop_img;
+        var isStartDone = hasStart || signalVal === "RECEIVE";
+        var isComplete = isStartDone && hasStop;
 
-        // --- Logic ปิดปุ่ม ---
-        let disableStart = "";
+        var disableStart = "";
         if (signalVal === "NON" || hasStart || signalVal === "RECEIVE") {
-            disableStart = "disabled";
+          disableStart = "disabled";
         }
-        const disableStop = (signalVal === "NON" || hasStop) ? "disabled" : "";
-        const disableAction = isComplete ? "disabled" : ""; // ปิดปุ่มแก้ไข/ลบ เมื่อจบงาน
+        var disableStop = (signalVal === "NON" || hasStop) ? "disabled" : "";
+        var disableAction = isComplete ? "disabled" : "";
 
-        // --- สีปุ่ม ---
-        const btnStartClass = hasStart ? "btn-disabled bg-success/20 text-success" : "btn-success text-white";
-        const btnStopClass = hasStop ? "btn-disabled bg-error/20 text-error" : "btn-error text-white";
+        var btnStartClass = hasStart ? "btn-disabled bg-success/20 text-success" : "btn-success text-white";
+        var btnStopClass = hasStop ? "btn-disabled bg-error/20 text-error" : "btn-error text-white";
 
-        // --- Icon Status ---
-        let statusSymbol = '<span class="text-gray-300"><i class="fas fa-minus"></i></span>';
+        var statusSymbol = '<span class="text-gray-300"><i class="fas fa-minus"></i></span>';
         if (isComplete) {
-            statusSymbol = `<div class="tooltip" data-tip="Completed"><i class="fas fa-check-circle text-success text-xl"></i></div>`;
+          statusSymbol = '<div class="tooltip" data-tip="Completed"><i class="fas fa-check-circle text-success text-xl"></i></div>';
         } else if (isStartDone) {
-            statusSymbol = `<div class="tooltip" data-tip="On Air"><i class="fas fa-video text-error text-xl animate-pulse"></i></div>`;
+          statusSymbol = '<div class="tooltip" data-tip="On Air"><i class="fas fa-video text-error text-xl animate-pulse"></i></div>';
         } else if (hasStop) {
-             statusSymbol = `<div class="tooltip" data-tip="Stop Only"><i class="fas fa-stop-circle text-warning text-xl"></i></div>`;
+          statusSymbol = '<div class="tooltip" data-tip="Stop Only"><i class="fas fa-stop-circle text-warning text-xl"></i></div>';
         }
 
-        tr.innerHTML = `
-        <td class="font-mono text-xs">${match.time}</td>
-        <td>
-          <div class="font-bold text-sm">${match.league}</div>
-          <div class="text-xs text-gray-500">${match.home} vs ${match.away}</div>
-        </td>
-        <td><span class="badge badge-ghost badge-sm">${match.channel}</span></td>
-        
-        <td class="text-center">
-          <div id="signal-container-${match.id}" class="relative inline-block w-full max-w-[120px]">
-            <select id="signal-select-${match.id}" 
-              class="select select-bordered select-xs w-full"
-              onchange="Dashboard.updateSignal('${match.id}', this.value)">
-              ${options}
-            </select>
-          </div>
-        </td>
+        // ใช้ String Concatenation แทน Template Literal เพื่อความปลอดภัยสูงสุด
+        var html = '';
+        html += '<td class="font-mono text-xs">' + match.time + '</td>';
+        html += '<td>';
+        html += '<div class="font-bold text-sm">' + match.league + '</div>';
+        html += '<div class="text-xs text-gray-500">' + match.home + ' vs ' + match.away + '</div>';
+        html += '</td>';
+        html += '<td><span class="badge badge-ghost badge-sm">' + match.channel + '</span></td>';
 
-        <td class="text-center">
-          <button class="btn btn-xs ${btnStartClass} w-full" ${disableStart} 
-            onclick="Dashboard.openUploadModal('${match.id}', 'START')">
-            ${hasStart ? '<i class="fas fa-check"></i>' : 'Start'}
-          </button>
-        </td>
-        
-        <td class="text-center">
-          <button class="btn btn-xs ${btnStopClass} w-full" ${disableStop} 
-            onclick="Dashboard.openUploadModal('${match.id}', 'STOP')">
-            ${hasStop ? '<i class="fas fa-check"></i>' : 'Stop'}
-          </button>
-        </td>
-        
-        <td class="text-center">${statusSymbol}</td>
+        html += '<td class="text-center">';
+        html += '<div id="signal-container-' + match.id + '" class="relative inline-block w-full max-w-[120px]">';
+        html += '<select id="signal-select-' + match.id + '" class="select select-bordered select-xs w-full" onchange="Dashboard.updateSignal(\'' + match.id + '\', this.value)">';
+        html += optionsHtml;
+        html += '</select>';
+        html += '</div>';
+        html += '</td>';
 
-        <td class="text-center">
-          <div class="join">
-            <button class="btn btn-xs btn-ghost join-item text-warning" ${disableAction} onclick="Dashboard.editMatch('${match.id}')">
-              <i class="fas fa-edit"></i>
-            </button>
-            <button class="btn btn-xs btn-ghost join-item text-error" ${disableAction} onclick="Dashboard.deleteMatch('${match.id}')">
-              <i class="fas fa-trash-alt"></i>
-            </button>
-          </div>
-        </td>
-      `;
+        html += '<td class="text-center">';
+        html += '<button class="btn btn-xs ' + btnStartClass + ' w-full" ' + disableStart + ' onclick="Dashboard.openUploadModal(\'' + match.id + '\', \'START\')">';
+        html += (hasStart ? '<i class="fas fa-check"></i>' : 'Start');
+        html += '</button>';
+        html += '</td>';
+
+        html += '<td class="text-center">';
+        html += '<button class="btn btn-xs ' + btnStopClass + ' w-full" ' + disableStop + ' onclick="Dashboard.openUploadModal(\'' + match.id + '\', \'STOP\')">';
+        html += (hasStop ? '<i class="fas fa-check"></i>' : 'Stop');
+        html += '</button>';
+        html += '</td>';
+
+        html += '<td class="text-center">' + statusSymbol + '</td>';
+
+        html += '<td class="text-center">';
+        html += '<div class="join">';
+        html += '<button class="btn btn-xs btn-ghost join-item text-warning" ' + disableAction + ' onclick="Dashboard.editMatch(\'' + match.id + '\')"><i class="fas fa-edit"></i></button>';
+        html += '<button class="btn btn-xs btn-ghost join-item text-error" ' + disableAction + ' onclick="Dashboard.deleteMatch(\'' + match.id + '\')"><i class="fas fa-trash-alt"></i></button>';
+        html += '</div>';
+        html += '</td>';
+
+        tr.innerHTML = html;
         tbody.appendChild(tr);
       });
     },
 
-    // --- UPLOAD SYSTEM ---
-
-    openUploadModal(id, type) {
+    openUploadModal: function (id, type) {
       this.currentUpload = { matchId: id, type: type, file: null };
-      const bodyHtml = `
-        <div class="text-center space-y-4">
-          <p class="text-sm text-gray-500">คลิกเพื่อเลือกไฟล์ หรือ Paste (Ctrl+V) รูปภาพที่นี่</p>
-          <div id="upload-zone" onclick="document.getElementById('hidden-file-input').click()"
-               class="border-2 border-dashed border-base-300 rounded-lg p-6 cursor-pointer hover:bg-base-100 transition relative min-h-[150px] flex items-center justify-center">
-            <input type="file" id="hidden-file-input" class="hidden" accept="image/*" onchange="Dashboard.handleFileSelect(this)">
-            <div id="upload-placeholder" class="pointer-events-none">
-              <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
-              <p class="text-xs">Browse or Paste Image</p>
-            </div>
-            <img id="upload-preview" class="hidden max-h-48 rounded shadow-sm object-contain" />
-          </div>
-        </div>
-      `;
-      
-      // ✅ แก้ไข 2: ใช้ Backtick (`) ครอบ Title เพื่อแก้ Syntax Error 'เพิ่มรูปภาพ'
+
+      var bodyHtml = '';
+      bodyHtml += '<div class="text-center space-y-4">';
+      bodyHtml += '<p class="text-sm text-gray-500">คลิกเพื่อเลือกไฟล์ หรือ Paste (Ctrl+V) รูปภาพที่นี่</p>';
+      bodyHtml += '<div id="upload-zone" onclick="document.getElementById(\'hidden-file-input\').click()" class="border-2 border-dashed border-base-300 rounded-lg p-6 cursor-pointer hover:bg-base-100 transition relative min-h-[150px] flex items-center justify-center">';
+      bodyHtml += '<input type="file" id="hidden-file-input" class="hidden" accept="image/*" onchange="Dashboard.handleFileSelect(this)">';
+      bodyHtml += '<div id="upload-placeholder" class="pointer-events-none">';
+      bodyHtml += '<i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>';
+      bodyHtml += '<p class="text-xs">Browse or Paste Image</p>';
+      bodyHtml += '</div>';
+      bodyHtml += '<img id="upload-preview" class="hidden max-h-48 rounded shadow-sm object-contain" />';
+      bodyHtml += '</div>';
+      bodyHtml += '</div>';
+
+      // ✅ แก้ไข: ใช้ Single Quote และ Concatenation ป้องกัน Error 'Unexpected identifier'
+      var titleText = "เพิ่มรูปภาพ (" + (type === 'START' ? 'Start' : 'Stop') + ")";
+      var self = this;
+
       UIManager.showModal({
-        title: `เพิ่มรูปภาพ (${type === 'START' ? 'Start' : 'Stop'})`, 
+        title: titleText,
         body: bodyHtml,
         confirmText: 'ยืนยันอัปโหลด',
-        onConfirm: () => this.submitUpload()
+        manualClose: true, // สั่งเปิดค้างไว้
+        onConfirm: function () { self.submitUpload(); }
       });
     },
 
-    handleFileSelect(input) {
+    handleFileSelect: function (input) {
       if (input.files && input.files[0]) this.processFile(input.files[0]);
     },
 
-    handlePaste(e) {
-      // ทำงานเฉพาะตอน Modal เปิดอยู่
+    handlePaste: function (e) {
       if (!this.currentUpload) return;
-      
-      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-      for (let item of items) {
-        if (item.kind === 'file' && item.type.startsWith('image/')) {
-          this.processFile(item.getAsFile());
+      var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
+          this.processFile(items[i].getAsFile());
           break;
         }
       }
     },
 
-    processFile(file) {
+    processFile: function (file) {
       this.currentUpload.file = file;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = document.getElementById('upload-preview');
-        const ph = document.getElementById('upload-placeholder');
-        if (img && ph) { 
-            img.src = e.target.result; 
-            img.classList.remove('hidden'); 
-            ph.classList.add('hidden'); 
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var img = document.getElementById('upload-preview');
+        var ph = document.getElementById('upload-placeholder');
+        if (img && ph) {
+          img.src = e.target.result;
+          img.classList.remove('hidden');
+          ph.classList.add('hidden');
         }
       };
       reader.readAsDataURL(file);
     },
 
-    submitUpload() {
+    submitUpload: function () {
       if (!this.currentUpload || !this.currentUpload.file) {
         UIManager.showToast("กรุณาเลือกรูปภาพก่อนครับ", "warning");
         return;
       }
-      
-      // เปลี่ยนปุ่มเป็น Loading
-      const confirmBtn = document.querySelector('.modal-box .btn-primary');
-      if(confirmBtn) {
-          confirmBtn.innerHTML = '<span class="loading loading-spinner"></span> กำลังอัปโหลด...';
-          confirmBtn.disabled = true;
+
+      var modalBox = document.querySelector('.modal[open] .modal-box') || document.querySelector('.modal-box');
+      var confirmBtn = modalBox ? modalBox.querySelector('.btn-primary') : null;
+      var originalBtnText = confirmBtn ? confirmBtn.innerHTML : 'ยืนยันอัปโหลด';
+
+      // ✅ 1. แปลงร่างปุ่มเป็น Progress Bar (ใช้ String ปกติ)
+      if (confirmBtn) {
+        confirmBtn.style.position = 'relative';
+        confirmBtn.style.overflow = 'hidden';
+        confirmBtn.disabled = true;
+
+        var progressHtml = '';
+        progressHtml += '<div id="btn-progress-bar" style="position: absolute; top: 0; left: 0; bottom: 0; width: 0%; background-color: rgba(0,0,0,0.3); transition: width 0.2s linear;"></div>';
+        progressHtml += '<span id="btn-progress-text" style="position: relative; z-index: 1;">Uploading... 0%</span>';
+
+        confirmBtn.innerHTML = progressHtml;
       }
 
-      const { matchId, type, file } = this.currentUpload;
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const base64 = reader.result.split(',')[1];
-        Server.call("uploadMatchImage", matchId, type, base64, file.type)
-          .then((res) => {
+      // ✅ 2. จำลองตัวเลขวิ่ง (Simulate Progress)
+      var progress = 0;
+      var progressInterval = setInterval(function () {
+        if (progress < 90) {
+          progress += Math.floor(Math.random() * 5) + 1;
+          if (progress > 90) progress = 90;
+        }
+        if (confirmBtn) {
+          var bar = confirmBtn.querySelector('#btn-progress-bar');
+          var txt = confirmBtn.querySelector('#btn-progress-text');
+          if (bar) bar.style.width = progress + '%';
+          if (txt) txt.innerText = 'Uploading... ' + progress + '%';
+        }
+      }, 300);
+
+      // ✅ 3. ส่งข้อมูลไป Backend
+      var uploadData = this.currentUpload;
+      var reader = new FileReader();
+      reader.readAsDataURL(uploadData.file);
+
+      var self = this;
+      reader.onload = function () {
+        var base64 = reader.result.split(',')[1];
+
+        Server.call("uploadMatchImage", uploadData.matchId, uploadData.type, base64, uploadData.file.type)
+          .then(function (res) {
+            clearInterval(progressInterval); // หยุดตัวเลขวิ่ง
+
+            if (confirmBtn) {
+              var bar = confirmBtn.querySelector('#btn-progress-bar');
+              var txt = confirmBtn.querySelector('#btn-progress-text');
+              if (bar) bar.style.width = '100%';
+              if (txt) txt.innerText = 'Completed 100%!';
+            }
+
             if (res.success) {
               UIManager.showToast("อัปโหลดสำเร็จ", "success");
-              this.currentUpload = null;
-              this.loadData(); 
-              // Modal จะถูกปิดโดย UIManager (หรือกดปิดเอง)
+              self.currentUpload = null;
+
+              setTimeout(function () {
+                var modal = document.querySelector('.modal[open]') || document.getElementById('core-modal');
+                if (modal) {
+                  if (typeof modal.close === 'function') modal.close();
+                  else modal.removeAttribute('open');
+
+                  if (modal.id.startsWith('dynamic-modal')) modal.remove();
+                }
+                self.loadData();
+              }, 1000);
+
             } else {
               UIManager.showToast(res.message || "เกิดข้อผิดพลาด", "error");
-              if(confirmBtn) { confirmBtn.innerHTML = 'ยืนยันอัปโหลด'; confirmBtn.disabled = false; }
+              if (confirmBtn) {
+                confirmBtn.innerHTML = originalBtnText;
+                confirmBtn.disabled = false;
+                confirmBtn.style.position = '';
+              }
             }
           })
-          .catch(err => {
-              UIManager.showToast(err.message, "error");
-              if(confirmBtn) { confirmBtn.innerHTML = 'ยืนยันอัปโหลด'; confirmBtn.disabled = false; }
+          .catch(function (err) {
+            clearInterval(progressInterval);
+            UIManager.showToast(err.message, "error");
+            if (confirmBtn) {
+              confirmBtn.innerHTML = originalBtnText;
+              confirmBtn.disabled = false;
+              confirmBtn.style.position = '';
+            }
           });
       };
     },
 
-    editMatch(id) { alert("ระบบแก้ไขกำลังพัฒนา"); },
-    deleteMatch(id) {
+    editMatch: function (id) { alert("ระบบแก้ไขกำลังพัฒนา"); },
+    deleteMatch: function (id) {
+      var self = this;
       UIManager.showModal({
         title: "ลบรายการ",
         body: "คุณแน่ใจหรือไม่ที่จะลบรายการนี้?",
         confirmText: "ลบรายการ",
-        onConfirm: () => {
-           Server.call('deleteMatch', id)
-             .then(() => { UIManager.showToast("ลบสำเร็จ", "success"); this.loadData(); })
-             .catch(err => console.error(err));
+        onConfirm: function () {
+          Server.call('deleteMatch', id)
+            .then(function () { UIManager.showToast("ลบสำเร็จ", "success"); self.loadData(); })
+            .catch(function (err) { console.error(err); });
         }
       });
     }
   };
 
   // เรียกใช้เมื่อโหลดหน้าจอ
-  document.addEventListener("DOMContentLoaded", () => {
-     // JS_App จะเป็นคนเรียก Dashboard.init() เอง
-     // แต่ถ้า JS_App โหลดก่อน Dashboard ให้เรียกตรงนี้กันเหนียวได้
-     if (typeof Dashboard !== 'undefined' && Dashboard.init) {
-        // Dashboard.init(); // ปกติ JS_App จัดการให้แล้ว
-     }
+  document.addEventListener("DOMContentLoaded", function () {
+    if (typeof Dashboard !== 'undefined' && Dashboard.init) {
+      // Init manually if needed
+    }
   });
 </script>

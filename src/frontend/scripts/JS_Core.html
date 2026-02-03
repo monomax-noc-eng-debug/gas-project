@@ -12,24 +12,18 @@ class Router {
   };
 
   static navigateTo(pageId) {
-    // ซ่อนทุกหน้า
     document.querySelectorAll('.page-section').forEach(el => el.classList.add('hidden'));
-
-    // แสดงหน้าเป้าหมาย
     const target = document.getElementById(pageId);
     if (target) {
       target.classList.remove('hidden');
       target.classList.remove('fade-in');
-      void target.offsetWidth; // Force Reflow
+      void target.offsetWidth; 
       target.classList.add('fade-in');
     }
-
-    // อัปเดต Sidebar Active State
     document.querySelectorAll('aside a[data-target]').forEach(link => link.classList.remove('active'));
     const activeLink = document.querySelector(`aside a[data-target="${pageId}"]`);
     if (activeLink) activeLink.classList.add('active');
 
-    // อัปเดต Title บน Navbar (ถ้ามี)
     const titleEl = document.getElementById('header-title');
     if (titleEl && activeLink) {
         titleEl.innerText = activeLink.innerText.trim();
@@ -44,11 +38,9 @@ const Server = {
   call(funcName, ...args) {
     return new Promise((resolve, reject) => {
       if (typeof google === 'undefined' || !google.script) {
-         // Fallback สำหรับ Local Dev (ถ้าไม่มี Mock)
          reject(new Error("Google Script Run not found"));
          return;
       }
-
       google.script.run
         .withSuccessHandler(res => {
           try {
@@ -74,7 +66,6 @@ const UIManager = {
       container.className = 'toast toast-top toast-end z-[9999]';
       document.body.appendChild(container);
     }
-
     const alert = document.createElement('div');
     const alertClass = type === 'error' ? 'alert-error' : 
                        type === 'success' ? 'alert-success' : 
@@ -83,7 +74,6 @@ const UIManager = {
     alert.className = `alert ${alertClass} text-white shadow-lg min-w-[250px] flex justify-between animate-bounce-in`;
     alert.innerHTML = `<span>${msg}</span>`;
     container.appendChild(alert);
-
     setTimeout(() => {
       alert.classList.add('opacity-0', 'transition-opacity', 'duration-500');
       setTimeout(() => alert.remove(), 500);
@@ -109,7 +99,8 @@ const UIManager = {
     if(modal) { modal.close(); modal.remove(); }
   },
 
-  showModal({ title, body, confirmText = 'OK', onConfirm, showCancel = true }) {
+  // ✅ แก้ไข: เพิ่ม parameter 'manualClose'
+  showModal({ title, body, confirmText = 'OK', onConfirm, showCancel = true, manualClose = false }) {
     const modalId = 'dynamic-modal-' + Date.now();
     const modalHtml = `
       <dialog id="${modalId}" class="modal">
@@ -128,7 +119,10 @@ const UIManager = {
     
     document.getElementById(`${modalId}-confirm`).onclick = () => {
       if(onConfirm) onConfirm();
-      modal.close();
+      // ถ้า manualClose = true เราจะไม่สั่งปิด Modal ทันที (รอให้ Dashboard สั่งปิดเมื่อ Upload เสร็จ)
+      if (!manualClose) {
+        modal.close();
+      }
     };
 
     modal.addEventListener('close', () => modal.remove());
@@ -137,7 +131,7 @@ const UIManager = {
 };
 
 // ----------------------------------------------------------------------
-// ✅ 4. STORE: (เพิ่มส่วนนี้เข้าไปแก้ Error)
+// 4. STORE
 // ----------------------------------------------------------------------
 const Store = {
   state: {
@@ -145,22 +139,15 @@ const Store = {
     settings: { theme: 'light' },
     isInitialized: false
   },
-
-  // เริ่มต้นโหลดข้อมูล User Settings
   async init() {
     try {
       console.log('App Initializing...');
-      // เรียก getUserSettings จาก Backend (API.gs หรือ local-server.js)
       const data = await Server.call('getUserSettings');
-      
       if (data) {
         this.state.currentUser = data.profile;
         this.state.settings = data.settings || { theme: 'light' };
-        
-        // Apply Theme
         document.documentElement.setAttribute('data-theme', this.state.settings.theme);
       }
-      
       this.state.isInitialized = true;
       return true;
     } catch (err) {
@@ -168,7 +155,6 @@ const Store = {
       return false;
     }
   },
-
   getUser() {
     return this.state.currentUser;
   }

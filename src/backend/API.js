@@ -688,61 +688,6 @@ function _generateEmailContent(templateId, note) {
 }
 
 /**
- * อัปโหลดรูปภาพ Start/Stop ลง Drive และบันทึก URL ลง Sheet
- */
-function uploadMatchImage(matchId, type, base64Data, mimeType) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-    
-    // 1. Save Image to Drive
-    // ต้องแน่ใจว่าใน Config.js มี CONFIG.IMG_FOLDER หรือใส่ ID โฟลเดอร์ตรงๆ แทนก็ได้
-    const folderId = CONFIG.IMG_FOLDER; 
-    const folder = DriveApp.getFolderById(folderId);
-    
-    const fileName = `Match_${matchId}_${type}_${Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "HHmmss")}.jpg`;
-    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
-    const file = folder.createFile(blob);
-    const fileUrl = file.getUrl();
-
-    // 2. Update Sheet
-    const sheet = _getSheet("DB_Matches");
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const idxId = headers.indexOf("Match ID");
-    
-    // กำหนดชื่อคอลัมน์ที่จะบันทึก (ต้องตรงกับใน Sheet)
-    const colName = (type === 'START') ? "Start Image" : "Stop Image";
-    let idxTarget = headers.indexOf(colName);
-
-    // ถ้าไม่มีคอลัมน์ ให้สร้างใหม่ (Optional)
-    if (idxTarget === -1) {
-      // throw new Error(`Column '${colName}' not found in DB_Matches`);
-      // หรือจะให้สร้างคอลัมน์ใหม่เลยก็ได้ แต่แจ้ง Error ดีกว่าเพื่อความชัวร์
-       return JSON.stringify({ success: false, message: `ไม่พบคอลัมน์ ${colName} ใน Google Sheet` });
-    }
-
-    let found = false;
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][idxId]) === String(matchId)) {
-        sheet.getRange(i + 1, idxTarget + 1).setValue(fileUrl);
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) return JSON.stringify({ success: false, message: "Match ID not found" });
-
-    return JSON.stringify({ success: true, url: fileUrl });
-
-  } catch (e) {
-    return JSON.stringify({ success: false, message: e.toString() });
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-/**
  * ลบ Match ออกจาก Sheet
  */
 function deleteMatch(matchId) {
@@ -763,6 +708,83 @@ function deleteMatch(matchId) {
       }
     }
     return JSON.stringify({ success: false, message: "Match not found" });
+
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =================================================================
+// 📸 IMAGE UPLOAD SECTION (แก้ไขส่วนนี้)
+// =================================================================
+
+// ✅ Helper Function: สร้างโฟลเดอร์ (แปะไว้ล่างสุดของไฟล์หรือบนสุดก็ได้)
+function _getOrCreateSubFolder(parentFolder, folderName) {
+  const folders = parentFolder.getFoldersByName(folderName);
+  if (folders.hasNext()) {
+    return folders.next();
+  } else {
+    return parentFolder.createFolder(folderName);
+  }
+}
+
+// ✅ Main Function: แก้ไขให้สร้างโฟลเดอร์ตามวันที่
+function uploadMatchImage(matchId, type, base64Data, mimeType) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+
+    // 1. จัดการโฟลเดอร์ (Root > Year > Month > Day)
+    const rootFolderId = CONFIG.IMG_FOLDER;
+    const rootFolder = DriveApp.getFolderById(rootFolderId);
+
+    const now = new Date();
+    const yearStr = Utilities.formatDate(now, CONFIG.TIMEZONE, "yyyy");
+    const monthStr = Utilities.formatDate(now, CONFIG.TIMEZONE, "MM");
+    const dayStr = Utilities.formatDate(now, CONFIG.TIMEZONE, "dd");
+
+    // สร้างทีละชั้น
+    const yearFolder = _getOrCreateSubFolder(rootFolder, yearStr);
+    const monthFolder = _getOrCreateSubFolder(yearFolder, monthStr);
+    const dayFolder = _getOrCreateSubFolder(monthFolder, dayStr);
+
+    // 2. สร้างไฟล์ในโฟลเดอร์วัน (Day Folder)
+    const fileName = `Match_${matchId}_${type}_${Utilities.formatDate(now, CONFIG.TIMEZONE, "HHmmss")}.jpg`;
+    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
+
+    const file = dayFolder.createFile(blob);
+    const fileUrl = file.getUrl();
+
+    // 3. บันทึก URL ลง Sheet
+    const sheet = _getSheet("DB_Matches");
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const idxId = headers.indexOf("Match ID");
+
+    // หาคอลัมน์ (รองรับชื่อ Start Image / Image In)
+    let colName = (type === 'START') ? "Start Image" : "Stop Image";
+    let idxTarget = headers.indexOf(colName);
+    if (idxTarget === -1 && type === 'START') idxTarget = headers.indexOf("Image In");
+    if (idxTarget === -1 && type === 'STOP') idxTarget = headers.indexOf("Image Out");
+
+    if (idxTarget === -1) {
+      return JSON.stringify({ success: false, message: `ไม่พบคอลัมน์ ${colName} ใน Sheet` });
+    }
+
+    let found = false;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idxId]) === String(matchId)) {
+        sheet.getRange(i + 1, idxTarget + 1).setValue(fileUrl);
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) return JSON.stringify({ success: false, message: "Match ID not found" });
+
+    return JSON.stringify({ success: true, url: fileUrl });
 
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
