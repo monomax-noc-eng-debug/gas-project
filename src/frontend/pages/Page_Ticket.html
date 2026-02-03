@@ -1,0 +1,59 @@
+<div id="page-ticket" class="page-section hidden w-full h-full flex flex-col bg-base-200">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between px-6 py-4 bg-base-100 border-b border-base-300">
+    <div>
+      <h2 class="text-2xl font-bold text-base-content">Ticket Management</h2>
+      <p class="text-sm text-base-content/60">Track and manage support tickets</p>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="loadTickets()" class="btn btn-ghost btn-sm">
+        <i class="fas fa-sync-alt mr-1"></i> Refresh
+      </button>
+      <button class="btn btn-primary btn-sm">
+        <i class="fas fa-plus mr-1"></i> New Ticket
+      </button>
+    </div>
+  </div>
+
+  <!-- Table Container -->
+  <div class="flex-1 overflow-auto p-4">
+    <div class="card bg-base-100 shadow-sm border border-base-300">
+      <div class="overflow-x-auto w-full">
+        <table class="table table-xs table-pin-rows">
+          <thead>
+            <tr class="bg-base-200 text-base-content/70">
+              <th>No.</th>
+              <th>Date</th>
+              <th>Ticket No</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Severity</th>
+              <th>Category</th>
+              <th>Sub Category</th>
+              <th class="min-w-[200px]">Subject</th>
+              <th class="min-w-[300px]">Detail</th>
+              <th>Action</th>
+              <th>Resolved Detail</th>
+              <th>Responsibility</th>
+              <th>Assign</th>
+              <th>Remark</th>
+              <th>Created</th>
+              <th>Resolved</th>
+              <th>Duration</th>
+              <th>Log Update</th>
+            </tr>
+          </thead>
+          <tbody id="ticket-table-body">
+            <tr>
+              <td colspan="19" class="text-center py-8 opacity-50">
+                <span class="loading loading-spinner text-primary"></span> Loading...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>

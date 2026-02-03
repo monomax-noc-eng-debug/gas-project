@@ -1,0 +1,83 @@
+<script>
+  /**
+   * JS_Ticket.html
+   * Handle Ticket Page Logic
+   */
+
+  async function loadTickets() {
+    console.log("Loading Tickets...");
+    const tbody = document.getElementById('ticket-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = `<tr><td colspan="19" class="text-center py-10"><span class="loading loading-dots loading-lg text-primary"></span></td></tr>`;
+
+    try {
+      const data = await Server.call('getTickets');
+      renderTicketTable(data);
+    } catch (err) {
+      console.error(err);
+      tbody.innerHTML = `<tr><td colspan="19" class="text-center text-error py-4">Failed to load: ${err.message}</td></tr>`;
+    }
+  }
+
+  function renderTicketTable(tickets) {
+    const tbody = document.getElementById('ticket-table-body');
+    tbody.innerHTML = '';
+
+    if (!tickets || tickets.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="19" class="text-center py-8 text-base-content/50">No tickets found</td></tr>`;
+      return;
+    }
+
+    tickets.forEach((t, i) => {
+      const tr = document.createElement('tr');
+      tr.className = "hover";
+
+      // Status Badge Logic
+      let statusBadge = `<div class="badge badge-ghost badge-sm">${t.status || '-'}</div>`;
+      const s = String(t.status).toLowerCase();
+      if (s.includes('open') || s.includes('new')) statusBadge = `<div class="badge badge-info badge-sm text-white">${t.status}</div>`;
+      if (s.includes('pending') || s.includes('wait')) statusBadge = `<div class="badge badge-warning badge-sm text-white">${t.status}</div>`;
+      if (s.includes('resolved') || s.includes('close')) statusBadge = `<div class="badge badge-success badge-sm text-white">${t.status}</div>`;
+
+      tr.innerHTML = `
+            <th class="font-normal text-xs opacity-70">${t.no || i + 1}</th>
+            <td class="whitespace-nowrap font-mono text-xs">${t.date || '-'}</td>
+            <td class="font-medium text-primary">${t.ticketNo || '-'}</td>
+            <td>${t.type || '-'}</td>
+            <td>${statusBadge}</td>
+            <td>${t.severity || '-'}</td>
+            <td>${t.category || '-'}</td>
+            <td>${t.subCategory || '-'}</td>
+            <td class="truncate max-w-[200px]" title="${t.desc}">${t.desc || '-'}</td>
+            <td class="truncate max-w-[300px]" title="${t.detail}">${t.detail || '-'}</td>
+            <td>${t.action || '-'}</td>
+            <td class="truncate max-w-[150px]">${t.resolvedDetail || '-'}</td>
+            <td>${t.resp || '-'}</td>
+            <td>${t.assign || '-'}</td>
+            <td>${t.remark || '-'}</td>
+            <td class="whitespace-nowrap text-xs text-base-content/70">${t.created || '-'}</td>
+            <td class="whitespace-nowrap text-xs text-base-content/70">${t.resolved || '-'}</td>
+            <td>${t.duration || '-'}</td>
+            <td class="text-xs">${t.log || '-'}</td>
+        `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // Auto-load when navigating to page
+  document.addEventListener('DOMContentLoaded', () => {
+    // Observer to detect when page becomes visible
+    const ticketPage = document.getElementById('page-ticket');
+    if (ticketPage) {
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.attributeName === 'class' && !ticketPage.classList.contains('hidden')) {
+            loadTickets();
+          }
+        });
+      });
+      observer.observe(ticketPage, { attributes: true });
+    }
+  });
+</script>

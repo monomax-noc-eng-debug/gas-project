@@ -1,108 +1,109 @@
 <script>
-// ----------------------------------------------------------------------
-// 1. ROUTER: จัดการการเปลี่ยนหน้า
-// ----------------------------------------------------------------------
-class Router {
-  static routes = {
-    'page-dashboard': 'Page_Dashboard',
-    'page-report': 'Page_Report',
-    'page-history': 'Page_History',
-    'page-email': 'Page_Email',
-    'page-settings': 'Page_Settings'
+  // ----------------------------------------------------------------------
+  // 1. ROUTER: จัดการการเปลี่ยนหน้า
+  // ----------------------------------------------------------------------
+  class Router {
+    static routes = {
+      'page-dashboard': 'Page_Dashboard',
+      'page-report': 'Page_Report',
+      'page-ticket': 'Page_Ticket',
+      'page-history': 'Page_History',
+      'page-email': 'Page_Email',
+      'page-settings': 'Page_Settings'
+    };
+
+    static navigateTo(pageId) {
+      document.querySelectorAll('.page-section').forEach(el => el.classList.add('hidden'));
+      const target = document.getElementById(pageId);
+      if (target) {
+        target.classList.remove('hidden');
+        target.classList.remove('fade-in');
+        void target.offsetWidth;
+        target.classList.add('fade-in');
+      }
+      document.querySelectorAll('aside a[data-target]').forEach(link => link.classList.remove('active'));
+      const activeLink = document.querySelector(`aside a[data-target="${pageId}"]`);
+      if (activeLink) activeLink.classList.add('active');
+
+      const titleEl = document.getElementById('header-title');
+      if (titleEl && activeLink) {
+        titleEl.innerText = activeLink.innerText.trim();
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------------
+  // 2. SERVER: ตัวกลางเรียก Google Apps Script
+  // ----------------------------------------------------------------------
+  const Server = {
+    call(funcName, ...args) {
+      return new Promise((resolve, reject) => {
+        if (typeof google === 'undefined' || !google.script) {
+          reject(new Error("Google Script Run not found"));
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(res => {
+            try {
+              const data = typeof res === 'string' ? JSON.parse(res) : res;
+              resolve(data);
+            } catch (e) { resolve(res); }
+          })
+          .withFailureHandler(err => reject(err))
+        [funcName](...args);
+      });
+    }
   };
 
-  static navigateTo(pageId) {
-    document.querySelectorAll('.page-section').forEach(el => el.classList.add('hidden'));
-    const target = document.getElementById(pageId);
-    if (target) {
-      target.classList.remove('hidden');
-      target.classList.remove('fade-in');
-      void target.offsetWidth; 
-      target.classList.add('fade-in');
-    }
-    document.querySelectorAll('aside a[data-target]').forEach(link => link.classList.remove('active'));
-    const activeLink = document.querySelector(`aside a[data-target="${pageId}"]`);
-    if (activeLink) activeLink.classList.add('active');
-
-    const titleEl = document.getElementById('header-title');
-    if (titleEl && activeLink) {
-        titleEl.innerText = activeLink.innerText.trim();
-    }
-  }
-}
-
-// ----------------------------------------------------------------------
-// 2. SERVER: ตัวกลางเรียก Google Apps Script
-// ----------------------------------------------------------------------
-const Server = {
-  call(funcName, ...args) {
-    return new Promise((resolve, reject) => {
-      if (typeof google === 'undefined' || !google.script) {
-         reject(new Error("Google Script Run not found"));
-         return;
+  // ----------------------------------------------------------------------
+  // 3. UI MANAGER: จัดการ Toast, Loading, Modal
+  // ----------------------------------------------------------------------
+  const UIManager = {
+    showToast(msg, type = 'info') {
+      let container = document.getElementById('toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast toast-top toast-end z-[9999]';
+        document.body.appendChild(container);
       }
-      google.script.run
-        .withSuccessHandler(res => {
-          try {
-            const data = typeof res === 'string' ? JSON.parse(res) : res;
-            resolve(data);
-          } catch (e) { resolve(res); }
-        })
-        .withFailureHandler(err => reject(err))
-        [funcName](...args);
-    });
-  }
-};
+      const alert = document.createElement('div');
+      const alertClass = type === 'error' ? 'alert-error' :
+        type === 'success' ? 'alert-success' :
+          type === 'warning' ? 'alert-warning' : 'alert-info';
 
-// ----------------------------------------------------------------------
-// 3. UI MANAGER: จัดการ Toast, Loading, Modal
-// ----------------------------------------------------------------------
-const UIManager = {
-  showToast(msg, type = 'info') {
-    let container = document.getElementById('toast-container');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'toast-container';
-      container.className = 'toast toast-top toast-end z-[9999]';
-      document.body.appendChild(container);
-    }
-    const alert = document.createElement('div');
-    const alertClass = type === 'error' ? 'alert-error' : 
-                       type === 'success' ? 'alert-success' : 
-                       type === 'warning' ? 'alert-warning' : 'alert-info';
-    
-    alert.className = `alert ${alertClass} text-white shadow-lg min-w-[250px] flex justify-between animate-bounce-in`;
-    alert.innerHTML = `<span>${msg}</span>`;
-    container.appendChild(alert);
-    setTimeout(() => {
-      alert.classList.add('opacity-0', 'transition-opacity', 'duration-500');
-      setTimeout(() => alert.remove(), 500);
-    }, 3000);
-  },
+      alert.className = `alert ${alertClass} text-white shadow-lg min-w-[250px] flex justify-between animate-bounce-in`;
+      alert.innerHTML = `<span>${msg}</span>`;
+      container.appendChild(alert);
+      setTimeout(() => {
+        alert.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+        setTimeout(() => alert.remove(), 500);
+      }, 3000);
+    },
 
-  showLoading() {
-    if(document.getElementById('global-loading')) return;
-    const modal = document.createElement('dialog');
-    modal.id = 'global-loading';
-    modal.className = 'modal modal-bottom sm:modal-middle';
-    modal.innerHTML = `
+    showLoading() {
+      if (document.getElementById('global-loading')) return;
+      const modal = document.createElement('dialog');
+      modal.id = 'global-loading';
+      modal.className = 'modal modal-bottom sm:modal-middle';
+      modal.innerHTML = `
       <div class="modal-box bg-transparent shadow-none border-none flex justify-center items-center">
         <span class="loading loading-spinner loading-lg text-primary scale-150"></span>
       </div>
     `;
-    document.body.appendChild(modal);
-    modal.showModal();
-  },
+      document.body.appendChild(modal);
+      modal.showModal();
+    },
 
-  hideLoading() {
-    const modal = document.getElementById('global-loading');
-    if(modal) { modal.close(); modal.remove(); }
-  },
+    hideLoading() {
+      const modal = document.getElementById('global-loading');
+      if (modal) { modal.close(); modal.remove(); }
+    },
 
-  // ✅ แก้ไข: เพิ่ม parameter 'manualClose'
-  showModal({ title, body, confirmText = 'OK', onConfirm, showCancel = true, manualClose = false }) {
-    const modalId = 'dynamic-modal-' + Date.now();
-    const modalHtml = `
+    // ✅ แก้ไข: เพิ่ม parameter 'manualClose'
+    showModal({ title, body, confirmText = 'OK', onConfirm, showCancel = true, manualClose = false }) {
+      const modalId = 'dynamic-modal-' + Date.now();
+      const modalHtml = `
       <dialog id="${modalId}" class="modal">
         <div class="modal-box">
           <h3 class="font-bold text-lg">${title}</h3>
@@ -114,49 +115,49 @@ const UIManager = {
         </div>
       </dialog>
     `;
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = document.getElementById(modalId);
-    
-    document.getElementById(`${modalId}-confirm`).onclick = () => {
-      if(onConfirm) onConfirm();
-      // ถ้า manualClose = true เราจะไม่สั่งปิด Modal ทันที (รอให้ Dashboard สั่งปิดเมื่อ Upload เสร็จ)
-      if (!manualClose) {
-        modal.close();
-      }
-    };
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+      const modal = document.getElementById(modalId);
 
-    modal.addEventListener('close', () => modal.remove());
-    modal.showModal();
-  }
-};
+      document.getElementById(`${modalId}-confirm`).onclick = () => {
+        if (onConfirm) onConfirm();
+        // ถ้า manualClose = true เราจะไม่สั่งปิด Modal ทันที (รอให้ Dashboard สั่งปิดเมื่อ Upload เสร็จ)
+        if (!manualClose) {
+          modal.close();
+        }
+      };
 
-// ----------------------------------------------------------------------
-// 4. STORE
-// ----------------------------------------------------------------------
-const Store = {
-  state: {
-    currentUser: null,
-    settings: { theme: 'light' },
-    isInitialized: false
-  },
-  async init() {
-    try {
-      console.log('App Initializing...');
-      const data = await Server.call('getUserSettings');
-      if (data) {
-        this.state.currentUser = data.profile;
-        this.state.settings = data.settings || { theme: 'light' };
-        document.documentElement.setAttribute('data-theme', this.state.settings.theme);
-      }
-      this.state.isInitialized = true;
-      return true;
-    } catch (err) {
-      console.error('Store Init Error:', err);
-      return false;
+      modal.addEventListener('close', () => modal.remove());
+      modal.showModal();
     }
-  },
-  getUser() {
-    return this.state.currentUser;
-  }
-};
+  };
+
+  // ----------------------------------------------------------------------
+  // 4. STORE
+  // ----------------------------------------------------------------------
+  const Store = {
+    state: {
+      currentUser: null,
+      settings: { theme: 'light' },
+      isInitialized: false
+    },
+    async init() {
+      try {
+        console.log('App Initializing...');
+        const data = await Server.call('getUserSettings');
+        if (data) {
+          this.state.currentUser = data.profile;
+          this.state.settings = data.settings || { theme: 'light' };
+          document.documentElement.setAttribute('data-theme', this.state.settings.theme);
+        }
+        this.state.isInitialized = true;
+        return true;
+      } catch (err) {
+        console.error('Store Init Error:', err);
+        return false;
+      }
+    },
+    getUser() {
+      return this.state.currentUser;
+    }
+  };
 </script>

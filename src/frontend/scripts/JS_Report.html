@@ -1,22 +1,20 @@
 <script>
   /**
    * JS_Report.html
-   * Logic สำหรับหน้า Shift Report
+   * Logic สำหรับหน้า Shift Report (Updated: Error Handling & Debug)
    */
-  const Report = {
-    // เก็บไฟล์รูปภาพชั่วคราว
+  var Report = {
     proofFiles: { mono: [], ais: [], start: [] },
 
-    init() {
-      // โค้ดเริ่มต้นทำงาน (ถ้ามี)
+    init: function() {
+      // Init logic
     },
 
     // --- UI Interactions ---
 
-    // เช็คถ้าเลือก "อื่นๆ" ให้โชว์ช่องกรอก
-    checkReporterOther() {
-      const val = document.getElementById('reporterSelect').value;
-      const other = document.getElementById('reporterOther');
+    checkReporterOther: function() {
+      var val = document.getElementById('reporterSelect').value;
+      var other = document.getElementById('reporterOther');
       if (val === 'อื่นๆ') {
         other.classList.remove('hidden');
         other.focus();
@@ -25,48 +23,43 @@
       }
     },
 
-    // ซ่อน/แสดง โซนอัปโหลดรูปตามสถานะ
-    toggleUploadSection(selectId, divId, fileType) {
-      const val = document.getElementById(selectId).value;
-      const div = document.getElementById(divId);
+    toggleUploadSection: function(selectId, divId, fileType) {
+      var val = document.getElementById(selectId).value;
+      var div = document.getElementById(divId);
       if (val === 'ไม่มี') {
         div.classList.add('hidden');
-        this.proofFiles[fileType] = []; // ล้างไฟล์ทิ้ง
+        this.proofFiles[fileType] = [];
         this.updateFileListUi(fileType, fileType + 'FileList');
       } else {
         div.classList.remove('hidden');
       }
     },
 
-    // --- Image Processing (Compress & Handle) ---
+    // --- Image Processing ---
 
-    async compressImage(file) {
-      const MAX_DIMENSION = 1600;
-      const QUALITY = 0.8;
-      return new Promise((resolve) => {
-        const reader = new FileReader();
+    compressImage: function(file) {
+      var MAX_DIMENSION = 1600;
+      var QUALITY = 0.8;
+      
+      return new Promise(function(resolve) {
+        var reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = (e) => {
-          const img = new Image();
+        reader.onload = function(e) {
+          var img = new Image();
           img.src = e.target.result;
-          img.onload = () => {
-            let width = img.width;
-            let height = img.height;
-
-            // คำนวณ Aspect Ratio
+          img.onload = function() {
+            var width = img.width;
+            var height = img.height;
             if (width > height) {
               if (width > MAX_DIMENSION) { height *= MAX_DIMENSION / width; width = MAX_DIMENSION; }
             } else {
               if (height > MAX_DIMENSION) { width *= MAX_DIMENSION / height; height = MAX_DIMENSION; }
             }
-
-            const canvas = document.createElement('canvas');
+            var canvas = document.createElement('canvas');
             canvas.width = width;
             canvas.height = height;
-            const ctx = canvas.getContext('2d');
+            var ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-
-            // คืนค่าเป็น Base64 (ตัด header ออก)
             resolve({
               data: canvas.toDataURL('image/jpeg', QUALITY).split(',')[1],
               mimeType: 'image/jpeg'
@@ -76,133 +69,149 @@
       });
     },
 
-    // เมื่อเลือกไฟล์จากปุ่ม Upload
-    handleFilesUpload(inputId, listId) {
-      const input = document.getElementById(inputId);
-      const type = inputId.replace('file', '').toLowerCase(); // mono, ais, start
-      const files = Array.from(input.files);
-
-      if (files.length > 0) {
-        this.proofFiles[type] = [...this.proofFiles[type], ...files];
+    handleFilesUpload: function(inputId, listId) {
+      var input = document.getElementById(inputId);
+      var type = inputId.replace('file', '').toLowerCase();
+      if (input.files && input.files.length > 0) {
+        var newFiles = Array.from(input.files);
+        this.proofFiles[type] = this.proofFiles[type].concat(newFiles);
         this.updateFileListUi(type, listId);
-        UIManager.showToast(`เพิ่มรูปภาพ ${files.length} รายการ`, 'success');
+        UIManager.showToast('เพิ่มรูปภาพ ' + newFiles.length + ' รายการ', 'success');
       }
-      input.value = ''; // Reset input
+      input.value = '';
     },
 
-    // เมื่อกดปุ่ม Paste (จาก Clipboard)
-    async pasteImage(type, listId) {
-      try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          const imgTypes = item.types.filter(t => t.startsWith('image/'));
+    pasteImage: function(type, listId) {
+      var self = this;
+      if (!navigator.clipboard) {
+         UIManager.showToast("Browser ไม่รองรับ Clipboard API", 'error');
+         return;
+      }
+      navigator.clipboard.read().then(function(items) {
+        var found = false;
+        for (var i = 0; i < items.length; i++) {
+          var item = items[i];
+          var imgTypes = item.types.filter(function(t) { return t.startsWith('image/'); });
           if (imgTypes.length > 0) {
-            const blob = await item.getType(imgTypes[0]);
-            const file = new File([blob], `Pasted_${Date.now()}.png`, { type: imgTypes[0] });
-            this.proofFiles[type].push(file);
-            this.updateFileListUi(type, listId);
-            UIManager.showToast("วางรูปเรียบร้อย", 'success');
+            item.getType(imgTypes[0]).then(function(blob) {
+               var file = new File([blob], 'Pasted_' + Date.now() + '.png', { type: imgTypes[0] });
+               self.proofFiles[type].push(file);
+               self.updateFileListUi(type, listId);
+               UIManager.showToast("วางรูปเรียบร้อย", 'success');
+            });
+            found = true;
             return;
           }
         }
-        UIManager.showToast("ไม่พบรูปใน Clipboard", 'warning');
-      } catch (err) {
-        UIManager.showToast("เข้าถึง Clipboard ไม่ได้ (อนุญาตสิทธิ์ก่อน)", 'error');
-      }
+        if (!found) UIManager.showToast("ไม่พบรูปใน Clipboard", 'warning');
+      }).catch(function(err) {
+        UIManager.showToast("เข้าถึง Clipboard ไม่ได้", 'error');
+      });
     },
 
-    // อัปเดตรายชื่อไฟล์ที่หน้าเว็บ
-    updateFileListUi(type, listId) {
-      const container = document.getElementById(listId);
+    updateFileListUi: function(type, listId) {
+      var container = document.getElementById(listId);
       container.innerHTML = '';
-      this.proofFiles[type].forEach((file, index) => {
-        const div = document.createElement('div');
+      var self = this;
+      this.proofFiles[type].forEach(function(file, index) {
+        var div = document.createElement('div');
         div.className = 'flex items-center justify-between bg-base-100 border border-base-300 px-3 py-2 rounded-lg mb-1 shadow-sm';
-        div.innerHTML = `
-        <span class="truncate pr-4 font-mono">${file.name}</span> 
-        <button type="button" onclick="Report.removeFile('${type}', ${index}, '${listId}')" class="btn btn-xs btn-square btn-ghost text-error">
-          <i class="fas fa-times"></i>
-        </button>`;
+        var html = '';
+        html += '<span class="truncate pr-4 font-mono">' + file.name + '</span>';
+        html += '<button type="button" onclick="Report.removeFile(\'' + type + '\', ' + index + ', \'' + listId + '\')" class="btn btn-xs btn-square btn-ghost text-error">';
+        html +=   '<i class="fas fa-times"></i>';
+        html += '</button>';
+        div.innerHTML = html;
         container.appendChild(div);
       });
     },
 
-    removeFile(type, index, listId) {
+    removeFile: function(type, index, listId) {
       this.proofFiles[type].splice(index, 1);
       this.updateFileListUi(type, listId);
     },
 
-    // --- Data Fetching ---
+    // --- Data Fetching (Updated Error Handling) ---
 
-    // 1. ดึงข้อมูล Ticket (รองรับ 5 สถานะ)
-    autoFetchTicket(btn) {
-      const d = document.getElementById('inputDate').value;
+    autoFetchTicket: function(btn) {
+      var d = document.getElementById('inputDate').value;
       if (!d) return UIManager.showToast("กรุณาเลือกวันที่ก่อน", 'warning');
 
-      const originalText = btn.innerHTML;
+      var originalText = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
 
       Server.call('getTicketDetails', d)
-        .then(res => {
-          // A. อัปเดตค่าลง Hidden Input (สำหรับส่ง Backend)
+        .then(function(res) {
+          // ✅ เช็ค Success ก่อน
+          if (!res.success) {
+             UIManager.showToast("Error: " + res.error, 'error');
+             document.getElementById('ticketSummary').value = "Error fetching data: " + res.error;
+             return;
+          }
+
           document.getElementById('ticketSummary').value = res.text;
           document.getElementById('ticketDetailsRaw').value = res.rawDetails;
 
-          document.getElementById('ticketTotal').value = res.rawStats.total || 0;
-          document.getElementById('ticketOpen').value = res.rawStats.open || 0;
-          document.getElementById('ticketPending').value = res.rawStats.pending || 0;
-          document.getElementById('ticketResolved').value = res.rawStats.resolved || 0;
-          document.getElementById('ticketClosed').value = res.rawStats.closed || 0;
+          var stats = res.rawStats || {};
+          document.getElementById('ticketTotal').value = stats.total || 0;
+          document.getElementById('ticketOpen').value = stats.open || 0;
+          document.getElementById('ticketPending').value = stats.pending || 0;
+          document.getElementById('ticketResolved').value = stats.resolved || 0;
+          document.getElementById('ticketClosed').value = stats.closed || 0;
 
-          // B. อัปเดตตัวเลขบนหน้าจอ (Visual Stats)
-          const setText = (id, val) => {
-            const el = document.getElementById(id);
+          var setText = function(id, val) {
+            var el = document.getElementById(id);
             if (el) el.innerText = val;
           };
-
-          setText('disp-ticket-total', res.rawStats.total || 0);
-          setText('disp-ticket-open', res.rawStats.open || 0);
-          setText('disp-ticket-pending', res.rawStats.pending || 0);
-          setText('disp-ticket-resolved', res.rawStats.resolved || 0);
-          setText('disp-ticket-closed', res.rawStats.closed || 0);
+          setText('disp-ticket-total', stats.total || 0);
+          setText('disp-ticket-open', stats.open || 0);
+          setText('disp-ticket-pending', stats.pending || 0);
+          setText('disp-ticket-resolved', stats.resolved || 0);
+          setText('disp-ticket-closed', stats.closed || 0);
 
           UIManager.showToast("อัปเดต Ticket เรียบร้อย", 'success');
         })
-        .catch(err => UIManager.showToast(err.message, 'error'))
-        .finally(() => {
+        .catch(function(err) { UIManager.showToast(err.message, 'error'); })
+        .finally(function() {
           btn.disabled = false;
           btn.innerHTML = originalText;
         });
     },
 
-    // 2. ดึงข้อมูล Match
-    autoFetchMatch(btn) {
-      const d = document.getElementById('inputDate').value;
+    autoFetchMatch: function(btn) {
+      var d = document.getElementById('inputDate').value;
       if (!d) return UIManager.showToast("กรุณาเลือกวันที่ก่อน", 'warning');
 
-      const originalText = btn.innerHTML;
+      var originalText = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
 
       Server.call('getMatchesByDate', d)
-        .then(res => {
-          // A. อัปเดตค่า Hidden Input
+        .then(function(res) {
+          // ✅ เช็ค Success ก่อน เพื่อไม่ให้ขึ้น undefined
+          if (!res.success) {
+             UIManager.showToast("Error: " + res.error, 'error');
+             document.getElementById('matchSummary').value = "Error fetching data: " + res.error;
+             var dispStatus = document.getElementById('disp-match-status');
+             if (dispStatus) dispStatus.innerText = 'Error!';
+             return;
+          }
+
           document.getElementById('matchSummary').value = res.text;
           document.getElementById('matchDataJSON').value = JSON.stringify(res.data);
           document.getElementById('matchTotal').value = res.total;
 
-          // B. อัปเดตตัวเลขบนหน้าจอ
-          const dispTotal = document.getElementById('disp-match-total');
+          var dispTotal = document.getElementById('disp-match-total');
           if (dispTotal) dispTotal.innerText = res.total || 0;
 
-          const dispStatus = document.getElementById('disp-match-status');
-          if (dispStatus) dispStatus.innerText = `Fetched: ${res.total} Items`;
+          var dispStatus = document.getElementById('disp-match-status');
+          if (dispStatus) dispStatus.innerText = 'Fetched: ' + res.total + ' Items';
 
           UIManager.showToast("อัปเดต Match เรียบร้อย", 'success');
         })
-        .catch(err => UIManager.showToast(err.message, 'error'))
-        .finally(() => {
+        .catch(function(err) { UIManager.showToast(err.message, 'error'); })
+        .finally(function() {
           btn.disabled = false;
           btn.innerHTML = originalText;
         });
@@ -210,24 +219,28 @@
 
     // --- Form Submission ---
 
-    async submitForm(e, mode = 'send') {
+    submitForm: function(e, mode) {
       if (e) e.preventDefault();
-      const form = document.getElementById('mainForm');
+      var form = document.getElementById('mainForm');
+      if(!mode) mode = 'send';
 
-      // Validation
       if (!form.checkValidity()) return form.reportValidity();
-      if (this.proofFiles.mono.length === 0) return UIManager.showToast("กรุณาแนบรูป Mono อย่างน้อย 1 รูป", 'warning');
+      if (this.proofFiles.mono.length === 0) {
+          UIManager.showToast("กรุณาแนบรูป Mono อย่างน้อย 1 รูป", 'warning');
+          return;
+      }
 
       UIManager.showLoading();
+      var self = this;
 
-      // เตรียม Data Object
-      const formData = {
+      var reporterVal = form.reporter.value;
+      if(reporterVal === 'อื่นๆ') reporterVal = document.getElementById('reporterOther').value;
+
+      var formData = {
         date: form.date.value,
-        reporter: form.reporter.value === 'อื่นๆ' ? document.getElementById('reporterOther').value : form.reporter.value,
+        reporter: reporterVal,
         shift: form.shift.value,
         ticketSummary: form.ticketSummary.value,
-
-        // ✅ ส่ง 5 สถานะ Ticket
         ticketStats: {
           total: document.getElementById('ticketTotal').value,
           open: document.getElementById('ticketOpen').value,
@@ -235,7 +248,6 @@
           resolved: document.getElementById('ticketResolved').value,
           closed: document.getElementById('ticketClosed').value
         },
-
         ticketDetails: document.getElementById('ticketDetailsRaw').value,
         matchSummary: form.matchSummary.value,
         matchTotal: document.getElementById('matchTotal').value,
@@ -245,66 +257,77 @@
         statusAis: document.getElementById('statusAis').value,
         statusStart: document.getElementById('statusStart').value,
         chatTarget: form.chatTarget.value,
-        proofImages: {}, // รอใส่ Blob
+        proofImages: {},
         isDraft: (mode === 'preview')
       };
 
-      try {
-        // Compress Images (Async Parallel)
-        if (this.proofFiles.mono.length > 0) formData.proofImages.mono = await Promise.all(this.proofFiles.mono.map(f => this.compressImage(f)));
-        if (this.proofFiles.ais.length > 0) formData.proofImages.ais = await Promise.all(this.proofFiles.ais.map(f => this.compressImage(f)));
-        if (this.proofFiles.start.length > 0) formData.proofImages.start = await Promise.all(this.proofFiles.start.map(f => this.compressImage(f)));
-
-        // Call Backend
-        // ใช้ google.script.run โดยตรงเพื่อความชัวร์ในการส่ง Blob และข้อมูลขนาดใหญ่
-        google.script.run
-          .withSuccessHandler(resStr => {
-            UIManager.hideLoading();
-            const res = JSON.parse(resStr); // Backend ส่ง JSON String มา
-
-            if (res.success) {
-              if (res.isPreview) {
-                this.showPreviewModal(res.pdfUrl, res.chatPreview);
-              } else {
-                UIManager.showToast("ส่งรายงานเรียบร้อยแล้ว!", 'success');
-                // Reset Form
-                form.reset();
-                this.proofFiles = { mono: [], ais: [], start: [] };
-                this.updateFileListUi('mono', 'monoFileList');
-                this.updateFileListUi('ais', 'aisFileList');
-                this.updateFileListUi('start', 'startFileList');
-
-                // Redirect ไปหน้า History (ถ้ามี Router)
-                if (typeof Router !== 'undefined') {
-                  setTimeout(() => Router.navigateTo('page-history'), 1000);
-                }
-              }
-            } else {
-              UIManager.showToast("Error: " + res.error, 'error');
-            }
-          })
-          .withFailureHandler(err => {
-            UIManager.hideLoading();
-            UIManager.showToast("Server Failed: " + err.message, 'error');
-          })
-          .processShiftReport(formData);
-
-      } catch (err) {
-        UIManager.hideLoading();
-        UIManager.showToast("Client Error: " + err.message, 'error');
-        console.error(err);
+      var promises = [];
+      if (this.proofFiles.mono.length > 0) {
+         var pMono = Promise.all(this.proofFiles.mono.map(function(f) { return self.compressImage(f); }))
+            .then(function(res) { formData.proofImages.mono = res; });
+         promises.push(pMono);
       }
+      if (this.proofFiles.ais.length > 0) {
+         var pAis = Promise.all(this.proofFiles.ais.map(function(f) { return self.compressImage(f); }))
+            .then(function(res) { formData.proofImages.ais = res; });
+         promises.push(pAis);
+      }
+      if (this.proofFiles.start.length > 0) {
+         var pStart = Promise.all(this.proofFiles.start.map(function(f) { return self.compressImage(f); }))
+            .then(function(res) { formData.proofImages.start = res; });
+         promises.push(pStart);
+      }
+
+      Promise.all(promises).then(function() {
+          if (typeof google === 'undefined' || !google.script) {
+             UIManager.hideLoading();
+             UIManager.showToast("Google Script Environment not found", 'error');
+             return;
+          }
+
+          google.script.run
+            .withSuccessHandler(function(resStr) {
+              UIManager.hideLoading();
+              var res = JSON.parse(resStr); 
+
+              if (res.success) {
+                if (res.isPreview) {
+                  self.showPreviewModal(res.pdfUrl, res.chatPreview);
+                } else {
+                  UIManager.showToast("ส่งรายงานเรียบร้อยแล้ว!", 'success');
+                  form.reset();
+                  self.proofFiles = { mono: [], ais: [], start: [] };
+                  self.updateFileListUi('mono', 'monoFileList');
+                  self.updateFileListUi('ais', 'aisFileList');
+                  self.updateFileListUi('start', 'startFileList');
+                  if (typeof Router !== 'undefined') {
+                    setTimeout(function() { Router.navigateTo('page-history'); }, 1000);
+                  }
+                }
+              } else {
+                UIManager.showToast("Error: " + res.error, 'error');
+              }
+            })
+            .withFailureHandler(function(err) {
+              UIManager.hideLoading();
+              UIManager.showToast("Server Failed: " + err.message, 'error');
+            })
+            .processShiftReport(formData);
+
+      }).catch(function(err) {
+          UIManager.hideLoading();
+          UIManager.showToast("Client Error (Compress): " + err.message, 'error');
+          console.error(err);
+      });
     },
 
-    // --- Modal Helpers ---
-
-    showPreviewModal(url, chatText) {
+    showPreviewModal: function(url, chatText) {
       document.getElementById('previewLink').href = url;
       document.getElementById('chatPreviewText').textContent = chatText;
       document.getElementById('preview_modal').showModal();
     },
 
-    confirmSend() {
+    confirmSend: function() {
       document.getElementById('preview_modal').close();
       this.submitForm(null, 'send');
     }
