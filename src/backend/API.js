@@ -49,10 +49,10 @@ function getMatches(filterType, filterValue) {
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
 
-    // Helper: หา Index ตามชื่อ Header (รองรับทั้งชื่อเก่าและใหม่)
+    // Helper: หา Index ตามชื่อ Header
     const getIdx = (name) => {
       let idx = headers.indexOf(name);
-      if (idx === -1) idx = headers.indexOf(name + "_Owner"); // เผื่อเป็น Signal_Owner
+      if (idx === -1) idx = headers.indexOf(name + "_Owner");
       if (idx === -1) idx = headers.indexOf(name + " Owner");
       return idx;
     };
@@ -65,11 +65,11 @@ function getMatches(filterType, filterValue) {
       home: getIdx('Home'),
       away: getIdx('Away'),
       channel: getIdx('Channel'),
-
-      // ✅ แก้จุดที่ 1: ค้นหาคอลัมน์ Signal ให้เจอชัวร์ๆ
       signal: getIdx('Signal'),
-
-      status: getIdx('Status')
+      status: getIdx('Status'),
+      // ✅ เพิ่ม: คอลัมน์เก็บ Link รูปภาพ
+      startImg: headers.indexOf('Start Image'),
+      stopImg: headers.indexOf('Stop Image')
     };
 
     const matches = [];
@@ -95,8 +95,6 @@ function getMatches(filterType, filterValue) {
       }
 
       if (isMatch) {
-        // ✅ แก้จุดที่ 2: ใช้ชื่อ key ว่า "signalOwner" ให้ตรงกับ Frontend
-        // และดึงค่าจาก row[col.signal] ถ้าไม่มีให้ใส่ 'WAIT'
         const sigVal = (col.signal > -1) ? row[col.signal] : 'WAIT';
 
         matches.push({
@@ -107,11 +105,11 @@ function getMatches(filterType, filterValue) {
           home: row[col.home],
           away: row[col.away],
           channel: row[col.channel],
-
-          // ส่งไปชื่อนี้ หน้าเว็บถึงจะรู้จัก
           signalOwner: sigVal || 'WAIT',
-
-          status: row[col.status] || 'WAIT'
+          status: row[col.status] || 'WAIT',
+          // ✅ ส่งข้อมูลรูปภาพไป Frontend
+          start_img: (col.startImg > -1) ? row[col.startImg] : '',
+          stop_img: (col.stopImg > -1) ? row[col.stopImg] : ''
         });
       }
     }
@@ -687,4 +685,88 @@ function _generateEmailContent(templateId, note) {
     body = `<h3 style="color:red">Incident Report</h3><p>${note}</p>`;
   }
   return { subject, body };
+}
+
+/**
+ * อัปโหลดรูปภาพ Start/Stop ลง Drive และบันทึก URL ลง Sheet
+ */
+function uploadMatchImage(matchId, type, base64Data, mimeType) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    
+    // 1. Save Image to Drive
+    // ต้องแน่ใจว่าใน Config.js มี CONFIG.IMG_FOLDER หรือใส่ ID โฟลเดอร์ตรงๆ แทนก็ได้
+    const folderId = CONFIG.IMG_FOLDER; 
+    const folder = DriveApp.getFolderById(folderId);
+    
+    const fileName = `Match_${matchId}_${type}_${Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "HHmmss")}.jpg`;
+    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
+    const file = folder.createFile(blob);
+    const fileUrl = file.getUrl();
+
+    // 2. Update Sheet
+    const sheet = _getSheet("DB_Matches");
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const idxId = headers.indexOf("Match ID");
+    
+    // กำหนดชื่อคอลัมน์ที่จะบันทึก (ต้องตรงกับใน Sheet)
+    const colName = (type === 'START') ? "Start Image" : "Stop Image";
+    let idxTarget = headers.indexOf(colName);
+
+    // ถ้าไม่มีคอลัมน์ ให้สร้างใหม่ (Optional)
+    if (idxTarget === -1) {
+      // throw new Error(`Column '${colName}' not found in DB_Matches`);
+      // หรือจะให้สร้างคอลัมน์ใหม่เลยก็ได้ แต่แจ้ง Error ดีกว่าเพื่อความชัวร์
+       return JSON.stringify({ success: false, message: `ไม่พบคอลัมน์ ${colName} ใน Google Sheet` });
+    }
+
+    let found = false;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idxId]) === String(matchId)) {
+        sheet.getRange(i + 1, idxTarget + 1).setValue(fileUrl);
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) return JSON.stringify({ success: false, message: "Match ID not found" });
+
+    return JSON.stringify({ success: true, url: fileUrl });
+
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * ลบ Match ออกจาก Sheet
+ */
+function deleteMatch(matchId) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(5000);
+    const sheet = _getSheet("DB_Matches");
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const idxId = headers.indexOf("Match ID");
+
+    if (idxId === -1) return JSON.stringify({ success: false, message: "Column Match ID not found" });
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idxId]) === String(matchId)) {
+        sheet.deleteRow(i + 1);
+        return JSON.stringify({ success: true });
+      }
+    }
+    return JSON.stringify({ success: false, message: "Match not found" });
+
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  } finally {
+    lock.releaseLock();
+  }
 }

@@ -1,68 +1,48 @@
-<script>
-  const Dashboard = {
-    currentFilter: 'DAY',
-    currentDate: new Date().toISOString().split('T')[0],
+<div id="page-dashboard" class="page-section hidden p-4 md:p-6 fade-in h-full flex flex-col">
+  
+  <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+    <div>
+      <h2 class="text-2xl font-bold text-base-content">Dashboard</h2>
+      <p class="text-base-content/60 text-sm">จัดการตารางและสถานะการถ่ายทอดสด</p>
+    </div>
 
-    init() {
-      this.loadData();
-    },
+    <div class="flex items-center gap-2 bg-base-100 p-2 rounded-lg shadow-sm border border-base-200">
+      <div class="join">
+        <input class="join-item btn btn-sm" type="radio" name="dash-mode" aria-label="Day" checked onclick="Dashboard.switchMode('DAY')"/>
+        <input class="join-item btn btn-sm" type="radio" name="dash-mode" aria-label="Month" onclick="Dashboard.switchMode('MONTH')"/>
+      </div>
+      
+      <input type="date" id="dash-date-picker" class="input input-bordered input-sm" onchange="Dashboard.loadData()" />
+      <input type="month" id="dash-month-picker" class="input input-bordered input-sm hidden" onchange="Dashboard.loadData()" />
 
-    loadData() {
-      UIManager.showLoading();
-      Server.call('getMatches', this.currentFilter, this.currentDate)
-        .then(data => this.renderTable(data))
-        .catch(e => console.error(e))
-        .finally(() => UIManager.hideLoading());
-    },
+      <button class="btn btn-sm btn-circle btn-ghost" onclick="Dashboard.loadData(true)">
+        <i class="fas fa-sync-alt" id="dash-refresh-icon"></i>
+      </button>
+    </div>
+  </div>
 
-    renderTable(matches) {
-      const tbody = document.getElementById('match-table-body');
-      if (!tbody) return;
-      tbody.innerHTML = '';
+  <div class="card bg-base-100 shadow-xl border border-base-200 flex-1 overflow-hidden">
+    <div class="overflow-x-auto h-full">
+      <table class="table table-pin-rows w-full">
+        <thead>
+          <tr class="bg-base-200 text-base-content/70">
+            <th class="w-20">Time</th>
+            <th>Match Detail</th>
+            <th>Channel</th>
+            <th class="text-center w-32">Signal Owner</th>
+            <th class="text-center w-24">Start</th> <th class="text-center w-24">Stop</th>  <th class="text-center w-32">Status</th> <th class="text-center w-24">Action</th>
+          </tr>
+        </thead>
+        
+        <tbody id="match-table-body">
+          <tr>
+            <td colspan="8" class="text-center py-10 opacity-50">
+              <span class="loading loading-spinner"></span> Loading data...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
-      if (!matches.length) { tbody.innerHTML = '<tr><td colspan="10" class="text-center p-4">No matches</td></tr>'; return; }
-
-      matches.forEach(m => {
-        const tr = document.createElement('tr');
-        tr.className = "hover";
-
-        // ✅ Logic ปิดปุ่มถ้าเป็น NON
-        const isDisabled = (m.signalOwner === 'NON' || !m.signalOwner) ? 'disabled' : '';
-
-        // ✅ Dropdown Options
-        const opts = ['NON', 'HOST', 'RECEIVE'].map(o => `<option value="${o}" ${m.signalOwner === o ? 'selected' : ''}>${o}</option>`).join('');
-
-        tr.innerHTML = `
-        <td class="font-mono text-xs">${m.time}</td>
-        <td><div class="font-bold text-sm">${m.league}</div><div class="text-xs text-gray-500">${m.home} vs ${m.away}</div></td>
-        <td><span class="badge badge-ghost badge-sm">${m.channel}</span></td>
-        <td>
-          <select class="select select-bordered select-xs w-24" onchange="Dashboard.updateSignal('${m.id}', this.value)">${opts}</select>
-        </td>
-        <td>
-          <div class="join">
-            <button id="btn-in-${m.id}" class="btn btn-xs btn-success join-item text-white" ${isDisabled} onclick="Dashboard.setStatus('${m.id}','IN')">IN</button>
-            <button id="btn-out-${m.id}" class="btn btn-xs btn-error join-item text-white" ${isDisabled} onclick="Dashboard.setStatus('${m.id}','OUT')">OUT</button>
-          </div>
-        </td>
-        <td><span class="badge ${m.status === 'LIVE' ? 'badge-success' : m.status === 'DONE' ? 'badge-neutral' : 'badge-ghost'} badge-sm">${m.status}</span></td>
-      `;
-        tbody.appendChild(tr);
-      });
-    },
-
-    updateSignal(id, val) {
-      Server.call('toggleSignalOwner', id, val);
-      const bIn = document.getElementById(`btn-in-${id}`);
-      const bOut = document.getElementById(`btn-out-${id}`);
-      if (val === 'NON') { if (bIn) bIn.disabled = true; if (bOut) bOut.disabled = true; }
-      else { if (bIn) bIn.disabled = false; if (bOut) bOut.disabled = false; }
-    },
-
-    setStatus(id, type) {
-      Server.call('setMatchStatus', id, type).then(() => this.loadData());
-    },
-
-    changeDate(d) { this.currentDate = d; this.loadData(); }
-  };
-</script>
+</div>

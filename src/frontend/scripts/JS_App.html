@@ -1,31 +1,27 @@
 <script>
 /**
  * JS_App.html
- * จุดเริ่มต้นของ Application (Entry Point)
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
   
-  // 1. แสดง Loading
   UIManager.showLoading();
 
   try {
-    // 2. โหลดข้อมูลเริ่มต้น (เรียก Store ที่เราเพิ่งสร้าง)
     await Store.init();
 
-    // 3. ตั้งค่า Router เริ่มต้น (ไปหน้า Dashboard)
+    // ไปหน้า Dashboard
     Router.navigateTo('page-dashboard');
 
-    // (Optional) โหลดข้อมูล Dashboard ทันที
+    // ✅ แก้ไข: เรียก .init() เพื่อให้ตั้งค่าวันที่ปัจจุบันก่อนโหลดข้อมูล
     if(typeof Dashboard !== 'undefined') {
-        Dashboard.loadData();
+        Dashboard.init(); 
     }
 
   } catch (err) {
     console.error('App Start Error:', err);
     UIManager.showToast('Failed to load application', 'error');
   } finally {
-    // 4. ปิด Loading
     UIManager.hideLoading();
   }
 

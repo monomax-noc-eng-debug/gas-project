@@ -1,18 +1,22 @@
 <script>
   /**
    * JS_Dashboard.html
-   * Logic สำหรับหน้า Dashboard (Corrected Version)
+   * Logic สำหรับหน้า Dashboard (ฉบับแก้ไข Date & Syntax Error)
    */
-
-  // 🚩 แก้ไข 1: เปลี่ยน const เป็น var เพื่อป้องกัน Error "already declared"
   var Dashboard = {
-    viewMode: "DAY", // 'DAY' | 'MONTH'
+    viewMode: "DAY", 
     data: [],
+    currentUpload: null,
 
     init() {
-      // ตั้งค่าวันปัจจุบัน
-      const today = new Date().toISOString().split("T")[0];
-      const thisMonth = today.slice(0, 7);
+      // ✅ แก้ไข 1: ใช้วันที่แบบ Local Time (แก้ปัญหา Date ไม่ตรง)
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      
+      const today = `${year}-${month}-${day}`;     // YYYY-MM-DD
+      const thisMonth = `${year}-${month}`;        // YYYY-MM
 
       const datePicker = document.getElementById("dash-date-picker");
       const monthPicker = document.getElementById("dash-month-picker");
@@ -20,6 +24,9 @@
       if (datePicker) datePicker.value = today;
       if (monthPicker) monthPicker.value = thisMonth;
 
+      // เพิ่ม Event Listener สำหรับ Paste รูปภาพ
+      document.addEventListener('paste', (e) => this.handlePaste(e));
+      
       this.loadData();
     },
 
@@ -40,28 +47,53 @@
 
     loadData(forceRefresh = false) {
       const icon = document.getElementById("dash-refresh-icon");
-      const tbody = document.getElementById("match-table-body"); // แก้ ID ให้ตรงกับ Table Body จริง
+      const tbody = document.getElementById("match-table-body");
       const dateVal = document.getElementById("dash-date-picker").value;
       const monthVal = document.getElementById("dash-month-picker").value;
-
       const filterValue = this.viewMode === "DAY" ? dateVal : monthVal;
 
-      // UI Loading
       if (icon) icon.classList.add("fa-spin");
-      if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center py-20 text-base-content/40"><span class="loading loading-dots loading-lg"></span></td></tr>`;
+      
+      // แสดง Loading เฉพาะตอนไม่มีข้อมูล หรือกด Refresh
+      if (forceRefresh || !this.data.length) {
+         if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center py-20"><span class="loading loading-dots loading-lg"></span></td></tr>`;
+      }
 
-      // Call Backend
       Server.call("getMatches", this.viewMode, filterValue)
         .then((matches) => {
           this.data = matches;
           this.renderTable(matches);
-          if (forceRefresh) UIManager.showToast(`Data Refreshed`, "success");
+          if (forceRefresh) UIManager.showToast(`Updated`, "success");
         })
         .catch((err) => {
-          if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-error">Error: ${err.message}</td></tr>`;
+          if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center py-10 text-error">Error: ${err.message}</td></tr>`;
         })
         .finally(() => {
           if (icon) icon.classList.remove("fa-spin");
+        });
+    },
+
+    // ฟังก์ชันอัปเดต Signal Dropdown (พร้อม Spinner)
+    updateSignal(id, val) {
+      const selectEl = document.getElementById(`signal-select-${id}`);
+      const containerEl = document.getElementById(`signal-container-${id}`);
+      
+      if (selectEl) selectEl.disabled = true;
+
+      let spinner = document.createElement("span");
+      spinner.id = `spinner-${id}`;
+      spinner.className = "loading loading-spinner loading-xs text-primary absolute -right-6 top-1/2 transform -translate-y-1/2"; 
+      if (containerEl) containerEl.appendChild(spinner);
+
+      Server.call("toggleSignalOwner", id, val)
+        .then(() => {
+          this.loadData(false); // โหลดข้อมูลใหม่เพื่ออัปเดตสถานะปุ่ม
+          UIManager.showToast("Saved", "success");
+        })
+        .catch((err) => {
+          if (selectEl) selectEl.disabled = false;
+          if (containerEl && spinner) spinner.remove();
+          UIManager.showToast("Update Failed: " + err.message, "error");
         });
     },
 
@@ -71,22 +103,48 @@
       tbody.innerHTML = "";
 
       if (matches.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center p-4 text-gray-500">No matches found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center p-4 text-gray-500">No matches found</td></tr>';
         return;
       }
 
       matches.forEach((match) => {
         const tr = document.createElement("tr");
-        tr.id = `row-${match.id}`;
         tr.className = "hover";
 
-        // Logic Disable ปุ่ม
-        const isBtnDisabled = (match.signalOwner === "NON" || !match.signalOwner) ? "disabled" : "";
+        // --- Logic Signal Owner ---
+        const signalVal = match.signalOwner || "NON"; 
+        const options = [
+          { val: "NON", label: "ไม่มี" },
+          { val: "HOST", label: "noc start" },
+          { val: "RECEIVE", label: "cus start" }
+        ].map(opt => `<option value="${opt.val}" ${signalVal === opt.val ? "selected" : ""}>${opt.label}</option>`).join("");
 
-        // Dropdown Options
-        const signalOptions = ["NON", "HOST", "RECEIVE"]
-          .map(opt => `<option value="${opt}" ${match.signalOwner === opt ? "selected" : ""}>${opt}</option>`)
-          .join("");
+        const hasStart = !!match.start_img;
+        const hasStop = !!match.stop_img;
+        const isStartDone = hasStart || signalVal === "RECEIVE"; // cus start ถือว่า start แล้ว
+        const isComplete = isStartDone && hasStop; 
+
+        // --- Logic ปิดปุ่ม ---
+        let disableStart = "";
+        if (signalVal === "NON" || hasStart || signalVal === "RECEIVE") {
+            disableStart = "disabled";
+        }
+        const disableStop = (signalVal === "NON" || hasStop) ? "disabled" : "";
+        const disableAction = isComplete ? "disabled" : ""; // ปิดปุ่มแก้ไข/ลบ เมื่อจบงาน
+
+        // --- สีปุ่ม ---
+        const btnStartClass = hasStart ? "btn-disabled bg-success/20 text-success" : "btn-success text-white";
+        const btnStopClass = hasStop ? "btn-disabled bg-error/20 text-error" : "btn-error text-white";
+
+        // --- Icon Status ---
+        let statusSymbol = '<span class="text-gray-300"><i class="fas fa-minus"></i></span>';
+        if (isComplete) {
+            statusSymbol = `<div class="tooltip" data-tip="Completed"><i class="fas fa-check-circle text-success text-xl"></i></div>`;
+        } else if (isStartDone) {
+            statusSymbol = `<div class="tooltip" data-tip="On Air"><i class="fas fa-video text-error text-xl animate-pulse"></i></div>`;
+        } else if (hasStop) {
+             statusSymbol = `<div class="tooltip" data-tip="Stop Only"><i class="fas fa-stop-circle text-warning text-xl"></i></div>`;
+        }
 
         tr.innerHTML = `
         <td class="font-mono text-xs">${match.time}</td>
@@ -96,115 +154,165 @@
         </td>
         <td><span class="badge badge-ghost badge-sm">${match.channel}</span></td>
         
-        <td>
-          <select class="select select-bordered select-xs w-full max-w-[100px]"
-            onchange="Dashboard.updateSignal('${match.id}', this.value)">
-            ${signalOptions}
-          </select>
-        </td>
-
-        <td>
-          <div class="join">
-            <button id="btn-in-${match.id}" class="btn btn-xs btn-success join-item text-white" 
-              ${isBtnDisabled} 
-              onclick="Dashboard.setStatus('${match.id}', 'IN')">IN</button>
-            
-            <button id="btn-out-${match.id}" class="btn btn-xs btn-error join-item text-white" 
-              ${isBtnDisabled} 
-              onclick="Dashboard.setStatus('${match.id}', 'OUT')">OUT</button>
+        <td class="text-center">
+          <div id="signal-container-${match.id}" class="relative inline-block w-full max-w-[120px]">
+            <select id="signal-select-${match.id}" 
+              class="select select-bordered select-xs w-full"
+              onchange="Dashboard.updateSignal('${match.id}', this.value)">
+              ${options}
+            </select>
           </div>
         </td>
+
+        <td class="text-center">
+          <button class="btn btn-xs ${btnStartClass} w-full" ${disableStart} 
+            onclick="Dashboard.openUploadModal('${match.id}', 'START')">
+            ${hasStart ? '<i class="fas fa-check"></i>' : 'Start'}
+          </button>
+        </td>
         
-        <td>
-          <span class="badge ${match.status === "LIVE" ? "badge-success" : match.status === "DONE" ? "badge-neutral" : "badge-ghost"} badge-sm">
-            ${match.status}
-          </span>
+        <td class="text-center">
+          <button class="btn btn-xs ${btnStopClass} w-full" ${disableStop} 
+            onclick="Dashboard.openUploadModal('${match.id}', 'STOP')">
+            ${hasStop ? '<i class="fas fa-check"></i>' : 'Stop'}
+          </button>
+        </td>
+        
+        <td class="text-center">${statusSymbol}</td>
+
+        <td class="text-center">
+          <div class="join">
+            <button class="btn btn-xs btn-ghost join-item text-warning" ${disableAction} onclick="Dashboard.editMatch('${match.id}')">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn btn-xs btn-ghost join-item text-error" ${disableAction} onclick="Dashboard.deleteMatch('${match.id}')">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </div>
         </td>
       `;
         tbody.appendChild(tr);
       });
     },
 
-    // ฟังก์ชันอัปเดต Signal Dropdown
-    updateSignal(matchId, newSignal) {
-      Server.call("toggleSignalOwner", matchId, newSignal)
-        .then(() => { /* Success */ })
-        .catch((err) => console.error(err));
+    // --- UPLOAD SYSTEM ---
 
-      // ควบคุมการเปิด/ปิดปุ่ม In/Out ทันที
-      const btnIn = document.getElementById(`btn-in-${matchId}`);
-      const btnOut = document.getElementById(`btn-out-${matchId}`);
-
-      if (newSignal === "NON") {
-        if (btnIn) btnIn.disabled = true;
-        if (btnOut) btnOut.disabled = true;
-      } else {
-        if (btnIn) btnIn.disabled = false;
-        if (btnOut) btnOut.disabled = false;
-      }
-    },
-
-    // 🚩 แก้ไข 2: เพิ่มฟังก์ชัน setStatus เพื่อรับคำสั่งจากปุ่มใน HTML
-    setStatus(id, type) {
-      // ค้นหาข้อมูล Match เพื่อเอาชื่อมาแสดงใน Modal
-      const match = this.data.find(m => m.id == id);
-      const matchName = match ? `${match.home} vs ${match.away}` : id;
-
-      // เรียก Modal ยืนยัน
-      this.confirmUpdateStatus(id, type, matchName);
-    },
-
-    // Modal ยืนยัน (ถ้าคุณมี UIManager.showModal แล้ว)
-    confirmUpdateStatus(id, type, matchName) {
-      const actionText = type === "IN" ? "Check-In" : "Check-Out";
-
-      // ตรวจสอบว่ามี UIManager.showModal หรือไม่ (เผื่อยังไม่ได้ทำ)
-      if (typeof UIManager.showModal !== 'function') {
-        // Fallback: ถ้าไม่มี Modal ให้บันทึกเลย
-        if (confirm(`Confirm ${actionText} for ${matchName}?`)) {
-          this.executeSetStatus(id, type, actionText);
-        }
-        return;
-      }
-
-      UIManager.showModal({
-        title: `Confirm ${actionText}`,
-        confirmText: `Yes, ${actionText}`,
-        body: `
-          <div class="text-center">
-            <div class="text-4xl mb-2 ${type === "IN" ? "text-success" : "text-error"}">
-              <i class="fas ${type === "IN" ? "fa-check-circle" : "fa-times-circle"}"></i>
+    openUploadModal(id, type) {
+      this.currentUpload = { matchId: id, type: type, file: null };
+      const bodyHtml = `
+        <div class="text-center space-y-4">
+          <p class="text-sm text-gray-500">คลิกเพื่อเลือกไฟล์ หรือ Paste (Ctrl+V) รูปภาพที่นี่</p>
+          <div id="upload-zone" onclick="document.getElementById('hidden-file-input').click()"
+               class="border-2 border-dashed border-base-300 rounded-lg p-6 cursor-pointer hover:bg-base-100 transition relative min-h-[150px] flex items-center justify-center">
+            <input type="file" id="hidden-file-input" class="hidden" accept="image/*" onchange="Dashboard.handleFileSelect(this)">
+            <div id="upload-placeholder" class="pointer-events-none">
+              <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+              <p class="text-xs">Browse or Paste Image</p>
             </div>
-            <p>Are you sure you want to <b>${actionText}</b>?</p>
-            <p class="text-sm opacity-60 mt-2">${matchName}</p>
+            <img id="upload-preview" class="hidden max-h-48 rounded shadow-sm object-contain" />
           </div>
-        `,
-        onConfirm: () => this.executeSetStatus(id, type, actionText)
+        </div>
+      `;
+      
+      // ✅ แก้ไข 2: ใช้ Backtick (`) ครอบ Title เพื่อแก้ Syntax Error 'เพิ่มรูปภาพ'
+      UIManager.showModal({
+        title: `เพิ่มรูปภาพ (${type === 'START' ? 'Start' : 'Stop'})`, 
+        body: bodyHtml,
+        confirmText: 'ยืนยันอัปโหลด',
+        onConfirm: () => this.submitUpload()
       });
     },
 
-    // ฟังก์ชันยิง Backend จริงๆ
-    executeSetStatus(id, type, actionText) {
-      UIManager.showLoading();
-      Server.call("setMatchStatus", id, type)
-        .then((res) => {
-          if (res.success) {
-            UIManager.showToast(`${actionText} Successful`, "success");
-            this.loadData(false);
-          } else {
-            UIManager.showToast(res.message, "error");
-          }
-        })
-        .catch((err) => UIManager.showToast(err.message, "error"))
-        .finally(() => UIManager.hideLoading());
+    handleFileSelect(input) {
+      if (input.files && input.files[0]) this.processFile(input.files[0]);
+    },
+
+    handlePaste(e) {
+      // ทำงานเฉพาะตอน Modal เปิดอยู่
+      if (!this.currentUpload) return;
+      
+      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      for (let item of items) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          this.processFile(item.getAsFile());
+          break;
+        }
+      }
+    },
+
+    processFile(file) {
+      this.currentUpload.file = file;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.getElementById('upload-preview');
+        const ph = document.getElementById('upload-placeholder');
+        if (img && ph) { 
+            img.src = e.target.result; 
+            img.classList.remove('hidden'); 
+            ph.classList.add('hidden'); 
+        }
+      };
+      reader.readAsDataURL(file);
+    },
+
+    submitUpload() {
+      if (!this.currentUpload || !this.currentUpload.file) {
+        UIManager.showToast("กรุณาเลือกรูปภาพก่อนครับ", "warning");
+        return;
+      }
+      
+      // เปลี่ยนปุ่มเป็น Loading
+      const confirmBtn = document.querySelector('.modal-box .btn-primary');
+      if(confirmBtn) {
+          confirmBtn.innerHTML = '<span class="loading loading-spinner"></span> กำลังอัปโหลด...';
+          confirmBtn.disabled = true;
+      }
+
+      const { matchId, type, file } = this.currentUpload;
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const base64 = reader.result.split(',')[1];
+        Server.call("uploadMatchImage", matchId, type, base64, file.type)
+          .then((res) => {
+            if (res.success) {
+              UIManager.showToast("อัปโหลดสำเร็จ", "success");
+              this.currentUpload = null;
+              this.loadData(); 
+              // Modal จะถูกปิดโดย UIManager (หรือกดปิดเอง)
+            } else {
+              UIManager.showToast(res.message || "เกิดข้อผิดพลาด", "error");
+              if(confirmBtn) { confirmBtn.innerHTML = 'ยืนยันอัปโหลด'; confirmBtn.disabled = false; }
+            }
+          })
+          .catch(err => {
+              UIManager.showToast(err.message, "error");
+              if(confirmBtn) { confirmBtn.innerHTML = 'ยืนยันอัปโหลด'; confirmBtn.disabled = false; }
+          });
+      };
+    },
+
+    editMatch(id) { alert("ระบบแก้ไขกำลังพัฒนา"); },
+    deleteMatch(id) {
+      UIManager.showModal({
+        title: "ลบรายการ",
+        body: "คุณแน่ใจหรือไม่ที่จะลบรายการนี้?",
+        confirmText: "ลบรายการ",
+        onConfirm: () => {
+           Server.call('deleteMatch', id)
+             .then(() => { UIManager.showToast("ลบสำเร็จ", "success"); this.loadData(); })
+             .catch(err => console.error(err));
+        }
+      });
     }
   };
 
-  // Auto Init (ใส่ไว้เผื่อ JS_App ไม่เรียก แต่ใส่ setTimeout กันชน)
+  // เรียกใช้เมื่อโหลดหน้าจอ
   document.addEventListener("DOMContentLoaded", () => {
-    if (typeof Dashboard !== 'undefined' && Dashboard.init) {
-      // เช็คว่า JS_App เรียกไปหรือยัง ถ้ายังค่อยเรียก
-      // แต่ปกติ JS_App จะจัดการให้
-    }
+     // JS_App จะเป็นคนเรียก Dashboard.init() เอง
+     // แต่ถ้า JS_App โหลดก่อน Dashboard ให้เรียกตรงนี้กันเหนียวได้
+     if (typeof Dashboard !== 'undefined' && Dashboard.init) {
+        // Dashboard.init(); // ปกติ JS_App จัดการให้แล้ว
+     }
   });
 </script>
