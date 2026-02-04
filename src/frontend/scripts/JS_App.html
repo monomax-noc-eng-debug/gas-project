@@ -1,29 +1,41 @@
 <script>
-/**
- * JS_App.html
- */
+  /**
+   * JS_App.html
+   * Application Entry Point
+   */
 
-document.addEventListener('DOMContentLoaded', async () => {
-  
-  UIManager.showLoading();
+  document.addEventListener('DOMContentLoaded', async () => {
 
-  try {
-    await Store.init();
+    UIManager.showLoading();
 
-    // ไปหน้า Dashboard
-    Router.navigateTo('page-dashboard');
+    try {
+      // Initialize Store (user settings, theme, etc.)
+      await Store.init();
 
-    // ✅ แก้ไข: เรียก .init() เพื่อให้ตั้งค่าวันที่ปัจจุบันก่อนโหลดข้อมูล
-    if(typeof Dashboard !== 'undefined') {
-        Dashboard.init(); 
+    } catch (err) {
+      console.error('Store Init Error:', err);
+      // Continue anyway - app can still work without user settings
     }
 
-  } catch (err) {
-    console.error('App Start Error:', err);
-    UIManager.showToast('Failed to load application', 'error');
-  } finally {
-    UIManager.hideLoading();
-  }
+    try {
+      // ✅ Navigate to Dashboard using the central router
+      // This will trigger Dashboard.init() which sets date picker and loads data
+      if (typeof changePage === 'function') {
+        changePage('page-dashboard');
+      } else {
+        // Fallback: direct call if changePage not available
+        Router.navigateTo('page-dashboard');
+        if (typeof Dashboard !== 'undefined' && typeof Dashboard.init === 'function') {
+          Dashboard.init();
+        }
+      }
 
-});
+    } catch (err) {
+      console.error('App Start Error:', err);
+      UIManager.showToast('Failed to load application', 'error');
+    } finally {
+      UIManager.hideLoading();
+    }
+
+  });
 </script>

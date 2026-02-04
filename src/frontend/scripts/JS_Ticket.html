@@ -2,9 +2,20 @@
   /**
    * JS_Ticket.html
    * Handle Ticket Page Logic
+   * Updated: Lazy Loading Support
    */
 
-  async function loadTickets() {
+  // ✅ LAZY LOADING FLAG
+  var isTicketLoaded = false;
+
+  // ✅ GLOBAL LOADER FUNCTION (called from changePage)
+  async function loadTickets(forceRefresh) {
+    // ✅ LAZY LOADING CHECK
+    if (!forceRefresh && isTicketLoaded) {
+      console.log("Tickets: Using cached data");
+      return;
+    }
+
     console.log("Loading Tickets...");
     const tbody = document.getElementById('ticket-table-body');
     if (!tbody) return;
@@ -12,8 +23,10 @@
     tbody.innerHTML = `<tr><td colspan="19" class="text-center py-10"><span class="loading loading-dots loading-lg text-primary"></span></td></tr>`;
 
     try {
-      const data = await Server.call('getTickets');
+      const data = await Server.call('getTickets', forceRefresh);
       renderTicketTable(data);
+      // ✅ SET LOADED FLAG
+      isTicketLoaded = true;
     } catch (err) {
       console.error(err);
       tbody.innerHTML = `<tr><td colspan="19" class="text-center text-error py-4">Failed to load: ${err.message}</td></tr>`;
@@ -64,20 +77,4 @@
       tbody.appendChild(tr);
     });
   }
-
-  // Auto-load when navigating to page
-  document.addEventListener('DOMContentLoaded', () => {
-    // Observer to detect when page becomes visible
-    const ticketPage = document.getElementById('page-ticket');
-    if (ticketPage) {
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.attributeName === 'class' && !ticketPage.classList.contains('hidden')) {
-            loadTickets();
-          }
-        });
-      });
-      observer.observe(ticketPage, { attributes: true });
-    }
-  });
 </script>

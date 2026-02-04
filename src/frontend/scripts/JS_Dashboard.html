@@ -6,22 +6,27 @@
    * - CRUD System (Add/Edit)
    * - Safe Syntax for Google Apps Script
    * - Update: Time Input Type
+   * - Update: Lazy Loading Support
    */
+
+  // ✅ LAZY LOADING FLAG
+  var isDashboardLoaded = false;
+
   var Dashboard = {
-    viewMode: "DAY", 
+    viewMode: "DAY",
     data: [], // ข้อมูลทั้งหมด
     currentUpload: null,
-    
+
     // Pagination Config
     currentPage: 1,
     pageSize: 15, // จำนวนรายการต่อหน้า
 
-    init: function() {
+    init: function () {
       var now = new Date();
       var year = now.getFullYear();
       var month = String(now.getMonth() + 1).padStart(2, '0');
       var day = String(now.getDate()).padStart(2, '0');
-      
+
       var today = year + '-' + month + '-' + day;
       var thisMonth = year + '-' + month;
 
@@ -32,12 +37,14 @@
       if (monthPicker) monthPicker.value = thisMonth;
 
       var self = this;
-      document.addEventListener('paste', function(e) { self.handlePaste(e); });
-      
-      this.loadData();
+      document.addEventListener('paste', function (e) { self.handlePaste(e); });
+
+      // ✅ Reset flag and force load on init (bypass backend cache)
+      isDashboardLoaded = false;
+      this.loadData(true);
     },
 
-    switchMode: function(mode) {
+    switchMode: function (mode) {
       this.viewMode = mode;
       var datePicker = document.getElementById("dash-date-picker");
       var monthPicker = document.getElementById("dash-month-picker");
@@ -50,11 +57,11 @@
         datePicker.classList.add("hidden");
         monthPicker.classList.remove("hidden");
       }
-      
+
       // Reset State
-      this.currentPage = 1; 
-      this.data = []; 
-      
+      this.currentPage = 1;
+      this.data = [];
+
       // Show Loading
       if (tbody) {
         tbody.innerHTML = '<tr><td colspan="8" class="text-center py-20"><span class="loading loading-dots loading-lg"></span></td></tr>';
@@ -64,11 +71,17 @@
       this.loadData(true);
     },
 
-    loadData: function(forceRefresh) {
+    loadData: function (forceRefresh) {
+      // ✅ LAZY LOADING CHECK
+      if (!forceRefresh && isDashboardLoaded) {
+        console.log("Dashboard: Using cached data");
+        return;
+      }
+
       // 1. จับ Element ปุ่ม Refresh (ปุ่มแม่ของ icon)
-      var btnRefresh = document.getElementById("dash-refresh-icon")?.parentElement; 
+      var btnRefresh = document.getElementById("dash-refresh-icon")?.parentElement;
       var originalBtnContent = btnRefresh ? btnRefresh.innerHTML : '';
-      
+
       var tbody = document.getElementById("match-table-body");
       var dateVal = document.getElementById("dash-date-picker").value;
       var monthVal = document.getElementById("dash-month-picker").value;
@@ -76,37 +89,40 @@
 
       // 2. ✅ แก้ไข: ใช้ loading-spinner (วงกลมหมุน) สำหรับปุ่มนี้โดยเฉพาะ
       if (btnRefresh) {
-          btnRefresh.disabled = true;
-          btnRefresh.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
+        btnRefresh.disabled = true;
+        btnRefresh.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
       }
-      
+
       // ส่วน Table ยังคงใช้ loading-dots (จุด 3 จุด) ตามเดิม
       if (forceRefresh || !this.data.length) {
-         if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-20"><span class="loading loading-dots loading-lg text-primary"></span></td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-20"><span class="loading loading-dots loading-lg text-primary"></span></td></tr>';
       }
 
       var self = this;
-      Server.call("getMatches", this.viewMode, filterValue)
-        .then(function(matches) {
-          self.data = matches; 
-          self.currentPage = 1; 
-          self.renderTable(); 
-          
+      Server.call("getMatches", this.viewMode, filterValue, forceRefresh)
+        .then(function (matches) {
+          self.data = matches;
+          self.currentPage = 1;
+          self.renderTable();
+
+          // ✅ SET LOADED FLAG
+          isDashboardLoaded = true;
+
           if (forceRefresh) UIManager.showToast("Updated", "success");
         })
-        .catch(function(err) {
+        .catch(function (err) {
           if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-10 text-error">Error: ' + err.message + '</td></tr>';
         })
-        .finally(function() {
+        .finally(function () {
           // คืนค่าปุ่มกลับสู่สภาพเดิม (icon fa-sync-alt)
           if (btnRefresh) {
-              btnRefresh.innerHTML = originalBtnContent;
-              btnRefresh.disabled = false;
+            btnRefresh.innerHTML = originalBtnContent;
+            btnRefresh.disabled = false;
           }
         });
     },
 
-    changePage: function(direction) {
+    changePage: function (direction) {
       var totalPages = Math.ceil(this.data.length / this.pageSize);
       var newPage = this.currentPage + direction;
 
@@ -116,35 +132,35 @@
       }
     },
 
-    updateSignal: function(id, val) {
+    updateSignal: function (id, val) {
       var selectEl = document.getElementById('signal-select-' + id);
       var containerEl = document.getElementById('signal-container-' + id);
-      
+
       if (selectEl) selectEl.disabled = true;
 
       var spinner = document.createElement("span");
       spinner.id = 'spinner-' + id;
-      spinner.className = "loading loading-spinner loading-xs text-primary absolute -right-6 top-1/2 transform -translate-y-1/2"; 
+      spinner.className = "loading loading-spinner loading-xs text-primary absolute -right-6 top-1/2 transform -translate-y-1/2";
       if (containerEl) containerEl.appendChild(spinner);
 
       var self = this;
       Server.call("toggleSignalOwner", id, val)
-        .then(function() {
-          var match = self.data.find(function(m) { return String(m.id) === String(id); });
-          if(match) match.signalOwner = val;
+        .then(function () {
+          var match = self.data.find(function (m) { return String(m.id) === String(id); });
+          if (match) match.signalOwner = val;
 
-          self.renderTable(); 
+          self.renderTable();
           UIManager.showToast("Saved", "success");
         })
-        .catch(function(err) {
+        .catch(function (err) {
           if (selectEl) selectEl.disabled = false;
           if (containerEl && spinner) spinner.remove();
           UIManager.showToast("Update Failed: " + err.message, "error");
         });
     },
 
-    renderTable: function() {
-      var matches = this.data; 
+    renderTable: function () {
+      var matches = this.data;
       var tbody = document.getElementById("match-table-body");
       if (!tbody) return;
       tbody.innerHTML = "";
@@ -160,86 +176,86 @@
       var pageData = matches.slice(startIdx, endIdx);
 
       var self = this;
-      pageData.forEach(function(match) {
+      pageData.forEach(function (match) {
         var tr = document.createElement("tr");
         tr.className = "hover";
 
-        var signalVal = match.signalOwner || "NON"; 
-        
+        var signalVal = match.signalOwner || "NON";
+
         var optionsHtml = "";
         var opts = [
           { val: "NON", label: "ไม่มี" },
           { val: "HOST", label: "NOC" },
           { val: "RECEIVE", label: "ลูกค้า" }
         ];
-        opts.forEach(function(opt) {
-            var selected = (signalVal === opt.val) ? "selected" : "";
-            optionsHtml += '<option value="' + opt.val + '" ' + selected + '>' + opt.label + '</option>';
+        opts.forEach(function (opt) {
+          var selected = (signalVal === opt.val) ? "selected" : "";
+          optionsHtml += '<option value="' + opt.val + '" ' + selected + '>' + opt.label + '</option>';
         });
 
         var hasStart = !!match.start_img;
         var hasStop = !!match.stop_img;
-        var isStartDone = hasStart || signalVal === "RECEIVE"; 
-        var isComplete = isStartDone && hasStop; 
+        var isStartDone = hasStart || signalVal === "RECEIVE";
+        var isComplete = isStartDone && hasStop;
 
         var disableStart = "";
         if (signalVal === "NON" || hasStart || signalVal === "RECEIVE") {
-            disableStart = "disabled";
+          disableStart = "disabled";
         }
         var disableStop = (signalVal === "NON" || hasStop) ? "disabled" : "";
-        var disableAction = isComplete ? "disabled" : ""; 
+        var disableAction = isComplete ? "disabled" : "";
 
         var btnStartClass = isStartDone ? "btn-disabled bg-success/20 text-success" : "btn-success text-white";
         var btnStopClass = hasStop ? "btn-disabled bg-error/20 text-error" : "btn-error text-white";
 
         var statusSymbol = '<span class="text-gray-300"><i class="fas fa-minus"></i></span>';
         if (isComplete) {
-            statusSymbol = '<div class="tooltip" data-tip="Completed"><i class="fas fa-check-circle text-success text-xl"></i></div>';
+          statusSymbol = '<div class="tooltip" data-tip="Completed"><i class="fas fa-check-circle text-success text-xl"></i></div>';
         } else if (isStartDone) {
-            statusSymbol = '<div class="tooltip" data-tip="On Air"><i class="fas fa-video text-error text-xl animate-pulse"></i></div>';
+          statusSymbol = '<div class="tooltip" data-tip="On Air"><i class="fas fa-video text-error text-xl animate-pulse"></i></div>';
         } else if (hasStop) {
-             statusSymbol = '<div class="tooltip" data-tip="Stop Only"><i class="fas fa-stop-circle text-warning text-xl"></i></div>';
+          statusSymbol = '<div class="tooltip" data-tip="Stop Only"><i class="fas fa-stop-circle text-warning text-xl"></i></div>';
         }
 
         var html = '';
         html += '<td class="align-middle font-mono text-xs whitespace-nowrap">' + match.time + '</td>';
-        
+
         html += '<td class="align-middle">';
-        html +=   '<div class="font-bold text-sm truncate max-w-[180px]" title="' + match.league + '">' + match.league + '</div>';
-        html +=   '<div class="text-xs text-gray-500 truncate max-w-[180px]" title="' + match.home + ' vs ' + match.away + '">' + match.home + ' vs ' + match.away + '</div>';
+        html += '<div class="font-bold text-sm truncate max-w-[180px]" title="' + match.league + '">' + match.league + '</div>';
+        html += '<div class="text-xs text-gray-500 truncate max-w-[180px]" title="' + match.home + ' vs ' + match.away + '">' + match.home + ' vs ' + match.away + '</div>';
         html += '</td>';
-        
+
         html += '<td class="align-middle">';
-        html +=   '<span class="badge badge-ghost badge-sm whitespace-nowrap">' + match.channel + '</span>';
-        html += '</td>';
-        
-        html += '<td class="align-middle text-center">';
-        html +=   '<div id="signal-container-' + match.id + '" class="relative inline-block w-full max-w-[120px]">';
-        html +=     '<select id="signal-select-' + match.id + '" class="select select-bordered select-xs w-full" onchange="Dashboard.updateSignal(\'' + match.id + '\', this.value)">';
-        html +=       optionsHtml;
-        html +=     '</select>';
-        html +=   '</div>';
+        html += '<span class="badge badge-ghost badge-sm whitespace-nowrap">' + match.channel + '</span>';
         html += '</td>';
 
         html += '<td class="align-middle text-center">';
-        html +=   '<button class="btn btn-xs ' + btnStartClass + ' w-full" ' + disableStart + ' onclick="Dashboard.openUploadModal(\'' + match.id + '\', \'START\')">';
-        html +=     (isStartDone ? '<i class="fas fa-check"></i>' : 'Start');
-        html +=   '</button>';
+        html += '<div id="signal-container-' + match.id + '" class="relative inline-block w-full max-w-[120px]">';
+        html += '<select id="signal-select-' + match.id + '" class="select select-bordered select-xs w-full" onchange="Dashboard.updateSignal(\'' + match.id + '\', this.value)">';
+        html += optionsHtml;
+        html += '</select>';
+        html += '</div>';
         html += '</td>';
-        
+
         html += '<td class="align-middle text-center">';
-        html +=   '<button class="btn btn-xs ' + btnStopClass + ' w-full" ' + disableStop + ' onclick="Dashboard.openUploadModal(\'' + match.id + '\', \'STOP\')">';
-        html +=     (hasStop ? '<i class="fas fa-check"></i>' : 'Stop');
-        html +=   '</button>';
+        html += '<button class="btn btn-xs ' + btnStartClass + ' w-full" ' + disableStart + ' onclick="Dashboard.openUploadModal(\'' + match.id + '\', \'START\')">';
+        html += (isStartDone ? '<i class="fas fa-check"></i>' : 'Start');
+        html += '</button>';
         html += '</td>';
-        
+
+        html += '<td class="align-middle text-center">';
+        html += '<button class="btn btn-xs ' + btnStopClass + ' w-full" ' + disableStop + ' onclick="Dashboard.openUploadModal(\'' + match.id + '\', \'STOP\')">';
+        html += (hasStop ? '<i class="fas fa-check"></i>' : 'Stop');
+        html += '</button>';
+        html += '</td>';
+
         html += '<td class="align-middle text-center">' + statusSymbol + '</td>';
 
         html += '<td class="align-middle text-center">';
-        html +=   '<div class="join">';
-        html +=     '<button class="btn btn-xs btn-ghost join-item text-warning" ' + disableAction + ' onclick="Dashboard.editMatch(\'' + match.id + '\')"><i class="fas fa-edit"></i></button>';
-        html +=     '<button class="btn btn-xs btn-ghost join-item text-error" ' + disableAction + ' onclick="Dashboard.deleteMatch(\'' + match.id + '\')"><i class="fas fa-trash-alt"></i></button>';
-        html +=   '</div>';
+        html += '<div class="join">';
+        html += '<button class="btn btn-xs btn-ghost join-item text-warning" ' + disableAction + ' onclick="Dashboard.editMatch(\'' + match.id + '\')"><i class="fas fa-edit"></i></button>';
+        html += '<button class="btn btn-xs btn-ghost join-item text-error" ' + disableAction + ' onclick="Dashboard.deleteMatch(\'' + match.id + '\')"><i class="fas fa-trash-alt"></i></button>';
+        html += '</div>';
         html += '</td>';
 
         tr.innerHTML = html;
@@ -249,57 +265,57 @@
       this.updatePaginationUI(matches.length, startIdx, endIdx);
     },
 
-    updatePaginationUI: function(totalItems, start, end) {
+    updatePaginationUI: function (totalItems, start, end) {
       var totalPages = Math.ceil(totalItems / this.pageSize);
-      
+
       var infoText = document.getElementById("pagination-info");
       var pageNum = document.getElementById("page-num");
-      
-      if(infoText) infoText.innerText = "Total " + totalItems + " | Showing " + (start + 1) + "-" + Math.min(end, totalItems);
-      if(pageNum) pageNum.innerText = this.currentPage + " / " + (totalPages || 1);
+
+      if (infoText) infoText.innerText = "Total " + totalItems + " | Showing " + (start + 1) + "-" + Math.min(end, totalItems);
+      if (pageNum) pageNum.innerText = this.currentPage + " / " + (totalPages || 1);
 
       var btnPrev = document.getElementById("btn-prev");
       var btnNext = document.getElementById("btn-next");
 
-      if(btnPrev) btnPrev.disabled = (this.currentPage === 1);
-      if(btnNext) btnNext.disabled = (this.currentPage === totalPages || totalPages === 0);
+      if (btnPrev) btnPrev.disabled = (this.currentPage === 1);
+      if (btnNext) btnNext.disabled = (this.currentPage === totalPages || totalPages === 0);
     },
 
     // --- UPLOAD SYSTEM ---
 
-    openUploadModal: function(id, type) {
+    openUploadModal: function (id, type) {
       this.currentUpload = { matchId: id, type: type, file: null };
-      
+
       var bodyHtml = '';
       bodyHtml += '<div class="text-center space-y-4">';
-      bodyHtml +=   '<p class="text-sm text-gray-500">คลิกเพื่อเลือกไฟล์ หรือ Paste (Ctrl+V) รูปภาพที่นี่</p>';
-      bodyHtml +=   '<div id="upload-zone" onclick="document.getElementById(\'hidden-file-input\').click()" class="border-2 border-dashed border-base-300 rounded-lg p-6 cursor-pointer hover:bg-base-100 transition relative min-h-[150px] flex items-center justify-center">';
-      bodyHtml +=     '<input type="file" id="hidden-file-input" class="hidden" accept="image/*" onchange="Dashboard.handleFileSelect(this)">';
-      bodyHtml +=     '<div id="upload-placeholder" class="pointer-events-none">';
-      bodyHtml +=       '<i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>';
-      bodyHtml +=       '<p class="text-xs">Browse or Paste Image</p>';
-      bodyHtml +=     '</div>';
-      bodyHtml +=     '<img id="upload-preview" class="hidden max-h-48 rounded shadow-sm object-contain" />';
-      bodyHtml +=   '</div>';
+      bodyHtml += '<p class="text-sm text-gray-500">คลิกเพื่อเลือกไฟล์ หรือ Paste (Ctrl+V) รูปภาพที่นี่</p>';
+      bodyHtml += '<div id="upload-zone" onclick="document.getElementById(\'hidden-file-input\').click()" class="border-2 border-dashed border-base-300 rounded-lg p-6 cursor-pointer hover:bg-base-100 transition relative min-h-[150px] flex items-center justify-center">';
+      bodyHtml += '<input type="file" id="hidden-file-input" class="hidden" accept="image/*" onchange="Dashboard.handleFileSelect(this)">';
+      bodyHtml += '<div id="upload-placeholder" class="pointer-events-none">';
+      bodyHtml += '<i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>';
+      bodyHtml += '<p class="text-xs">Browse or Paste Image</p>';
       bodyHtml += '</div>';
-      
+      bodyHtml += '<img id="upload-preview" class="hidden max-h-48 rounded shadow-sm object-contain" />';
+      bodyHtml += '</div>';
+      bodyHtml += '</div>';
+
       var titleText = "เพิ่มรูปภาพ (" + (type === 'START' ? 'Start' : 'Stop') + ")";
       var self = this;
 
       UIManager.showModal({
-        title: titleText, 
+        title: titleText,
         body: bodyHtml,
         confirmText: 'ยืนยันอัปโหลด',
-        manualClose: true, 
-        onConfirm: function() { self.submitUpload(); }
+        manualClose: true,
+        onConfirm: function () { self.submitUpload(); }
       });
     },
 
-    handleFileSelect: function(input) {
+    handleFileSelect: function (input) {
       if (input.files && input.files[0]) this.processFile(input.files[0]);
     },
 
-    handlePaste: function(e) {
+    handlePaste: function (e) {
       if (!this.currentUpload) return;
       var items = (e.clipboardData || e.originalEvent.clipboardData).items;
       for (var i = 0; i < items.length; i++) {
@@ -310,251 +326,250 @@
       }
     },
 
-    processFile: function(file) {
+    processFile: function (file) {
       this.currentUpload.file = file;
       var reader = new FileReader();
-      reader.onload = function(e) {
+      reader.onload = function (e) {
         var img = document.getElementById('upload-preview');
         var ph = document.getElementById('upload-placeholder');
-        if (img && ph) { 
-            img.src = e.target.result; 
-            img.classList.remove('hidden'); 
-            ph.classList.add('hidden'); 
+        if (img && ph) {
+          img.src = e.target.result;
+          img.classList.remove('hidden');
+          ph.classList.add('hidden');
         }
       };
       reader.readAsDataURL(file);
     },
 
-    submitUpload: function() {
+    submitUpload: function () {
       if (!this.currentUpload || !this.currentUpload.file) {
         UIManager.showToast("กรุณาเลือกรูปภาพก่อนครับ", "warning");
         return;
       }
-      
+
       var modalBox = document.querySelector('.modal[open] .modal-box') || document.querySelector('.modal-box');
       var confirmBtn = modalBox ? modalBox.querySelector('.btn-primary') : null;
       var originalBtnText = confirmBtn ? confirmBtn.innerHTML : 'ยืนยันอัปโหลด';
-      
-      if(confirmBtn) {
-          var rect = confirmBtn.getBoundingClientRect();
-          confirmBtn.style.width = rect.width + 'px';
-          confirmBtn.style.height = rect.height + 'px';
-          
-          confirmBtn.style.position = 'relative';
-          confirmBtn.style.overflow = 'hidden';
-          confirmBtn.disabled = true;
-          
-          var progressHtml = '';
-          progressHtml += '<div id="btn-progress-bar" style="position: absolute; top: 0; left: 0; bottom: 0; width: 0%; background-color: rgba(0,0,0,0.3); transition: width 0.2s linear;"></div>';
-          progressHtml += '<span id="btn-progress-text" style="position: relative; z-index: 1;">Uploading... 0%</span>';
-          
-          confirmBtn.innerHTML = progressHtml;
+
+      if (confirmBtn) {
+        var rect = confirmBtn.getBoundingClientRect();
+        confirmBtn.style.width = rect.width + 'px';
+        confirmBtn.style.height = rect.height + 'px';
+
+        confirmBtn.style.position = 'relative';
+        confirmBtn.style.overflow = 'hidden';
+        confirmBtn.disabled = true;
+
+        var progressHtml = '';
+        progressHtml += '<div id="btn-progress-bar" style="position: absolute; top: 0; left: 0; bottom: 0; width: 0%; background-color: rgba(0,0,0,0.3); transition: width 0.2s linear;"></div>';
+        progressHtml += '<span id="btn-progress-text" style="position: relative; z-index: 1;">Uploading... 0%</span>';
+
+        confirmBtn.innerHTML = progressHtml;
       }
 
       var progress = 0;
-      var progressInterval = setInterval(function() {
-          if (progress < 90) {
-              progress += Math.floor(Math.random() * 5) + 1;
-              if(progress > 90) progress = 90;
-          }
-          if(confirmBtn) {
-              var bar = confirmBtn.querySelector('#btn-progress-bar');
-              var txt = confirmBtn.querySelector('#btn-progress-text');
-              if(bar) bar.style.width = progress + '%';
-              if(txt) txt.innerText = 'Uploading... ' + progress + '%';
-          }
+      var progressInterval = setInterval(function () {
+        if (progress < 90) {
+          progress += Math.floor(Math.random() * 5) + 1;
+          if (progress > 90) progress = 90;
+        }
+        if (confirmBtn) {
+          var bar = confirmBtn.querySelector('#btn-progress-bar');
+          var txt = confirmBtn.querySelector('#btn-progress-text');
+          if (bar) bar.style.width = progress + '%';
+          if (txt) txt.innerText = 'Uploading... ' + progress + '%';
+        }
       }, 300);
 
       var uploadData = this.currentUpload;
       var reader = new FileReader();
       reader.readAsDataURL(uploadData.file);
-      
-      var self = this;
-      reader.onload = function() {
-        var base64 = reader.result.split(',')[1];
-        
-        Server.call("uploadMatchImage", uploadData.matchId, uploadData.type, base64, uploadData.file.type)
-          .then(function(res) {
-            clearInterval(progressInterval); 
 
-            if(confirmBtn) {
-                var bar = confirmBtn.querySelector('#btn-progress-bar');
-                var txt = confirmBtn.querySelector('#btn-progress-text');
-                if(bar) bar.style.width = '100%';
-                if(txt) txt.innerText = 'Completed 100%!';
+      var self = this;
+      reader.onload = function () {
+        var base64 = reader.result.split(',')[1];
+
+        Server.call("uploadMatchImage", uploadData.matchId, uploadData.type, base64, uploadData.file.type)
+          .then(function (res) {
+            clearInterval(progressInterval);
+
+            if (confirmBtn) {
+              var bar = confirmBtn.querySelector('#btn-progress-bar');
+              var txt = confirmBtn.querySelector('#btn-progress-text');
+              if (bar) bar.style.width = '100%';
+              if (txt) txt.innerText = 'Completed 100%!';
             }
 
             if (res.success) {
               UIManager.showToast("อัปโหลดสำเร็จ", "success");
               self.currentUpload = null;
-              
-              setTimeout(function() {
-                 var modal = document.querySelector('.modal[open]') || document.getElementById('core-modal');
-                 if(modal) {
-                     if (typeof modal.close === 'function') modal.close();
-                     else modal.removeAttribute('open');
-                     
-                     if(modal.id.startsWith('dynamic-modal')) modal.remove();
-                 }
-                 self.loadData(); 
+
+              setTimeout(function () {
+                var modal = document.querySelector('.modal[open]') || document.getElementById('core-modal');
+                if (modal) {
+                  if (typeof modal.close === 'function') modal.close();
+                  else modal.removeAttribute('open');
+
+                  if (modal.id.startsWith('dynamic-modal')) modal.remove();
+                }
+                self.loadData(true); // Force refresh after upload
               }, 1000);
 
             } else {
               UIManager.showToast(res.message || "เกิดข้อผิดพลาด", "error");
-              if(confirmBtn) { 
-                  confirmBtn.innerHTML = originalBtnText; 
-                  confirmBtn.disabled = false; 
-                  confirmBtn.style.position = ''; 
-                  confirmBtn.style.width = '';  
-                  confirmBtn.style.height = ''; 
+              if (confirmBtn) {
+                confirmBtn.innerHTML = originalBtnText;
+                confirmBtn.disabled = false;
+                confirmBtn.style.position = '';
+                confirmBtn.style.width = '';
+                confirmBtn.style.height = '';
               }
             }
           })
-          .catch(function(err) {
-              clearInterval(progressInterval);
-              UIManager.showToast(err.message, "error");
-              if(confirmBtn) { 
-                  confirmBtn.innerHTML = originalBtnText; 
-                  confirmBtn.disabled = false; 
-                  confirmBtn.style.position = '';
-                  confirmBtn.style.width = '';  
-                  confirmBtn.style.height = ''; 
-              }
+          .catch(function (err) {
+            clearInterval(progressInterval);
+            UIManager.showToast(err.message, "error");
+            if (confirmBtn) {
+              confirmBtn.innerHTML = originalBtnText;
+              confirmBtn.disabled = false;
+              confirmBtn.style.position = '';
+              confirmBtn.style.width = '';
+              confirmBtn.style.height = '';
+            }
           });
       };
     },
 
     // --- CRUD SYSTEM ---
 
-    addMatch: function() {
+    addMatch: function () {
       this.openMatchForm('ADD', null);
     },
 
-    editMatch: function(id) {
+    editMatch: function (id) {
       this.openMatchForm('EDIT', id);
     },
 
-    openMatchForm: function(mode, matchId) {
-       var match = { date: '', time: '', league: '', home: '', away: '', channel: '' };
-       
-       if (mode === 'EDIT' && matchId) {
-         var found = this.data.find(function(m) { return String(m.id) === String(matchId); });
-         if (found) match = found;
-       } else {
-         match.date = document.getElementById("dash-date-picker").value;
-       }
+    openMatchForm: function (mode, matchId) {
+      var match = { date: '', time: '', league: '', home: '', away: '', channel: '' };
 
-       var title = mode === 'ADD' ? 'เพิ่มรายการใหม่' : 'แก้ไขรายการ';
-       
-       var html = '';
-       html += '<form id="match-form" class="text-left space-y-3 pt-2">';
-       html +=   '<input type="hidden" id="m-id" value="' + (matchId || '') + '">';
-       
-       html +=   '<div class="grid grid-cols-2 gap-3">';
-       html +=     '<div class="form-control">';
-       html +=       '<label class="label"><span class="label-text">Date</span></label>';
-       html +=       '<input type="date" id="m-date" class="input input-bordered input-sm w-full" value="' + match.date + '" required>';
-       html +=     '</div>';
-       html +=     '<div class="form-control">';
-       html +=       '<label class="label"><span class="label-text">Time</span></label>';
-       // ✅ แก้ไข: เปลี่ยน type="text" เป็น type="time"
-       html +=       '<input type="time" id="m-time" class="input input-bordered input-sm w-full" value="' + match.time + '" required>';
-       html +=     '</div>';
-       html +=   '</div>';
+      if (mode === 'EDIT' && matchId) {
+        var found = this.data.find(function (m) { return String(m.id) === String(matchId); });
+        if (found) match = found;
+      } else {
+        match.date = document.getElementById("dash-date-picker").value;
+      }
 
-       html +=   '<div class="form-control">';
-       html +=     '<label class="label"><span class="label-text">League</span></label>';
-       html +=     '<input type="text" id="m-league" class="input input-bordered input-sm w-full" value="' + match.league + '" required>';
-       html +=   '</div>';
+      var title = mode === 'ADD' ? 'เพิ่มรายการใหม่' : 'แก้ไขรายการ';
 
-       html +=   '<div class="grid grid-cols-2 gap-3">';
-       html +=     '<div class="form-control">';
-       html +=       '<label class="label"><span class="label-text">Home Team</span></label>';
-       html +=       '<input type="text" id="m-home" class="input input-bordered input-sm w-full" value="' + match.home + '" required>';
-       html +=     '</div>';
-       html +=     '<div class="form-control">';
-       html +=       '<label class="label"><span class="label-text">Away Team</span></label>';
-       html +=       '<input type="text" id="m-away" class="input input-bordered input-sm w-full" value="' + match.away + '" required>';
-       html +=     '</div>';
-       html +=   '</div>';
+      var html = '';
+      html += '<form id="match-form" class="text-left space-y-3 pt-2">';
+      html += '<input type="hidden" id="m-id" value="' + (matchId || '') + '">';
 
-       html +=   '<div class="form-control">';
-       html +=     '<label class="label"><span class="label-text">Channel</span></label>';
-       html +=     '<input type="text" id="m-channel" class="input input-bordered input-sm w-full" value="' + (match.channel || '') + '">';
-       html +=   '</div>';
-       html += '</form>';
+      html += '<div class="grid grid-cols-2 gap-3">';
+      html += '<div class="form-control">';
+      html += '<label class="label"><span class="label-text">Date</span></label>';
+      html += '<input type="date" id="m-date" class="input input-bordered input-sm w-full" value="' + match.date + '" required>';
+      html += '</div>';
+      html += '<div class="form-control">';
+      html += '<label class="label"><span class="label-text">Time</span></label>';
+      html += '<input type="time" id="m-time" class="input input-bordered input-sm w-full" value="' + match.time + '" required>';
+      html += '</div>';
+      html += '</div>';
 
-       var self = this;
-       UIManager.showModal({
-          title: title,
-          body: html,
-          confirmText: 'บันทึกข้อมูล',
-          onConfirm: function() { self.saveMatch(mode); }
-       });
+      html += '<div class="form-control">';
+      html += '<label class="label"><span class="label-text">League</span></label>';
+      html += '<input type="text" id="m-league" class="input input-bordered input-sm w-full" value="' + match.league + '" required>';
+      html += '</div>';
+
+      html += '<div class="grid grid-cols-2 gap-3">';
+      html += '<div class="form-control">';
+      html += '<label class="label"><span class="label-text">Home Team</span></label>';
+      html += '<input type="text" id="m-home" class="input input-bordered input-sm w-full" value="' + match.home + '" required>';
+      html += '</div>';
+      html += '<div class="form-control">';
+      html += '<label class="label"><span class="label-text">Away Team</span></label>';
+      html += '<input type="text" id="m-away" class="input input-bordered input-sm w-full" value="' + match.away + '" required>';
+      html += '</div>';
+      html += '</div>';
+
+      html += '<div class="form-control">';
+      html += '<label class="label"><span class="label-text">Channel</span></label>';
+      html += '<input type="text" id="m-channel" class="input input-bordered input-sm w-full" value="' + (match.channel || '') + '">';
+      html += '</div>';
+      html += '</form>';
+
+      var self = this;
+      UIManager.showModal({
+        title: title,
+        body: html,
+        confirmText: 'บันทึกข้อมูล',
+        onConfirm: function () { self.saveMatch(mode); }
+      });
     },
 
-    saveMatch: function(mode) {
-       var id = document.getElementById('m-id').value;
-       var date = document.getElementById('m-date').value;
-       var time = document.getElementById('m-time').value;
-       var league = document.getElementById('m-league').value;
-       var home = document.getElementById('m-home').value;
-       var away = document.getElementById('m-away').value;
-       var channel = document.getElementById('m-channel').value;
+    saveMatch: function (mode) {
+      var id = document.getElementById('m-id').value;
+      var date = document.getElementById('m-date').value;
+      var time = document.getElementById('m-time').value;
+      var league = document.getElementById('m-league').value;
+      var home = document.getElementById('m-home').value;
+      var away = document.getElementById('m-away').value;
+      var channel = document.getElementById('m-channel').value;
 
-       if (!date || !time || !league || !home || !away) {
-          UIManager.showToast("กรุณากรอกข้อมูลให้ครบถ้วน", "warning");
-          return;
-       }
+      if (!date || !time || !league || !home || !away) {
+        UIManager.showToast("กรุณากรอกข้อมูลให้ครบถ้วน", "warning");
+        return;
+      }
 
-       var payload = {
-          id: id,
-          date: date,
-          time: time,
-          league: league,
-          home: home,
-          away: away,
-          channel: channel
-       };
+      var payload = {
+        id: id,
+        date: date,
+        time: time,
+        league: league,
+        home: home,
+        away: away,
+        channel: channel
+      };
 
-       var apiName = mode === 'ADD' ? 'createMatch' : 'updateMatch';
-       
-       UIManager.showLoading();
-       var self = this;
-       
-       Server.call(apiName, payload)
-         .then(function(res) {
-            if (res.success) {
-               UIManager.showToast(res.message, "success");
-               self.loadData(true); 
-            } else {
-               UIManager.showToast(res.message, "error");
-            }
-         })
-         .catch(function(err) {
-            UIManager.showToast("Error: " + err.message, "error");
-         })
-         .finally(function() {
-            UIManager.hideLoading();
-         });
+      var apiName = mode === 'ADD' ? 'createMatch' : 'updateMatch';
+
+      UIManager.showLoading();
+      var self = this;
+
+      Server.call(apiName, payload)
+        .then(function (res) {
+          if (res.success) {
+            UIManager.showToast(res.message, "success");
+            self.loadData(true);
+          } else {
+            UIManager.showToast(res.message, "error");
+          }
+        })
+        .catch(function (err) {
+          UIManager.showToast("Error: " + err.message, "error");
+        })
+        .finally(function () {
+          UIManager.hideLoading();
+        });
     },
 
-    deleteMatch: function(id) {
+    deleteMatch: function (id) {
       var self = this;
       UIManager.showModal({
         title: "ลบรายการ",
         body: "คุณแน่ใจหรือไม่ที่จะลบรายการนี้?",
         confirmText: "ลบรายการ",
-        onConfirm: function() {
-           Server.call('deleteMatch', id)
-             .then(function() { UIManager.showToast("ลบสำเร็จ", "success"); self.loadData(); })
-             .catch(function(err) { console.error(err); });
+        onConfirm: function () {
+          Server.call('deleteMatch', id)
+            .then(function () { UIManager.showToast("ลบสำเร็จ", "success"); self.loadData(true); })
+            .catch(function (err) { console.error(err); });
         }
       });
     }
   };
 
-  document.addEventListener("DOMContentLoaded", function() {
-     if (typeof Dashboard !== 'undefined' && Dashboard.init) {}
+  document.addEventListener("DOMContentLoaded", function () {
+    if (typeof Dashboard !== 'undefined' && Dashboard.init) { }
   });
 </script>

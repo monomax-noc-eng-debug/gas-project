@@ -13,28 +13,27 @@
 
   <ul class="space-y-1">
     <li>
-      <a onclick="Router.navigateTo('page-dashboard'); closeDrawerOnMobile()" class="active"
-        data-target="page-dashboard">
+      <a onclick="changePage('page-dashboard'); closeDrawerOnMobile()" class="active" data-target="page-dashboard">
         <i class="fas fa-th-large w-5 text-center"></i> Dashboard
       </a>
     </li>
     <li>
-      <a onclick="Router.navigateTo('page-report'); closeDrawerOnMobile()" data-target="page-report">
+      <a onclick="changePage('page-report'); closeDrawerOnMobile()" data-target="page-report">
         <i class="fas fa-file-invoice w-5 text-center"></i> Reports
       </a>
     </li>
     <li>
-      <a onclick="Router.navigateTo('page-ticket'); closeDrawerOnMobile()" data-target="page-ticket">
+      <a onclick="changePage('page-ticket'); closeDrawerOnMobile()" data-target="page-ticket">
         <i class="fas fa-ticket-alt w-5 text-center"></i> Tickets
       </a>
     </li>
     <li>
-      <a onclick="Router.navigateTo('page-email'); closeDrawerOnMobile()" data-target="page-email">
+      <a onclick="changePage('page-email'); closeDrawerOnMobile()" data-target="page-email">
         <i class="fas fa-envelope w-5 text-center"></i> Email Center
       </a>
     </li>
     <li>
-      <a onclick="Router.navigateTo('page-history'); closeDrawerOnMobile()" data-target="page-history">
+      <a onclick="changePage('page-history'); closeDrawerOnMobile()" data-target="page-history">
         <i class="fas fa-history w-5 text-center"></i> History
       </a>
     </li>
@@ -43,7 +42,7 @@
   <div class="mt-auto pt-4 border-t border-base-200">
     <ul class="space-y-1">
       <li>
-        <a onclick="Router.navigateTo('page-settings'); closeDrawerOnMobile()" data-target="page-settings">
+        <a onclick="changePage('page-settings'); closeDrawerOnMobile()" data-target="page-settings">
           <i class="fas fa-cog w-5 text-center"></i> Settings
         </a>
       </li>

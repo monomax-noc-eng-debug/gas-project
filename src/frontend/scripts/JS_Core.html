@@ -33,6 +33,64 @@
   }
 
   // ----------------------------------------------------------------------
+  // 🚀 GLOBAL NAVIGATION ROUTER with LAZY LOADING
+  // ----------------------------------------------------------------------
+  function changePage(pageId) {
+    // 1. Hide all pages and show target
+    Router.navigateTo(pageId);
+
+    // 2. Trigger lazy loading based on page
+    switch (pageId) {
+      case 'page-dashboard':
+        if (typeof Dashboard !== 'undefined' && typeof Dashboard.loadData === 'function') {
+          loadMatches(false);
+        }
+        break;
+      case 'page-history':
+        if (typeof loadHistory === 'function') {
+          loadHistory(false);
+        }
+        break;
+      case 'page-ticket':
+        if (typeof loadTickets === 'function') {
+          loadTickets(false);
+        }
+        break;
+      case 'page-report':
+        if (typeof loadReportData === 'function') {
+          loadReportData(false);
+        }
+        break;
+      case 'page-email':
+        if (typeof loadEmailData === 'function') {
+          loadEmailData(false);
+        }
+        break;
+      case 'page-settings':
+        if (typeof loadSettings === 'function') {
+          loadSettings(false);
+        }
+        break;
+      default:
+        console.log('Unknown page: ' + pageId);
+    }
+  }
+
+  // Wrapper functions for lazy loading (called from changePage)
+  function loadMatches(forceRefresh) {
+    if (typeof Dashboard !== 'undefined') {
+      // First visit: call init() which sets date picker and loads data
+      if (!isDashboardLoaded && typeof Dashboard.init === 'function') {
+        Dashboard.init();
+      }
+      // Subsequent visits or force refresh: call loadData directly
+      else if (typeof Dashboard.loadData === 'function') {
+        Dashboard.loadData(forceRefresh);
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------------
   // 2. SERVER: ตัวกลางเรียก Google Apps Script
   // ----------------------------------------------------------------------
   const Server = {

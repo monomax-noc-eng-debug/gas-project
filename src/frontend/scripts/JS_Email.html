@@ -2,7 +2,23 @@
   /**
    * JS_Email.html
    * Handle Email Composer & Preview Logic
+   * Updated: Lazy Loading Support
    */
+
+  // ✅ LAZY LOADING FLAG
+  var isEmailLoaded = false;
+
+  // ✅ GLOBAL LOADER FUNCTION (called from changePage)
+  function loadEmailData(forceRefresh) {
+    // ✅ LAZY LOADING CHECK
+    if (!forceRefresh && isEmailLoaded) {
+      console.log("Email: Using cached data");
+      return;
+    }
+
+    EmailPage.init();
+  }
+
   const EmailPage = {
     previewTimeout: null,
 
@@ -28,6 +44,9 @@
             select.value = templates[0].id;
             this.updatePreview();
           }
+
+          // ✅ SET LOADED FLAG
+          isEmailLoaded = true;
         })
         .catch(err => UIManager.showToast("Error loading templates: " + err.message, 'error'));
     },
@@ -127,17 +146,4 @@
       });
     }
   };
-
-  document.addEventListener('DOMContentLoaded', () => {
-    // เริ่มทำงานเมื่อกด Tab Email (Lazy Load)
-    const tabBtn = document.querySelector('[data-target="page-email"]');
-    if (tabBtn) {
-      tabBtn.addEventListener('click', () => {
-        // ถ้ายังไม่มีข้อมูลใน Dropdown ให้โหลดใหม่
-        if (document.getElementById('email-template').children.length <= 1) {
-          EmailPage.init();
-        }
-      });
-    }
-  });
 </script>

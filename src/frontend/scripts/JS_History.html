@@ -1,81 +1,100 @@
 <script>
-  /**
-   * JS_History.html
-   * จัดการหน้าประวัติรายงาน (History)
-   */
-  var ShiftHistory = { // ✅ ใช้ชื่อ ShiftHistory แทน History เพื่อไม่ให้ชนกับ Browser API
-    
-    init: function() {
-      console.log("ShiftHistory Initialized");
-      this.loadData();
-    },
+   /**
+    * JS_History.html
+    * จัดการหน้าประวัติรายงาน (History)
+    * Updated: Lazy Loading Support
+    */
 
-    loadData: function(forceRefresh) {
-      var tbody = document.getElementById('history-table-body');
-      if (!tbody) return;
+   // ✅ LAZY LOADING FLAG
+   var isHistoryLoaded = false;
 
-      if (forceRefresh) {
+   // ✅ GLOBAL LOADER FUNCTION (called from changePage)
+   function loadHistory(forceRefresh) {
+      if (typeof ShiftHistory !== 'undefined' && typeof ShiftHistory.loadData === 'function') {
+         ShiftHistory.loadData(forceRefresh);
+      }
+   }
+
+   var ShiftHistory = { // ✅ ใช้ชื่อ ShiftHistory แทน History เพื่อไม่ให้ชนกับ Browser API
+
+      init: function () {
+         console.log("ShiftHistory Initialized");
+         this.loadData();
+      },
+
+      loadData: function (forceRefresh) {
+         // ✅ LAZY LOADING CHECK
+         if (!forceRefresh && isHistoryLoaded) {
+            console.log("History: Using cached data");
+            return;
+         }
+
+         var tbody = document.getElementById('history-table-body');
+         if (!tbody) return;
+
+         // Show loading spinner
          tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8"><span class="loading loading-dots loading-md text-primary"></span></td></tr>';
+
+         google.script.run
+            .withSuccessHandler(function (dataStr) {
+               var data = JSON.parse(dataStr);
+               ShiftHistory.renderTable(data);
+               // ✅ SET LOADED FLAG
+               isHistoryLoaded = true;
+            })
+            .withFailureHandler(function (err) {
+               tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-error">Error loading history</td></tr>';
+               console.error(err);
+            })
+            .getShiftHistory(); // เรียกฟังก์ชันใน API.js
+      },
+
+      renderTable: function (data) {
+         var tbody = document.getElementById('history-table-body');
+         tbody.innerHTML = '';
+
+         if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-base-content/50">ไม่พบประวัติการส่งรายงาน</td></tr>';
+            return;
+         }
+
+         data.forEach(function (row) {
+            var tr = document.createElement('tr');
+            tr.className = "hover border-b border-base-200"; // เพิ่มเส้นคั่นให้ดูสะอาดตา
+
+            // --- ส่วนการจัดการ Label ตามกลุ่ม ---
+            var groupLabel = '';
+            if (row.group === 'group_all') {
+               // ตกแต่งกลุ่ม Report: เน้นสีเขียว Success ดูเป็นทางการ
+               groupLabel = '<div class="badge badge-success badge-outline gap-2 font-bold border-2"><i class="fas fa-file-alt text-[10px]"></i> Report</div>';
+            } else if (row.group === 'group_dev') {
+               // ตกแต่งกลุ่ม DEV: เน้นสีน้ำเงิน/ม่วง ดูเป็นสายเทคนิค
+               groupLabel = '<div class="badge badge-primary badge-outline gap-2 font-bold border-2"><i class="fas fa-code text-[10px]"></i> DEV</div>';
+            } else {
+               // กรณีอื่นๆ
+               groupLabel = '<div class="badge badge-ghost badge-sm opacity-50">' + (row.group || '-') + '</div>';
+            }
+
+            var html = '';
+            html += '<td class="font-mono text-xs text-base-content/70">' + row.date + '</td>';
+            html += '<td class="font-medium">' + row.name + '</td>';
+
+            // ✅ แสดง Label ที่ตกแต่งแล้ว
+            html += '<td>' + groupLabel + '</td>';
+
+            html += '<td>';
+            if (row.pdfUrl && row.pdfUrl !== '#') {
+               html += '<a href="' + row.pdfUrl + '" target="_blank" class="btn btn-xs btn-ghost text-error hover:bg-error/10 transition-colors">';
+               html += '<i class="fas fa-file-pdf"></i> PDF';
+               html += '</a>';
+            } else {
+               html += '<span class="text-base-content/20">-</span>';
+            }
+            html += '</td>';
+
+            tr.innerHTML = html;
+            tbody.appendChild(tr);
+         });
       }
-
-      google.script.run
-        .withSuccessHandler(function(dataStr) {
-           var data = JSON.parse(dataStr);
-           ShiftHistory.renderTable(data);
-        })
-        .withFailureHandler(function(err) {
-           tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-error">Error loading history</td></tr>';
-           console.error(err);
-        })
-        .getShiftHistory(); // เรียกฟังก์ชันใน API.js
-    },
-
-    renderTable: function(data) {
-      var tbody = document.getElementById('history-table-body');
-      tbody.innerHTML = '';
-
-      if (!data || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-base-content/50">ไม่พบประวัติการส่งรายงาน</td></tr>';
-        return;
-      }
-
-      data.forEach(function(row) {
-        var tr = document.createElement('tr');
-        tr.className = "hover border-b border-base-200"; // เพิ่มเส้นคั่นให้ดูสะอาดตา
-        
-        // --- ส่วนการจัดการ Label ตามกลุ่ม ---
-        var groupLabel = '';
-        if (row.group === 'group_all') {
-           // ตกแต่งกลุ่ม Report: เน้นสีเขียว Success ดูเป็นทางการ
-           groupLabel = '<div class="badge badge-success badge-outline gap-2 font-bold border-2"><i class="fas fa-file-alt text-[10px]"></i> Report</div>';
-        } else if (row.group === 'group_dev') {
-           // ตกแต่งกลุ่ม DEV: เน้นสีน้ำเงิน/ม่วง ดูเป็นสายเทคนิค
-           groupLabel = '<div class="badge badge-primary badge-outline gap-2 font-bold border-2"><i class="fas fa-code text-[10px]"></i> DEV</div>';
-        } else {
-           // กรณีอื่นๆ
-           groupLabel = '<div class="badge badge-ghost badge-sm opacity-50">' + (row.group || '-') + '</div>';
-        }
-
-        var html = '';
-        html += '<td class="font-mono text-xs text-base-content/70">' + row.date + '</td>';
-        html += '<td class="font-medium">' + row.name + '</td>';
-        
-        // ✅ แสดง Label ที่ตกแต่งแล้ว
-        html += '<td>' + groupLabel + '</td>';
-        
-        html += '<td>';
-        if (row.pdfUrl && row.pdfUrl !== '#') {
-           html += '<a href="' + row.pdfUrl + '" target="_blank" class="btn btn-xs btn-ghost text-error hover:bg-error/10 transition-colors">';
-           html += '<i class="fas fa-file-pdf"></i> PDF';
-           html += '</a>';
-        } else {
-           html += '<span class="text-base-content/20">-</span>';
-        }
-        html += '</td>';
-
-        tr.innerHTML = html;
-        tbody.appendChild(tr);
-      });
-    }
-  };
+   };
 </script>

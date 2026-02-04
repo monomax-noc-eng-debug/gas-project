@@ -1,7 +1,23 @@
 <script>
   /**
    * JS_Settings.html
+   * Updated: Lazy Loading Support
    */
+
+  // ✅ LAZY LOADING FLAG
+  var isSettingsLoaded = false;
+
+  // ✅ GLOBAL LOADER FUNCTION (called from changePage)
+  function loadSettings(forceRefresh) {
+    // ✅ LAZY LOADING CHECK
+    if (!forceRefresh && isSettingsLoaded) {
+      console.log("Settings: Using cached data");
+      return;
+    }
+
+    SettingsPage.init();
+  }
+
   const SettingsPage = {
 
     init() {
@@ -9,6 +25,8 @@
       Server.call('getUserSettings')
         .then(settings => {
           this.render(settings);
+          // ✅ SET LOADED FLAG
+          isSettingsLoaded = true;
         })
         .catch(err => UIManager.showToast(err.message, 'error'))
         .finally(() => UIManager.hideLoading());
@@ -106,10 +124,4 @@
       btn.innerHTML = originalContent;
     }
   }
-
-  // Auto Init
-  document.addEventListener('DOMContentLoaded', () => {
-    // โหลด Setting ตั้งแต่เปิดเว็บเลยก็ได้ เพื่อ Apply Theme
-    // (แต่ปกติ App.js จะเรียก Router ไปหน้า Dashboard ก่อน หน้า Settings จะ init เมื่อถูกกดเลือก)
-  });
 </script>

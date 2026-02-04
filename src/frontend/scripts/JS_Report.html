@@ -3,20 +3,64 @@
    * JS_Report.html
    * Logic สำหรับหน้า Shift Report
    * Updated: Fixed SyntaxError (Comma) & TypeError (ticketDetailsRaw)
+   * Updated: Lazy Loading Support
    */
+
+  // ✅ LAZY LOADING FLAG
+  var isReportLoaded = false;
+
+  // ✅ GLOBAL LOADER FUNCTION (called from changePage)
+  // Report page doesn't preload data, it loads on demand when user clicks buttons
+  function loadReportData(forceRefresh) {
+    if (!forceRefresh && isReportLoaded) {
+      console.log("Report: Using cached state");
+      return;
+    }
+
+    // Initialize Report module
+    if (typeof Report !== 'undefined' && typeof Report.init === 'function') {
+      Report.init();
+      isReportLoaded = true;
+    }
+  }
+
   var Report = {
     proofFiles: { mono: [], ais: [], start: [] },
 
-    init: function() {
+    init: function () {
       console.log("Report Module Initialized");
+
+      // 1. Set Today's Date
+      var now = new Date();
+      var year = now.getFullYear();
+      var month = String(now.getMonth() + 1).padStart(2, '0');
+      var day = String(now.getDate()).padStart(2, '0');
+      var today = year + '-' + month + '-' + day;
+
+      var dateInput = document.getElementById('inputDate');
+      if (dateInput) {
+        dateInput.value = today;
+      }
+
+      // 2. Auto Fetch Data (Simulate button clicks to reuse logic)
+      // We use setTimeout to ensure UI is ready and to stagger requests slightly if needed
+      setTimeout(() => {
+        var btnTicket = document.querySelector('button[onclick="Report.autoFetchTicket(this)"]');
+        if (btnTicket) this.autoFetchTicket(btnTicket);
+
+        var btnMatch = document.querySelector('button[onclick="Report.autoFetchMatch(this)"]');
+        if (btnMatch) this.autoFetchMatch(btnMatch);
+
+        this.autoFetchProof();
+      }, 100);
     },
 
     // --- UI Interactions ---
 
-    checkReporterOther: function() {
+    checkReporterOther: function () {
       var select = document.getElementById('reporterSelect');
       var group = document.getElementById('reporterOtherGroup');
-      
+
       // Support both old/new HTML structure
       if (group) {
         var input = document.getElementById('reporterOther');
@@ -30,20 +74,20 @@
         // Fallback for old HTML
         var input = document.getElementById('reporterOther');
         if (select.value === 'อื่นๆ') {
-           input.classList.remove('hidden');
-           input.focus();
+          input.classList.remove('hidden');
+          input.focus();
         } else {
-           input.classList.add('hidden');
+          input.classList.add('hidden');
         }
       }
     },
 
-    resetReporter: function() {
+    resetReporter: function () {
       var select = document.getElementById('reporterSelect');
       var group = document.getElementById('reporterOtherGroup');
       var input = document.getElementById('reporterOther');
-      
-      select.value = ""; 
+
+      select.value = "";
       input.value = "";
       input.required = false;
 
@@ -51,7 +95,7 @@
       group.classList.add('hidden');
     },
 
-    toggleUploadSection: function(selectId, divId, fileType) {
+    toggleUploadSection: function (selectId, divId, fileType) {
       var val = document.getElementById(selectId).value;
       var div = document.getElementById(divId);
       if (val === 'ไม่มี') {
@@ -65,17 +109,17 @@
 
     // --- Image Processing ---
 
-    compressImage: function(file) {
+    compressImage: function (file) {
       var MAX_DIMENSION = 1600;
       var QUALITY = 0.8;
-      
-      return new Promise(function(resolve) {
+
+      return new Promise(function (resolve) {
         var reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = function(e) {
+        reader.onload = function (e) {
           var img = new Image();
           img.src = e.target.result;
-          img.onload = function() {
+          img.onload = function () {
             var width = img.width;
             var height = img.height;
             if (width > height) {
@@ -97,77 +141,77 @@
       });
     },
 
-    handleFilesUpload: function(inputId, listId) {
+    handleFilesUpload: function (inputId, listId) {
       var input = document.getElementById(inputId);
       var type = inputId.replace('file', '').toLowerCase();
       if (input.files && input.files.length > 0) {
         var newFiles = Array.from(input.files);
         this.proofFiles[type] = this.proofFiles[type].concat(newFiles);
         this.updateFileListUi(type, listId);
-        if(typeof UIManager !== 'undefined') UIManager.showToast('เพิ่มรูปภาพ ' + newFiles.length + ' รายการ', 'success');
+        if (typeof UIManager !== 'undefined') UIManager.showToast('เพิ่มรูปภาพ ' + newFiles.length + ' รายการ', 'success');
       }
       input.value = '';
     },
 
-    pasteImage: function(type, listId) {
+    pasteImage: function (type, listId) {
       var self = this;
       if (!navigator.clipboard) {
-         if(typeof UIManager !== 'undefined') UIManager.showToast("Browser ไม่รองรับ Clipboard API", 'error');
-         return;
+        if (typeof UIManager !== 'undefined') UIManager.showToast("Browser ไม่รองรับ Clipboard API", 'error');
+        return;
       }
-      navigator.clipboard.read().then(function(items) {
+      navigator.clipboard.read().then(function (items) {
         var found = false;
         for (var i = 0; i < items.length; i++) {
           var item = items[i];
-          var imgTypes = item.types.filter(function(t) { return t.startsWith('image/'); });
+          var imgTypes = item.types.filter(function (t) { return t.startsWith('image/'); });
           if (imgTypes.length > 0) {
-            item.getType(imgTypes[0]).then(function(blob) {
-               var file = new File([blob], 'Pasted_' + Date.now() + '.png', { type: imgTypes[0] });
-               self.proofFiles[type].push(file);
-               self.updateFileListUi(type, listId);
-               if(typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย", 'success');
+            item.getType(imgTypes[0]).then(function (blob) {
+              var file = new File([blob], 'Pasted_' + Date.now() + '.png', { type: imgTypes[0] });
+              self.proofFiles[type].push(file);
+              self.updateFileListUi(type, listId);
+              if (typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย", 'success');
             });
             found = true;
             return;
           }
         }
         if (!found && typeof UIManager !== 'undefined') UIManager.showToast("ไม่พบรูปใน Clipboard", 'warning');
-      }).catch(function(err) {
-        if(typeof UIManager !== 'undefined') UIManager.showToast("เข้าถึง Clipboard ไม่ได้", 'error');
+      }).catch(function (err) {
+        if (typeof UIManager !== 'undefined') UIManager.showToast("เข้าถึง Clipboard ไม่ได้", 'error');
       });
     },
 
-    updateFileListUi: function(type, listId) {
+    updateFileListUi: function (type, listId) {
       var container = document.getElementById(listId);
       var autoItems = Array.from(container.querySelectorAll('.auto-proof-item'));
       container.innerHTML = '';
-      
-      autoItems.forEach(function(item) {
-          container.appendChild(item);
+
+      autoItems.forEach(function (item) {
+        container.appendChild(item);
       });
 
       var self = this;
-      this.proofFiles[type].forEach(function(file, index) {
+      this.proofFiles[type].forEach(function (file, index) {
         var div = document.createElement('div');
         div.className = 'flex items-center justify-between bg-base-100 border border-base-300 px-3 py-2 rounded-lg mb-1 shadow-sm';
         var html = '';
         html += '<span class="truncate pr-4 font-mono text-xs">' + file.name + '</span>';
         html += '<button type="button" onclick="Report.removeFile(\'' + type + '\', ' + index + ', \'' + listId + '\')" class="btn btn-xs btn-square btn-ghost text-error">';
-        html +=   '<i class="fas fa-times"></i>';
+        html += '<i class="fas fa-times"></i>';
         html += '</button>';
         div.innerHTML = html;
         container.appendChild(div);
       });
     },
 
-    removeFile: function(type, index, listId) {
+    removeFile: function (type, index, listId) {
       this.proofFiles[type].splice(index, 1);
       this.updateFileListUi(type, listId);
     },
 
     // --- Data Fetching ---
 
-    autoFetchTicket: function(btn) {
+    autoFetchTicket: function (btn) {
       var d = document.getElementById('inputDate').value;
       if (!d) return UIManager.showToast("กรุณาเลือกวันที่ก่อน", 'warning');
 
@@ -175,35 +219,35 @@
       btn.disabled = true;
       btn.innerHTML = '<span class="loading loading-dots loading-xs"></span>';
 
-      document.getElementById('ticketTableBody').innerHTML = 
+      document.getElementById('ticketTableBody').innerHTML =
         '<tr><td colspan="3" class="text-center py-8 text-base-content/50"><span class="loading loading-dots loading-md text-primary"></span></td></tr>';
 
       google.script.run
-        .withSuccessHandler(function(resStr) {
+        .withSuccessHandler(function (resStr) {
           btn.disabled = false;
           btn.innerHTML = originalText;
           var res = JSON.parse(resStr);
 
           if (!res.success) {
-              UIManager.showToast("Error: " + res.error, 'error');
-              return;
+            UIManager.showToast("Error: " + res.error, 'error');
+            return;
           }
 
           var stats = res.stats || {};
-          ['total', 'open', 'pending', 'resolved', 'closed'].forEach(function(key) {
-             var inputId = 'ticket' + key.charAt(0).toUpperCase() + key.slice(1);
-             var dispId = 'disp-ticket-' + key;
-             if(document.getElementById(inputId)) document.getElementById(inputId).value = stats[key] || 0;
-             if(document.getElementById(dispId)) document.getElementById(dispId).innerText = stats[key] || 0;
+          ['total', 'open', 'pending', 'resolved', 'closed'].forEach(function (key) {
+            var inputId = 'ticket' + key.charAt(0).toUpperCase() + key.slice(1);
+            var dispId = 'disp-ticket-' + key;
+            if (document.getElementById(inputId)) document.getElementById(inputId).value = stats[key] || 0;
+            if (document.getElementById(dispId)) document.getElementById(dispId).innerText = stats[key] || 0;
           });
 
-          document.getElementById('ticketSummary').value = res.text; 
+          document.getElementById('ticketSummary').value = res.text;
 
           var tableBody = document.getElementById('ticketTableBody');
-          tableBody.innerHTML = ""; 
+          tableBody.innerHTML = "";
 
           if (res.list && res.list.length > 0) {
-            res.list.forEach(function(item) {
+            res.list.forEach(function (item) {
               var badgeClass = "badge-ghost";
               if (item.status === 'OPEN') badgeClass = "badge-info";
               else if (item.status === 'PENDING') badgeClass = "badge-warning";
@@ -222,15 +266,15 @@
           }
           UIManager.showToast("Ticket Updated (" + (stats.total || 0) + ")", 'success');
         })
-        .withFailureHandler(function(err) {
-           btn.disabled = false;
-           btn.innerHTML = originalText;
-           UIManager.showToast("Server Error: " + err.message, 'error');
+        .withFailureHandler(function (err) {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+          UIManager.showToast("Server Error: " + err.message, 'error');
         })
         .getTicketDetails(d);
     },
 
-    autoFetchMatch: function(btn) {
+    autoFetchMatch: function (btn) {
       var d = document.getElementById('inputDate').value;
       if (!d) return UIManager.showToast("กรุณาเลือกวันที่ก่อน", 'warning');
 
@@ -242,121 +286,121 @@
       container.innerHTML = '<div class="col-span-full flex justify-center py-6"><span class="loading loading-dots loading-md text-info"></span></div>';
 
       google.script.run
-        .withSuccessHandler(function(resStr) {
-           btn.disabled = false;
-           btn.innerHTML = originalText;
-           var res = JSON.parse(resStr);
+        .withSuccessHandler(function (resStr) {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+          var res = JSON.parse(resStr);
 
           if (!res.success) {
-              UIManager.showToast("Error: " + res.error, 'error');
-              document.getElementById('matchSummary').value = "Error: " + res.error;
-              return;
+            UIManager.showToast("Error: " + res.error, 'error');
+            document.getElementById('matchSummary').value = "Error: " + res.error;
+            return;
           }
 
           document.getElementById('matchSummary').value = res.text;
           document.getElementById('matchDataJSON').value = JSON.stringify(res.data);
           document.getElementById('matchTotal').value = res.total;
-          
-          if(document.getElementById('disp-match-total')) document.getElementById('disp-match-total').innerText = res.total || 0;
+
+          if (document.getElementById('disp-match-total')) document.getElementById('disp-match-total').innerText = res.total || 0;
 
           container.innerHTML = '';
           var html = '';
           html += '<div class="flex flex-col items-center p-2 bg-base-200 rounded-lg border border-base-300 shadow-sm col-span-2 md:col-span-1">';
-          html +=   '<span class="text-[10px] font-bold uppercase opacity-60">Total</span>';
-          html +=   '<span class="text-lg font-black">' + (res.total || 0) + '</span>';
+          html += '<span class="text-[10px] font-bold uppercase opacity-60">Total</span>';
+          html += '<span class="text-lg font-black">' + (res.total || 0) + '</span>';
           html += '</div>';
 
           if (res.data && Object.keys(res.data).length > 0) {
             var hasLeagues = false;
-            Object.keys(res.data).forEach(function(leagueName) {
-               var count = res.data[leagueName];
-               if (count > 0) {
-                   hasLeagues = true;
-                   html += '<div class="flex flex-col items-center p-2 bg-white rounded-lg border border-base-200 shadow-sm hover:border-info/50 transition-colors">';
-                   html +=   '<span class="text-[10px] font-bold uppercase text-info text-center truncate w-full" title="' + leagueName + '">' + leagueName + '</span>';
-                   html +=   '<span class="text-lg font-black text-base-content">' + count + '</span>';
-                   html += '</div>';
-               }
+            Object.keys(res.data).forEach(function (leagueName) {
+              var count = res.data[leagueName];
+              if (count > 0) {
+                hasLeagues = true;
+                html += '<div class="flex flex-col items-center p-2 bg-white rounded-lg border border-base-200 shadow-sm hover:border-info/50 transition-colors">';
+                html += '<span class="text-[10px] font-bold uppercase text-info text-center truncate w-full" title="' + leagueName + '">' + leagueName + '</span>';
+                html += '<span class="text-lg font-black text-base-content">' + count + '</span>';
+                html += '</div>';
+              }
             });
             if (!hasLeagues && res.total === 0) {
-                html += '<div class="col-span-2 md:col-span-3 flex items-center justify-center p-2 text-xs text-base-content/50 border border-dashed rounded-lg">No matches found</div>';
+              html += '<div class="col-span-2 md:col-span-3 flex items-center justify-center p-2 text-xs text-base-content/50 border border-dashed rounded-lg">No matches found</div>';
             }
           }
           container.innerHTML = html;
           UIManager.showToast("Match Updated (" + res.total + ")", 'success');
         })
-        .withFailureHandler(function(err) {
-           btn.disabled = false;
-           btn.innerHTML = originalText;
-           UIManager.showToast(err.message, 'error');
+        .withFailureHandler(function (err) {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+          UIManager.showToast(err.message, 'error');
         })
         .getMatchesByDate(d);
     },
 
-    autoFetchProof: function() {
+    autoFetchProof: function () {
       var dateVal = document.getElementById('inputDate').value;
       if (!dateVal) return;
 
       google.script.run
-        .withSuccessHandler(function(res) {
+        .withSuccessHandler(function (res) {
           document.querySelectorAll('.auto-proof-item').forEach(el => el.remove());
 
           if (res.success && res.data) {
             var hasData = false;
 
             if (res.data.start && res.data.start.length > 0) {
-              res.data.start.forEach(function(item) {
-                 Report.renderProofPreview('start', item.url, item.label);
+              res.data.start.forEach(function (item) {
+                Report.renderProofPreview('start', item.url, item.label);
               });
               var statusSelect = document.getElementById('statusStart');
-              if(statusSelect) statusSelect.value = 'เรียบร้อย';
+              if (statusSelect) statusSelect.value = 'เรียบร้อย';
               var proofDiv = document.getElementById('proofStartDiv');
-              if(proofDiv) proofDiv.classList.remove('hidden');
+              if (proofDiv) proofDiv.classList.remove('hidden');
               var collapse = document.getElementById('collapse-start');
-              if(collapse) collapse.checked = true;
+              if (collapse) collapse.checked = true;
               hasData = true;
             }
 
             if (res.data.stop && res.data.stop.length > 0) {
-              res.data.stop.forEach(function(item) {
-                 Report.renderProofPreview('mono', item.url, item.label);
+              res.data.stop.forEach(function (item) {
+                Report.renderProofPreview('mono', item.url, item.label);
               });
               var statusSelect = document.getElementById('statusMono');
-              if(statusSelect) statusSelect.value = 'เรียบร้อย';
+              if (statusSelect) statusSelect.value = 'เรียบร้อย';
               var collapse = document.getElementById('collapse-mono');
-              if(collapse) collapse.checked = true;
+              if (collapse) collapse.checked = true;
               hasData = true;
             }
 
             if (hasData && typeof UIManager !== 'undefined') {
-               UIManager.showToast('ดึงรูปภาพจาก Dashboard เรียบร้อย', 'success');
+              UIManager.showToast('ดึงรูปภาพจาก Dashboard เรียบร้อย', 'success');
             }
           }
         })
         .getDailyProofImages(dateVal);
     },
 
-    renderProofPreview: function(type, url, label) {
+    renderProofPreview: function (type, url, label) {
       var listId = type + 'FileList';
       var container = document.getElementById(listId);
-      if(!container) return;
+      if (!container) return;
 
-      if(container.innerHTML.indexOf(url) !== -1) return;
+      if (container.innerHTML.indexOf(url) !== -1) return;
 
       var html = '';
       html += '<div class="auto-proof-item flex items-center justify-between bg-blue-50 border border-blue-200 px-3 py-2 rounded-lg mb-1 shadow-sm gap-2">';
-      html +=   '<div class="flex items-center gap-2 overflow-hidden flex-1 min-w-0">';
-      html +=     '<i class="fas fa-link text-blue-500 flex-shrink-0"></i>';
-      
+      html += '<div class="flex items-center gap-2 overflow-hidden flex-1 min-w-0">';
+      html += '<i class="fas fa-link text-blue-500 flex-shrink-0"></i>';
+
       if (label) {
-        html +=   '<span class="text-xs font-bold text-blue-700 truncate max-w-[120px] md:max-w-[200px]" title="' + label + '">' + label + ':</span>';
+        html += '<span class="text-xs font-bold text-blue-700 truncate max-w-[120px] md:max-w-[200px]" title="' + label + '">' + label + ':</span>';
       } else {
-        html +=   '<span class="text-xs font-bold text-blue-700">Dashboard:</span>';
+        html += '<span class="text-xs font-bold text-blue-700">Dashboard:</span>';
       }
 
-      html +=     '<a href="' + url + '" target="_blank" class="text-xs text-blue-600 hover:underline hover:text-blue-800 whitespace-nowrap font-mono ml-auto">เปิดดูรูป</a>';
-      html +=   '</div>';
-      html +=   '<div class="badge badge-info badge-xs text-white flex-shrink-0">AUTO</div>';
+      html += '<a href="' + url + '" target="_blank" class="text-xs text-blue-600 hover:underline hover:text-blue-800 whitespace-nowrap font-mono ml-auto">เปิดดูรูป</a>';
+      html += '</div>';
+      html += '<div class="badge badge-info badge-xs text-white flex-shrink-0">AUTO</div>';
       html += '</div>';
 
       container.insertAdjacentHTML('afterbegin', html);
@@ -366,24 +410,24 @@
 
     // --- Form Submission (Full Version) ---
 
-    submitForm: function(e, mode) {
+    submitForm: function (e, mode) {
       if (e) e.preventDefault();
       var form = document.getElementById('mainForm');
-      
+
       // ถ้าไม่ได้ระบุ mode ให้ถือว่าเป็น 'send' (ส่งจริง)
-      if(!mode) mode = 'send';
+      if (!mode) mode = 'send';
 
       // 1. ตรวจสอบความถูกต้องของฟอร์ม (HTML5 Validation)
       if (!form.checkValidity()) return form.reportValidity();
-      
+
       // 2. ตรวจสอบรูปภาพ Mono (ต้องมีอย่างน้อย 1 รูป จากการอัปโหลด หรือ Auto)
       var monoContainer = document.getElementById('monoFileList');
       var hasMonoAuto = monoContainer && monoContainer.querySelector('.auto-proof-item');
       var hasMonoManual = this.proofFiles.mono.length > 0;
 
       if (!hasMonoManual && !hasMonoAuto) {
-          UIManager.showToast("กรุณาแนบรูป Mono อย่างน้อย 1 รูป", 'warning');
-          return;
+        UIManager.showToast("กรุณาแนบรูป Mono อย่างน้อย 1 รูป", 'warning');
+        return;
       }
 
       // 3. แสดง Loading Bar ตามโหมดการทำงาน
@@ -393,12 +437,12 @@
 
       // จัดการค่าผู้รายงาน (กรณีเลือก 'อื่นๆ')
       var reporterVal = form.reporter.value;
-      if(reporterVal === 'อื่นๆ') reporterVal = document.getElementById('reporterOther').value;
+      if (reporterVal === 'อื่นๆ') reporterVal = document.getElementById('reporterOther').value;
 
       // Helper: ดึง URL จากรูป Auto ที่แสดงอยู่หน้าเว็บ
       const getAutoUrls = (listId) => {
-         const container = document.getElementById(listId);
-         return container ? Array.from(container.querySelectorAll('.auto-proof-item a')).map(a => a.href) : [];
+        const container = document.getElementById(listId);
+        return container ? Array.from(container.querySelectorAll('.auto-proof-item a')).map(a => a.href) : [];
       };
 
       // 4. เตรียมข้อมูลที่จะส่งไป Server
@@ -407,7 +451,7 @@
         reporter: reporterVal,
         shift: form.shift.value,
         ticketSummary: document.getElementById('ticketSummary').value,
-        
+
         // ข้อมูล Ticket Stats
         ticketStats: {
           total: document.getElementById('ticketTotal').value,
@@ -416,27 +460,27 @@
           resolved: document.getElementById('ticketResolved').value,
           closed: document.getElementById('ticketClosed').value
         },
-        
+
         // ข้อมูล Match & Transfer
         matchSummary: form.matchSummary.value,
         matchTotal: document.getElementById('matchTotal').value,
         matchData: JSON.parse(document.getElementById('matchDataJSON').value || "{}"),
         transferReport: form.transferReport.value,
-        
+
         // ข้อมูล Status Checklist
         statusMono: document.getElementById('statusMono').value,
         statusAis: document.getElementById('statusAis').value,
         statusStart: document.getElementById('statusStart').value,
         chatTarget: form.chatTarget.value,
-        
+
         // รูปภาพ
         proofImages: {}, // จะถูกเติมค่าหลังจาก Compress เสร็จ
         autoProofUrls: {
-           mono: getAutoUrls('monoFileList'),
-           ais: getAutoUrls('aisFileList'),
-           start: getAutoUrls('startFileList')
+          mono: getAutoUrls('monoFileList'),
+          ais: getAutoUrls('aisFileList'),
+          start: getAutoUrls('startFileList')
         },
-        
+
         // ระบุว่าเป็น Draft (Preview) หรือไม่
         isDraft: (mode === 'preview')
       };
@@ -446,125 +490,125 @@
       var promises = [];
       if (mode !== 'preview') {
         if (this.proofFiles.mono.length > 0) {
-            promises.push(Promise.all(this.proofFiles.mono.map(function(f) { return self.compressImage(f); }))
-                .then(function(res) { formData.proofImages.mono = res; }));
+          promises.push(Promise.all(this.proofFiles.mono.map(function (f) { return self.compressImage(f); }))
+            .then(function (res) { formData.proofImages.mono = res; }));
         }
         if (this.proofFiles.ais.length > 0) {
-            promises.push(Promise.all(this.proofFiles.ais.map(function(f) { return self.compressImage(f); }))
-                .then(function(res) { formData.proofImages.ais = res; }));
+          promises.push(Promise.all(this.proofFiles.ais.map(function (f) { return self.compressImage(f); }))
+            .then(function (res) { formData.proofImages.ais = res; }));
         }
         if (this.proofFiles.start.length > 0) {
-            promises.push(Promise.all(this.proofFiles.start.map(function(f) { return self.compressImage(f); }))
-                .then(function(res) { formData.proofImages.start = res; }));
+          promises.push(Promise.all(this.proofFiles.start.map(function (f) { return self.compressImage(f); }))
+            .then(function (res) { formData.proofImages.start = res; }));
         }
       }
 
       // รอให้บีบอัดรูปเสร็จทั้งหมด (ถ้ามี) แล้วค่อยส่ง
-      Promise.all(promises).then(function() {
-          
-          if (typeof google === 'undefined' || !google.script) {
-              UIManager.hideLoading();
-              UIManager.showToast("Google Script Environment not found", 'error');
-              return;
-          }
+      Promise.all(promises).then(function () {
 
-          // เรียกฟังก์ชัน Server
-          google.script.run
-            .withSuccessHandler(function(resStr) {
-              UIManager.hideLoading();
-              var res = JSON.parse(resStr); 
-
-              if (res.success) {
-                
-                // --- กรณี PREVIEW ---
-                if (res.isPreview) {
-                  // ส่ง null url ไป เพราะ Preview แบบ Realtime ไม่ได้สร้าง PDF จริง
-                  Report.showPreviewModal(null, res.chatPreview);
-                } 
-                
-                // --- กรณี SEND สำเร็จ ---
-                else {
-                  // เปลี่ยนข้อความ Loading เพื่อแจ้งผู้ใช้ว่ากำลังรีเฟรชข้อมูล
-                  UIManager.showLoading('Refreshing History...'); 
-                  UIManager.showToast("ส่งรายงานเรียบร้อยแล้ว!", 'success');
-                  
-                  // 1. ล้างค่าในฟอร์ม
-                  form.reset();
-                  
-                  // 2. ล้างค่ารูปภาพในตัวแปรและหน้าเว็บ
-                  self.proofFiles = { mono: [], ais: [], start: [] };
-                  self.updateFileListUi('mono', 'monoFileList');
-                  self.updateFileListUi('ais', 'aisFileList');
-                  self.updateFileListUi('start', 'startFileList');
-                  document.querySelectorAll('.auto-proof-item').forEach(function(el) { el.remove(); });
-                  
-                  // 3. ล้างค่าตาราง Ticket และ Stats
-                  document.getElementById('ticketTableBody').innerHTML = '<tr><td colspan="3" class="text-center py-8 text-base-content/50">ยังไม่มีข้อมูล (กรุณากดดึงข้อมูล)</td></tr>';
-                  ['total','open','pending','resolved','closed'].forEach(function(k) {
-                     var el = document.getElementById('disp-ticket-'+k);
-                     if(el) el.innerText = '-';
-                  });
-                  var dispMatch = document.getElementById('disp-match-total');
-                  if(dispMatch) dispMatch.innerText = '-';
-
-                  // 4. รีเฟรชหน้า History อัตโนมัติ (ใช้ ShiftHistory ตามที่แก้ชื่อไป)
-                  try {
-                    if (typeof ShiftHistory !== 'undefined' && typeof ShiftHistory.loadData === 'function') {
-                        ShiftHistory.loadData(true); 
-                    }
-                  } catch (e) { console.warn("Auto-refresh history failed:", e); }
-
-                  // 5. เปลี่ยนหน้าไปที่ History (หน่วงเวลาเล็กน้อยเพื่อให้เห็น Toast)
-                  if (typeof Router !== 'undefined') {
-                    setTimeout(function() { 
-                        UIManager.hideLoading();
-                        Router.navigateTo('page-history'); 
-                    }, 1500);
-                  } else {
-                     UIManager.hideLoading();
-                  }
-                }
-              } else {
-                // กรณี Server ตอบกลับว่า Error
-                UIManager.hideLoading();
-                UIManager.showToast("Error: " + res.error, 'error');
-              }
-            })
-            .withFailureHandler(function(err) {
-              // กรณีเชื่อมต่อ Server ไม่ได้
-              UIManager.hideLoading();
-              UIManager.showToast("Server Failed: " + err.message, 'error');
-            })
-            .processShiftReport(formData); // ชื่อฟังก์ชันฝั่ง Server
-            
-      }).catch(function(err) {
-          // กรณี Client Error (เช่น บีบอัดรูปไม่ผ่าน)
+        if (typeof google === 'undefined' || !google.script) {
           UIManager.hideLoading();
-          UIManager.showToast("Client Error: " + err.message, 'error');
-          console.error(err);
+          UIManager.showToast("Google Script Environment not found", 'error');
+          return;
+        }
+
+        // เรียกฟังก์ชัน Server
+        google.script.run
+          .withSuccessHandler(function (resStr) {
+            UIManager.hideLoading();
+            var res = JSON.parse(resStr);
+
+            if (res.success) {
+
+              // --- กรณี PREVIEW ---
+              if (res.isPreview) {
+                // ส่ง null url ไป เพราะ Preview แบบ Realtime ไม่ได้สร้าง PDF จริง
+                Report.showPreviewModal(null, res.chatPreview);
+              }
+
+              // --- กรณี SEND สำเร็จ ---
+              else {
+                // เปลี่ยนข้อความ Loading เพื่อแจ้งผู้ใช้ว่ากำลังรีเฟรชข้อมูล
+                UIManager.showLoading('Refreshing History...');
+                UIManager.showToast("ส่งรายงานเรียบร้อยแล้ว!", 'success');
+
+                // 1. ล้างค่าในฟอร์ม
+                form.reset();
+
+                // 2. ล้างค่ารูปภาพในตัวแปรและหน้าเว็บ
+                self.proofFiles = { mono: [], ais: [], start: [] };
+                self.updateFileListUi('mono', 'monoFileList');
+                self.updateFileListUi('ais', 'aisFileList');
+                self.updateFileListUi('start', 'startFileList');
+                document.querySelectorAll('.auto-proof-item').forEach(function (el) { el.remove(); });
+
+                // 3. ล้างค่าตาราง Ticket และ Stats
+                document.getElementById('ticketTableBody').innerHTML = '<tr><td colspan="3" class="text-center py-8 text-base-content/50">ยังไม่มีข้อมูล (กรุณากดดึงข้อมูล)</td></tr>';
+                ['total', 'open', 'pending', 'resolved', 'closed'].forEach(function (k) {
+                  var el = document.getElementById('disp-ticket-' + k);
+                  if (el) el.innerText = '-';
+                });
+                var dispMatch = document.getElementById('disp-match-total');
+                if (dispMatch) dispMatch.innerText = '-';
+
+                // 4. รีเฟรชหน้า History อัตโนมัติ (ใช้ ShiftHistory ตามที่แก้ชื่อไป)
+                try {
+                  if (typeof ShiftHistory !== 'undefined' && typeof ShiftHistory.loadData === 'function') {
+                    ShiftHistory.loadData(true);
+                  }
+                } catch (e) { console.warn("Auto-refresh history failed:", e); }
+
+                // 5. เปลี่ยนหน้าไปที่ History (หน่วงเวลาเล็กน้อยเพื่อให้เห็น Toast)
+                if (typeof Router !== 'undefined') {
+                  setTimeout(function () {
+                    UIManager.hideLoading();
+                    Router.navigateTo('page-history');
+                  }, 1500);
+                } else {
+                  UIManager.hideLoading();
+                }
+              }
+            } else {
+              // กรณี Server ตอบกลับว่า Error
+              UIManager.hideLoading();
+              UIManager.showToast("Error: " + res.error, 'error');
+            }
+          })
+          .withFailureHandler(function (err) {
+            // กรณีเชื่อมต่อ Server ไม่ได้
+            UIManager.hideLoading();
+            UIManager.showToast("Server Failed: " + err.message, 'error');
+          })
+          .processShiftReport(formData); // ชื่อฟังก์ชันฝั่ง Server
+
+      }).catch(function (err) {
+        // กรณี Client Error (เช่น บีบอัดรูปไม่ผ่าน)
+        UIManager.hideLoading();
+        UIManager.showToast("Client Error: " + err.message, 'error');
+        console.error(err);
       });
     },
 
-    showPreviewModal: function(url, chatText) {
+    showPreviewModal: function (url, chatText) {
       // ✅ ถ้าเป็น Realtime Preview (url = null) ให้ซ่อนปุ่ม PDF
       var pdfBtn = document.getElementById('previewLink');
       var pdfBox = pdfBtn.parentElement;
-      
+
       if (!url) {
-         pdfBox.classList.add('hidden'); // ซ่อนกล่อง PDF
-         // ปรับ Chat Box ให้เต็มจอ
-         document.getElementById('chatPreviewText').parentElement.className = "w-full flex flex-col h-full";
+        pdfBox.classList.add('hidden'); // ซ่อนกล่อง PDF
+        // ปรับ Chat Box ให้เต็มจอ
+        document.getElementById('chatPreviewText').parentElement.className = "w-full flex flex-col h-full";
       } else {
-         pdfBox.classList.remove('hidden');
-         pdfBtn.href = url;
-         document.getElementById('chatPreviewText').parentElement.className = "md:w-1/2 flex flex-col h-full";
+        pdfBox.classList.remove('hidden');
+        pdfBtn.href = url;
+        document.getElementById('chatPreviewText').parentElement.className = "md:w-1/2 flex flex-col h-full";
       }
 
       document.getElementById('chatPreviewText').textContent = chatText;
       document.getElementById('preview_modal').showModal();
     },
 
-    confirmSend: function() {
+    confirmSend: function () {
       document.getElementById('preview_modal').close();
       this.submitForm(null, 'send');
     },
