@@ -239,13 +239,13 @@ function getMatchesByDate(dateString) {
       return JSON.stringify({ success: false, error: "ไม่พบหัวตาราง League, Date หรือ Home" });
     }
 
-    // ✅ FIXED: Parse YYYY-MM-DD Manually to avoid Timezone issues
+    // ✅ FIXED: กำหนดช่วงเวลา (06:00 เมื่อวาน -> 06:00 วันที่เลือก)
     const [y, m, d] = dateString.split('-').map(Number);
 
-    // ตัดรอบ: 06:00 ของวันที่เลือก (End Bound)
+    // จุดสิ้นสุด: 06:00 น. ของวันที่เลือก
     const endBound = new Date(y, m - 1, d, 6, 0, 0);
 
-    // เริ่มต้น: 06:00 ของเมื่อวาน (Start Bound)
+    // จุดเริ่มต้น: ย้อนกลับไป 24 ชั่วโมง (06:00 น. ของเมื่อวาน)
     const startBound = new Date(endBound.getTime() - 24 * 60 * 60 * 1000);
 
     let leagueStats = {};
@@ -259,14 +259,13 @@ function getMatchesByDate(dateString) {
       let matchDateTime = combineDateTime(row[idx.date], row[idx.time]);
       if (!matchDateTime) continue;
 
-      // Filter: [เมื่อวาน 06:00] <= เวลาแข่ง < [วันนี้ 06:00]
+      // เช็คช่วงเวลา
       if (matchDateTime >= startBound && matchDateTime < endBound) {
         let matchKey = `${row[idx.league]}_${row[idx.home]}_${row[idx.away]}`;
 
         if (!uniqueMatchKeys.has(matchKey)) {
           uniqueMatchKeys.add(matchKey);
           matchCount++;
-
           let rawLeague = String(row[idx.league]).trim() || "Unknown League";
           if (leagueStats[rawLeague]) {
             leagueStats[rawLeague]++;
@@ -380,78 +379,123 @@ function getTicketDetails(dateString) {
     const sheet = CONFIG.TICKET_TAB ? ss.getSheetByName(CONFIG.TICKET_TAB) : ss.getSheets()[0];
     if (!sheet) return JSON.stringify({ success: false, error: `Tab "${CONFIG.TICKET_TAB}" not found` });
 
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
+    // --- Optimization: Fetch Last 2000 Rows ---
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return JSON.stringify({ success: true, list: [], stats: {}, text: "ไม่พบข้อมูล" });
 
-    const getIdx = (keywords) => {
-      if (!Array.isArray(keywords)) keywords = [keywords];
-      return headers.findIndex(h => {
-        const hStr = String(h).trim().toLowerCase();
-        return keywords.some(k => hStr.includes(k.toLowerCase()));
-      });
-    };
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const limit = 2000;
+    const startRow = Math.max(2, lastRow - limit + 1);
+    const numRows = lastRow - startRow + 1;
+    const data = sheet.getRange(startRow, 1, numRows, sheet.getLastColumn()).getValues();
 
+    // Mapping Headers
     const colIdx = {
-      date: getIdx(["Date", "วันที่", "Timestamp", "ประทับเวลา"]),
-      id: getIdx(["Ticket Number", "Ticket ID", "No.", "เลขที่"]),
-      status: getIdx(["Ticket Status", "Status", "สถานะ"]),
-      detail: getIdx(["Detail", "Description", "รายละเอียด", "Issue"]),
-      resolved: getIdx(["Resolved Date", "วันแก้ไข"])
+      createdDate: headers.indexOf("Created Date"),
+      date: headers.indexOf("Date"),
+      id: headers.indexOf("Ticket Number"),
+      status: headers.indexOf("Ticket Status"),
+      detail: headers.indexOf("Short Description & Subject"),
+      fullDetail: headers.indexOf("Detail"),
+      resolved: headers.indexOf("Resolved Date")
     };
-
-    if (colIdx.date === -1) return JSON.stringify({ success: false, error: "ไม่พบคอลัมน์วันที่ (Date/Timestamp)" });
-    if (colIdx.status === -1) return JSON.stringify({ success: false, error: "ไม่พบคอลัมน์สถานะ (Status)" });
 
     const targetDateStr = dateString;
     let stats = { total: 0, open: 0, pending: 0, resolved: 0, closed: 0 };
-    let detailsList = [];
 
-    for (let i = 1; i < data.length; i++) {
+    // ✅ เปลี่ยนจาก String Array เป็น Object Array
+    let ticketList = [];
+    let uniqueIds = new Set();
+
+    for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      let rowDate = normalizeDate(row[colIdx.date]);
+      const ticketId = (colIdx.id > -1) ? String(row[colIdx.id]).trim() : "-";
+      if (!ticketId) continue;
 
-      if (rowDate === targetDateStr) {
-        stats.total++;
-        const status = String(row[colIdx.status]).toLowerCase().trim();
-        const tid = (colIdx.id > -1) ? row[colIdx.id] : "-";
-        const desc = (colIdx.detail > -1) ? row[colIdx.detail] : "-";
+      // Logic วันที่ (Priority: Created > Date)
+      let rawDateVal = "";
+      if (colIdx.createdDate > -1 && row[colIdx.createdDate]) rawDateVal = row[colIdx.createdDate];
+      else if (colIdx.date > -1) rawDateVal = row[colIdx.date];
 
-        if (status.includes("open") || status.includes("new") || status.includes("เปิด")) stats.open++;
-        else if (status.includes("pending") || status.includes("wait") || status.includes("รอ")) stats.pending++;
-        else if (status.includes("resolved") || status.includes("succeed") || status.includes("เสร็จ")) stats.resolved++;
-        else if (status.includes("closed") || status.includes("ปิด")) stats.closed++;
+      const createdDateStr = normalizeDate(rawDateVal);
+      const resolvedDateStr = (colIdx.resolved > -1) ? normalizeDate(row[colIdx.resolved]) : "";
+      const statusRaw = String(row[colIdx.status] || "").toLowerCase().trim();
 
-        detailsList.push(`[${status.toUpperCase()}] ${tid} : ${desc}`);
+      // Logic การกรอง (Filter)
+      const isCreatedToday = (createdDateStr === targetDateStr);
+      const isFinishedStatus = /succeed|success|close|done|resolved|complete|เสร็จ|ปิด/.test(statusRaw);
+      const isResolvedToday = (resolvedDateStr === targetDateStr && isFinishedStatus);
+      const isActiveStatus = /open|new|pending|wait|hold|in progress|รอ|เปิด/.test(statusRaw);
+
+      if (isCreatedToday || isResolvedToday || isActiveStatus) {
+        if (!uniqueIds.has(ticketId)) {
+          uniqueIds.add(ticketId);
+
+          // Logic นับสถานะ
+          let displayStatus = "UNKNOWN";
+          if (/resolved|succeed|done|complete|เสร็จ/.test(statusRaw)) { stats.resolved++; displayStatus = "RESOLVED"; }
+          else if (/close|closed|ปิด/.test(statusRaw)) { stats.closed++; displayStatus = "CLOSED"; }
+          else if (/pending|wait|hold|in progress|รอ/.test(statusRaw)) { stats.pending++; displayStatus = "PENDING"; }
+          else if (/open|new|เปิด/.test(statusRaw)) { stats.open++; displayStatus = "OPEN"; }
+          else { stats.open++; displayStatus = statusRaw.toUpperCase(); }
+
+          // Logic รายละเอียด
+          let desc = (colIdx.detail > -1) ? row[colIdx.detail] : "";
+          if (!desc && colIdx.fullDetail > -1) desc = row[colIdx.fullDetail];
+          if (!desc) desc = "-";
+
+          // ✅ Push ข้อมูลเป็น Object ลง List
+          ticketList.push({
+            id: ticketId,
+            status: displayStatus,
+            detail: String(desc).trim()
+          });
+        }
       }
     }
 
-    const summaryText = `Total: ${stats.total}\nOpen: ${stats.open}\nPending: ${stats.pending}\nResolved: ${stats.resolved}\nClosed: ${stats.closed}\n\n` + detailsList.join("\n");
+    stats.total = ticketList.length;
+
+    // สร้าง Text สำรองไว้เผื่อใช้ใน PDF
+    const summaryText = `Total: ${stats.total}\nOpen: ${stats.open}\nPending: ${stats.pending}\nResolved: ${stats.resolved}\nClosed: ${stats.closed}\n\n` +
+      ticketList.map(t => `[${t.status}] ${t.id} - ${t.detail}`).join("\n");
 
     return JSON.stringify({
       success: true,
-      text: summaryText,
-      rawStats: stats,
-      rawDetails: detailsList.join("\n"),
+      list: ticketList,    // ✅ ส่ง Array กลับไปให้ Table
+      stats: stats,
+      text: summaryText    // ส่ง Text กลับไปให้ Form Submit
     });
+
   } catch (e) {
     return JSON.stringify({ success: false, error: e.toString() });
   }
 }
 
 // =================================================================
-// 🔧 5. HELPER FUNCTIONS & REPORT PROCESSING
+// 🔧 HELPER FUNCTIONS (คงเดิม)
 // =================================================================
 
 function normalizeDate(d) {
   if (!d) return "";
-  if (d instanceof Date) return Utilities.formatDate(d, CONFIG.TIMEZONE, "yyyy-MM-dd");
-  let s = String(d).trim().split(" ")[0].replace(/[\/\.]/g, "-");
-  let p = s.split("-");
-  if (p.length !== 3) return "";
-  let y, m, day;
-  if (p[0].length === 4) { y = p[0]; m = p[1]; day = p[2]; }
-  else { y = p[2]; m = p[1]; day = p[0]; }
-  return `${parseInt(y)}-${("0" + parseInt(m)).slice(-2)}-${("0" + parseInt(day)).slice(-2)}`;
+  try {
+    const tz = (typeof CONFIG !== 'undefined' && CONFIG.TIMEZONE) ? CONFIG.TIMEZONE : Session.getScriptTimeZone();
+    if (d instanceof Date) return Utilities.formatDate(d, tz, "yyyy-MM-dd");
+
+    let s = String(d).trim();
+    let parsedDate = new Date(s);
+    if (!isNaN(parsedDate.getTime())) return Utilities.formatDate(parsedDate, tz, "yyyy-MM-dd");
+
+    s = s.split(" ")[0].replace(/[\/\.]/g, "-");
+    let p = s.split("-");
+    if (p.length !== 3) return "";
+    let y, m, day;
+    if (p[0].length === 4) { y = p[0]; m = p[1]; day = p[2]; }
+    else { y = p[2]; m = p[1]; day = p[0]; }
+    let yInt = parseInt(y);
+    if (yInt > 2400) yInt -= 543;
+    return `${yInt}-${("0" + parseInt(m)).slice(-2)}-${("0" + parseInt(day)).slice(-2)}`;
+  } catch (e) { return ""; }
 }
 
 function combineDateTime(dObj, tObj) {
@@ -625,5 +669,79 @@ function processShiftReport(formData) {
 
   } catch (e) {
     return JSON.stringify({ success: false, error: e.toString() });
+  }
+}
+
+/**
+ * 🛠️ DEBUG FUNCTION (UPDATED): เช็ค 20 แถวล่างสุด
+ * เพื่อตรวจสอบข้อมูลล่าสุด
+ */
+function debugTicketData() {
+  const TEST_DATE = "2026-02-03"; // <-- วันที่ที่ต้องการค้นหา
+
+  console.log("🚀 START DEBUGGING TICKET FETCH (BOTTOM ROWS)...");
+
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.TICKET_ID);
+    const sheet = CONFIG.TICKET_TAB ? ss.getSheetByName(CONFIG.TICKET_TAB) : ss.getSheets()[0];
+
+    if (!sheet) {
+      console.error("❌ Error: Ticket Sheet not found.");
+      return;
+    }
+    console.log(`✅ Found Sheet: ${sheet.getName()}`);
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const totalRows = data.length;
+
+    console.log(`📊 Total rows found: ${totalRows}`);
+
+    // Column Mapping
+    const getIdx = (keywords) => {
+      if (!Array.isArray(keywords)) keywords = [keywords];
+      return headers.findIndex(h => {
+        const hStr = String(h).trim().toLowerCase();
+        return keywords.some(k => hStr.includes(k.toLowerCase()));
+      });
+    };
+
+    const colIdx = {
+      date: getIdx(["Date", "วันที่", "Timestamp"]),
+      status: getIdx(["Ticket Status", "Status", "สถานะ"]),
+    };
+
+    console.log(`📍 Column Indices: Date=${colIdx.date}, Status=${colIdx.status}`);
+
+    if (colIdx.date === -1 || colIdx.status === -1) {
+      console.error("❌ CRITICAL: Cannot find required columns.");
+      return;
+    }
+
+    // ✅ NEW LOGIC: Check LAST 20 Rows
+    const checkCount = 20;
+    const startRow = Math.max(1, totalRows - checkCount); // เริ่มเช็คย้อนหลัง 20 แถว (ไม่นับ Header)
+
+    console.log(`🔍 Checking rows ${startRow + 1} to ${totalRows} for date: ${TEST_DATE}`);
+    let matchCount = 0;
+
+    for (let i = startRow; i < totalRows; i++) {
+      const row = data[i];
+      const rawDate = row[colIdx.date];
+      const normDate = normalizeDate(rawDate); // ใช้ Function เดียวกับตัวจริง
+      const rawStatus = row[colIdx.status];
+
+      console.log(`   [Row ${i + 1}] Raw: '${rawDate}' -> Norm: '${normDate}' | Status: '${rawStatus}'`);
+
+      if (normDate === TEST_DATE) {
+        console.log(`      ✅ MATCH FOUND at Row ${i + 1} !!!`);
+        matchCount++;
+      }
+    }
+
+    console.log(`🏁 Summary: Found ${matchCount} matches for ${TEST_DATE} in the last ${checkCount} rows.`);
+
+  } catch (e) {
+    console.error("❌ EXCEPTION:", e);
   }
 }

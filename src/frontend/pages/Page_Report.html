@@ -12,11 +12,16 @@
       <p class="text-base-content/60 mt-1 ml-1 text-sm md:text-base">รายงานผลการปฏิบัติงานประจำกะดึก</p>
     </div>
 
-    <div role="alert" class="alert shadow-sm bg-base-100 border border-warning/30 w-full md:w-auto md:max-w-md p-3">
-      <i class="fas fa-exclamation-triangle text-warning"></i>
-      <div>
-        <h3 class="font-bold text-xs text-base-content/70">REMINDER</h3>
-        <div class="text-xs">ตรวจสอบการปิด Channel ให้เรียบร้อย</div>
+    <div role="alert"
+      class="alert bg-red-50 border-l-4 border-error shadow-md w-full md:w-auto md:max-w-md p-4 animate-pulse-subtle">
+      <div class="flex items-start gap-3">
+        <i class="fas fa-exclamation-circle text-error text-2xl mt-1"></i>
+        <div>
+          <h3 class="font-bold text-error uppercase tracking-wider text-sm">Action Required!</h3>
+          <div class="text-base-content/80 font-semibold text-sm">
+            กรุณา <span class="text-error font-bold underline">ตรวจสอบการปิด Channel</span> ให้เรียบร้อยก่อนส่งรายงาน
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -29,28 +34,23 @@
         <div class="card bg-base-100 shadow-sm border border-base-200">
           <div class="card-body p-4 md:p-6">
             <h2 class="card-title text-sm opacity-50 border-b pb-2 mb-4">GENERAL INFORMATION</h2>
-
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="form-control">
                 <label class="label"><span class="label-text font-bold">วันที่ (Date)</span></label>
                 <input type="date" name="date" id="inputDate" required class="input input-bordered w-full" />
               </div>
-
               <div class="form-control">
                 <label class="label"><span class="label-text font-bold">ผู้รายงาน (Reporter)</span></label>
-                <select name="reporter" id="reporterSelect" onchange="Report.checkReporterOther()" required
-                  class="select select-bordered w-full">
-                  <option value="">-- เลือกผู้รายงาน --</option>
-                  <option value="เมฆินทร์">เมฆินทร์</option>
-                  <option value="อรรคพล">อรรคพล</option>
-                  <option value="วัชระพล">วัชระพล</option>
-                  <option value="นวพัตร์">นวพัตร์</option>
-                  <option value="อื่นๆ">อื่นๆ (โปรดระบุ)</option>
-                </select>
-                <input type="text" name="reporterOther" id="reporterOther" placeholder="ระบุชื่อ-นามสกุล"
-                  class="input input-bordered w-full mt-2 hidden" />
+                <select name="reporter" id="reporterSelect" onchange="Report.checkReporterOther()" required class="select select-bordered w-full">
+            <option value="">-- เลือกผู้รายงาน --</option>
+            <option value="เมฆินทร์">เมฆินทร์</option>
+            <option value="อรรคพล">อรรคพล</option>
+            <option value="วัชระพล">วัชระพล</option>
+            <option value="นวพัตร์">นวพัตร์</option>
+            <option value="อื่นๆ">อื่นๆ (โปรดระบุ)</option>
+          </select>
+                <input type="text" name="reporterOther" id="reporterOther" placeholder="ระบุชื่อ-นามสกุล" class="input input-bordered w-full mt-2 hidden" />
               </div>
-
               <input type="hidden" name="shift" value="Night Shift">
             </div>
           </div>
@@ -63,99 +63,111 @@
               <h2 class="card-title text-primary flex gap-2 text-lg">
                 <i class="fas fa-ticket-alt"></i> 1. Ticket Status
               </h2>
-              <button type="button" onclick="Report.autoFetchTicket(this)"
-                class="btn btn-sm btn-primary btn-outline gap-2 w-full md:w-auto">
-                <i class="fas fa-sync-alt"></i> <span class="hidden md:inline">ดึงข้อมูล</span><span
-                  class="md:hidden">Refresh</span>
+
+              <button type="button" onclick="Report.autoFetchTicket(this)" class="btn btn-sm btn-primary btn-outline gap-2 w-full md:w-auto min-w-[140px]">
+                <i class="fas fa-sync-alt"></i> 
+                <span>ดึงข้อมูล</span>
               </button>
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
-
-              <div class="flex flex-col items-center p-3 bg-base-200 rounded-lg border border-base-300">
-                <span class="text-xs font-bold uppercase opacity-60">Total</span>
-                <span class="text-xl font-black mt-1" id="disp-ticket-total">-</span>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+              <div class="flex flex-col items-center p-2 bg-base-200 rounded-lg border border-base-300">
+                <span class="text-[10px] font-bold uppercase opacity-60">Total</span>
+                <span class="text-lg font-black" id="disp-ticket-total">-</span>
                 <input type="hidden" id="ticketTotal" value="0">
               </div>
-
-              <div class="flex flex-col items-center p-3 bg-info/10 rounded-lg border border-info/20 text-info">
-                <span class="text-xs font-bold uppercase">Open</span>
-                <span class="text-xl font-black mt-1" id="disp-ticket-open">-</span>
+              <div class="flex flex-col items-center p-2 bg-info/10 rounded-lg border border-info/20 text-info">
+                <span class="text-[10px] font-bold uppercase">Open</span>
+                <span class="text-lg font-black" id="disp-ticket-open">-</span>
                 <input type="hidden" id="ticketOpen" value="0">
               </div>
-
               <div
-                class="flex flex-col items-center p-3 bg-warning/10 rounded-lg border border-warning/20 text-warning">
-                <span class="text-xs font-bold uppercase">Pending</span>
-                <span class="text-xl font-black mt-1" id="disp-ticket-pending">-</span>
+                class="flex flex-col items-center p-2 bg-warning/10 rounded-lg border border-warning/20 text-warning">
+                <span class="text-[10px] font-bold uppercase">Pending</span>
+                <span class="text-lg font-black" id="disp-ticket-pending">-</span>
                 <input type="hidden" id="ticketPending" value="0">
               </div>
-
               <div
-                class="flex flex-col items-center p-3 bg-success/10 rounded-lg border border-success/20 text-success">
-                <span class="text-xs font-bold uppercase">Resolved</span>
-                <span class="text-xl font-black mt-1" id="disp-ticket-resolved">-</span>
+                class="flex flex-col items-center p-2 bg-success/10 rounded-lg border border-success/20 text-success">
+                <span class="text-[10px] font-bold uppercase">Resolved</span>
+                <span class="text-lg font-black" id="disp-ticket-resolved">-</span>
                 <input type="hidden" id="ticketResolved" value="0">
               </div>
-
               <div
-                class="flex flex-col items-center p-3 bg-neutral/10 rounded-lg border border-neutral/20 text-neutral col-span-2 md:col-span-1 lg:col-span-1">
-                <span class="text-xs font-bold uppercase">Closed</span>
-                <span class="text-xl font-black mt-1" id="disp-ticket-closed">-</span>
+                class="flex flex-col items-center p-2 bg-neutral/10 rounded-lg border border-neutral/20 text-neutral col-span-2 md:col-span-1">
+                <span class="text-[10px] font-bold uppercase">Closed</span>
+                <span class="text-lg font-black" id="disp-ticket-closed">-</span>
                 <input type="hidden" id="ticketClosed" value="0">
               </div>
-
-              <input type="hidden" id="ticketDetailsRaw" value="">
             </div>
 
-            <textarea name="ticketSummary" id="ticketSummary" rows="4"
-              class="textarea textarea-bordered w-full font-mono text-sm leading-relaxed"
-              placeholder="รายละเอียด Ticket จะแสดงที่นี่..."></textarea>
+            <div class="border rounded-lg overflow-hidden bg-base-100">
+              <div class="overflow-x-auto max-h-[300px]">
+                <table class="table table-xs md:table-sm table-pin-rows w-full">
+                  <thead class="bg-base-200">
+                    <tr>
+                      <th class="w-24 text-center">Status</th>
+                      <th class="w-32">Ticket No.</th>
+                      <th>Description</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ticketTableBody">
+                    <tr class="text-center text-base-content/50">
+                      <td colspan="3" class="py-8">ยังไม่มีข้อมูล (กรุณากดดึงข้อมูล)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <input type="hidden" name="ticketSummary" id="ticketSummary">
           </div>
         </div>
 
         <div class="card bg-base-100 shadow-sm border border-base-200">
           <div class="card-body p-4 md:p-6">
             <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
-              <h2 class="card-title text-info flex gap-2 text-lg">
+              <h3 class="card-title text-info flex gap-2 text-lg">
                 <i class="fas fa-futbol"></i> 2. Match Summary
-              </h2>
-              <button type="button" onclick="Report.autoFetchMatch(this)"
-                class="btn btn-sm btn-info btn-outline gap-2 w-full md:w-auto">
-                <i class="fas fa-sync-alt"></i> ดึงข้อมูล
+              </h3>
+
+              <button type="button" class="btn btn-sm btn-outline btn-info gap-2 w-full md:w-auto min-w-[140px]" onclick="Report.autoFetchMatch(this)">
+                <i class="fas fa-sync-alt"></i> <span>ดึงข้อมูล</span>
               </button>
             </div>
 
-            <div class="grid grid-cols-2 gap-3 mb-4">
-              <div class="bg-base-200 p-3 rounded-lg text-center">
-                <div class="text-xs opacity-60">Total Matches</div>
-                <div class="text-xl font-bold text-info" id="disp-match-total">-</div>
-                <input type="hidden" id="matchTotal" value="0">
+            <div id="match-stats-container" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-4">
+              <div
+                class="flex flex-col items-center p-2 bg-base-200 rounded-lg border border-base-300 col-span-2 md:col-span-1">
+                <span class="text-[10px] font-bold uppercase opacity-60">Total Matches</span>
+                <span class="text-lg font-black" id="disp-match-total">0</span>
               </div>
-              <div class="bg-base-200 p-3 rounded-lg text-center flex items-center justify-center">
-                <div class="text-xs font-bold text-info" id="disp-match-status">Wait for fetch</div>
+              <div
+                class="flex flex-col justify-center items-center p-2 bg-base-50 rounded-lg border border-base-200 border-dashed col-span-2 md:col-span-3 lg:col-span-4 text-xs text-base-content/40">
+                Waiting to fetch data...
               </div>
-              <input type="hidden" id="matchDataJSON" value="{}">
             </div>
 
-            <textarea name="matchSummary" id="matchSummary" rows="4"
-              class="textarea textarea-bordered w-full font-mono text-sm" placeholder="สรุปจำนวน Match..."></textarea>
+            <div class="form-control">
+              <label class="label"><span class="label-text text-xs opacity-60">รายละเอียดเพิ่มเติม (Text Format)</span></label>
+              <textarea name="matchSummary" id="matchSummary" class="textarea textarea-bordered h-24 text-xs font-mono w-full leading-relaxed" placeholder="รายละเอียดคู่แข่งขัน..." required></textarea>
+              <input type="hidden" id="matchTotal" name="matchTotal">
+              <input type="hidden" id="matchDataJSON" name="matchDataJSON">
+            </div>
           </div>
         </div>
 
         <div class="card bg-base-100 shadow-sm border border-base-200">
           <div class="card-body p-4 md:p-6">
-            <h2 class="card-title text-warning flex gap-2 mb-2 text-lg">
-              <i class="fas fa-handshake"></i> 3. Handover / Issues
+            <h2 class="card-title text-warning flex gap-2 mb-4 text-lg"> <i class="fas fa-handshake"></i> 3. Handover /
+              Issues
             </h2>
-            <textarea name="transferReport" rows="3" class="textarea textarea-bordered w-full"
-              placeholder="ระบุงานที่ต้องส่งต่อ..."></textarea>
+            <textarea name="transferReport" rows="3" class="textarea textarea-bordered w-full text-sm leading-relaxed" placeholder="ระบุงานที่ต้องส่งต่อ..."></textarea>
           </div>
         </div>
+
       </div>
 
       <div class="space-y-6">
-
         <div class="lg:sticky lg:top-4 space-y-6">
 
           <div class="card bg-base-100 shadow-xl border-t-4 border-t-warning">
@@ -172,14 +184,11 @@
                 </div>
                 <div class="collapse-content bg-base-100 pt-2">
                   <div class="flex gap-2 mb-2">
-                    <button type="button" onclick="document.getElementById('fileMono').click()"
-                      class="btn btn-xs btn-outline flex-1"><i class="fas fa-upload"></i></button>
-                    <button type="button" onclick="Report.pasteImage('mono', 'monoFileList')"
-                      class="btn btn-xs btn-outline flex-1"><i class="fas fa-paste"></i></button>
+                    <button type="button" onclick="document.getElementById('fileMono').click()" class="btn btn-xs btn-outline flex-1"><i class="fas fa-upload"></i> Upload</button>
+                    <button type="button" onclick="Report.pasteImage('mono', 'monoFileList')" class="btn btn-xs btn-outline flex-1"><i class="fas fa-paste"></i> Paste</button>
                   </div>
-                  <div id="monoFileList" class="text-xs space-y-1 text-base-content/60"></div>
-                  <input type="file" id="fileMono" multiple accept="image/*" class="hidden"
-                    onchange="Report.handleFilesUpload('fileMono', 'monoFileList')">
+                  <div id="monoFileList" class="text-xs space-y-1 text-base-content/60 break-all"></div>
+                  <input type="file" id="fileMono" multiple accept="image/*" class="hidden" onchange="Report.handleFilesUpload('fileMono', 'monoFileList')">
                 </div>
               </div>
 
@@ -188,9 +197,7 @@
                 <div class="collapse-title font-bold text-sm">4.2 Start Channel</div>
                 <div class="collapse-content bg-base-100 pt-2">
                   <div class="form-control mb-2">
-                    <select id="statusStart"
-                      onchange="Report.toggleUploadSection('statusStart', 'proofStartDiv', 'start')"
-                      class="select select-xs select-bordered w-full">
+                    <select id="statusStart" onchange="Report.toggleUploadSection('statusStart', 'proofStartDiv', 'start')" class="select select-xs select-bordered w-full">
                       <option value="ไม่มี">ไม่มี</option>
                       <option value="เรียบร้อย">เรียบร้อย</option>
                       <option value="ติดปัญหา">ติดปัญหา</option>
@@ -198,14 +205,11 @@
                   </div>
                   <div id="proofStartDiv" class="hidden">
                     <div class="flex gap-2 mb-2">
-                      <button type="button" onclick="document.getElementById('fileStart').click()"
-                        class="btn btn-xs btn-outline flex-1">Upload</button>
-                      <button type="button" onclick="Report.pasteImage('start', 'startFileList')"
-                        class="btn btn-xs btn-outline flex-1">Paste</button>
+                      <button type="button" onclick="document.getElementById('fileStart').click()" class="btn btn-xs btn-outline flex-1">Upload</button>
+                      <button type="button" onclick="Report.pasteImage('start', 'startFileList')" class="btn btn-xs btn-outline flex-1">Paste</button>
                     </div>
-                    <div id="startFileList" class="text-xs space-y-1"></div>
-                    <input type="file" id="fileStart" multiple accept="image/*" class="hidden"
-                      onchange="Report.handleFilesUpload('fileStart', 'startFileList')">
+                    <div id="startFileList" class="text-xs space-y-1 break-all"></div>
+                    <input type="file" id="fileStart" multiple accept="image/*" class="hidden" onchange="Report.handleFilesUpload('fileStart', 'startFileList')">
                   </div>
                 </div>
               </div>
@@ -215,8 +219,7 @@
                 <div class="collapse-title font-bold text-sm">4.3 AIS</div>
                 <div class="collapse-content bg-base-100 pt-2">
                   <div class="form-control mb-2">
-                    <select id="statusAis" onchange="Report.toggleUploadSection('statusAis', 'proofAisDiv', 'ais')"
-                      class="select select-xs select-bordered w-full">
+                    <select id="statusAis" onchange="Report.toggleUploadSection('statusAis', 'proofAisDiv', 'ais')" class="select select-xs select-bordered w-full">
                       <option value="ไม่มี">ไม่มี</option>
                       <option value="เรียบร้อย">เรียบร้อย</option>
                       <option value="ติดปัญหา">ติดปัญหา</option>
@@ -224,14 +227,11 @@
                   </div>
                   <div id="proofAisDiv" class="hidden">
                     <div class="flex gap-2 mb-2">
-                      <button type="button" onclick="document.getElementById('fileAis').click()"
-                        class="btn btn-xs btn-outline flex-1">Upload</button>
-                      <button type="button" onclick="Report.pasteImage('ais', 'aisFileList')"
-                        class="btn btn-xs btn-outline flex-1">Paste</button>
+                      <button type="button" onclick="document.getElementById('fileAis').click()" class="btn btn-xs btn-outline flex-1">Upload</button>
+                      <button type="button" onclick="Report.pasteImage('ais', 'aisFileList')" class="btn btn-xs btn-outline flex-1">Paste</button>
                     </div>
-                    <div id="aisFileList" class="text-xs space-y-1"></div>
-                    <input type="file" id="fileAis" multiple accept="image/*" class="hidden"
-                      onchange="Report.handleFilesUpload('fileAis', 'aisFileList')">
+                    <div id="aisFileList" class="text-xs space-y-1 break-all"></div>
+                    <input type="file" id="fileAis" multiple accept="image/*" class="hidden" onchange="Report.handleFilesUpload('fileAis', 'aisFileList')">
                   </div>
                 </div>
               </div>
@@ -241,8 +241,7 @@
           <div class="card bg-base-100 shadow-xl border border-base-200">
             <div class="card-body p-4 md:p-5">
               <div class="form-control mb-4">
-                <label class="label"><span class="label-text font-bold text-xs uppercase tracking-wider">Send
-                    To</span></label>
+                <label class="label"><span class="label-text font-bold text-xs uppercase tracking-wider">Send To</span></label>
                 <select name="chatTarget" class="select select-bordered w-full">
                   <option value="">-- ไม่ส่ง --</option>
                   <option value="group_all">กลุ่ม Shift Reports</option>
@@ -251,12 +250,10 @@
               </div>
 
               <div class="flex flex-col gap-3">
-                <button type="button" onclick="Report.submitForm(null, 'preview')"
-                  class="btn btn-ghost border-base-300 w-full">
+                <button type="button" onclick="Report.submitForm(null, 'preview')" class="btn btn-ghost border-base-300 w-full min-h-[3rem]">
                   <i class="fas fa-eye"></i> Preview
                 </button>
-                <button type="button" onclick="Report.submitForm(null, 'send')"
-                  class="btn btn-primary w-full shadow-lg">
+                <button type="button" onclick="Report.submitForm(null, 'send')" class="btn btn-primary w-full shadow-lg min-h-[3rem]">
                   <i class="fas fa-paper-plane"></i> Send Report
                 </button>
               </div>
@@ -277,7 +274,7 @@
 
       <div class="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col md:flex-row gap-6">
         <div
-          class="md:w-1/2 flex flex-col justify-center items-center bg-base-100 border-2 border-dashed border-base-300 rounded-xl p-8 text-center gap-4">
+          class="md:w-1/2 flex flex-col justify-center items-center bg-base-100 border-2 border-dashed border-base-300 rounded-xl p-8 text-center gap-4 min-h-[200px]">
           <i class="fas fa-file-pdf text-4xl text-error"></i>
           <div>
             <h4 class="font-bold">PDF Ready</h4>
@@ -286,19 +283,36 @@
           <a id="previewLink" href="#" target="_blank" class="btn btn-error btn-wide text-white btn-sm md:btn-md">Open
             PDF</a>
         </div>
-        <div class="md:w-1/2 flex flex-col">
+        <div class="md:w-1/2 flex flex-col h-full">
           <span class="label-text font-bold mb-2">Chat Preview:</span>
           <div
-            class="bg-base-300 p-4 rounded-xl font-mono text-xs whitespace-pre-wrap flex-1 overflow-y-auto max-h-[300px]"
+            class="bg-base-300 p-4 rounded-xl font-mono text-xs whitespace-pre-wrap flex-1 overflow-y-auto max-h-[300px] min-h-[200px]"
             id="chatPreviewText"></div>
         </div>
       </div>
 
       <div class="p-4 border-t border-base-300 flex justify-end gap-3 bg-base-100">
         <form method="dialog"><button class="btn">Cancel</button></form>
-        <button type="button" class="btn btn-success text-white px-6" onclick="Report.confirmSend()">Confirm
-          Send</button>
+        <button type="button" class="btn btn-success text-white px-6 min-w-[120px]" onclick="Report.confirmSend()">Confirm Send</button>
       </div>
     </div>
   </dialog>
 </div>
+
+<style>
+  @keyframes pulse-subtle {
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.85;
+    }
+  }
+
+  .animate-pulse-subtle {
+    animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+</style>

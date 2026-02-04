@@ -1,13 +1,14 @@
 <script>
   /**
    * JS_Report.html
-   * Logic สำหรับหน้า Shift Report (Updated: Error Handling & Debug)
+   * Logic สำหรับหน้า Shift Report
+   * Updated: รองรับ Ticket Table Layout
    */
   var Report = {
     proofFiles: { mono: [], ais: [], start: [] },
 
     init: function() {
-      // Init logic
+      console.log("Report Module Initialized");
     },
 
     // --- UI Interactions ---
@@ -76,7 +77,7 @@
         var newFiles = Array.from(input.files);
         this.proofFiles[type] = this.proofFiles[type].concat(newFiles);
         this.updateFileListUi(type, listId);
-        UIManager.showToast('เพิ่มรูปภาพ ' + newFiles.length + ' รายการ', 'success');
+        if(typeof UIManager !== 'undefined') UIManager.showToast('เพิ่มรูปภาพ ' + newFiles.length + ' รายการ', 'success');
       }
       input.value = '';
     },
@@ -84,7 +85,7 @@
     pasteImage: function(type, listId) {
       var self = this;
       if (!navigator.clipboard) {
-         UIManager.showToast("Browser ไม่รองรับ Clipboard API", 'error');
+         if(typeof UIManager !== 'undefined') UIManager.showToast("Browser ไม่รองรับ Clipboard API", 'error');
          return;
       }
       navigator.clipboard.read().then(function(items) {
@@ -97,15 +98,15 @@
                var file = new File([blob], 'Pasted_' + Date.now() + '.png', { type: imgTypes[0] });
                self.proofFiles[type].push(file);
                self.updateFileListUi(type, listId);
-               UIManager.showToast("วางรูปเรียบร้อย", 'success');
+               if(typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย", 'success');
             });
             found = true;
             return;
           }
         }
-        if (!found) UIManager.showToast("ไม่พบรูปใน Clipboard", 'warning');
+        if (!found && typeof UIManager !== 'undefined') UIManager.showToast("ไม่พบรูปใน Clipboard", 'warning');
       }).catch(function(err) {
-        UIManager.showToast("เข้าถึง Clipboard ไม่ได้", 'error');
+        if(typeof UIManager !== 'undefined') UIManager.showToast("เข้าถึง Clipboard ไม่ได้", 'error');
       });
     },
 
@@ -131,52 +132,106 @@
       this.updateFileListUi(type, listId);
     },
 
-    // --- Data Fetching (Updated Error Handling) ---
+    // --- Data Fetching (Updated for Table Layout) ---
 
+    // ฟังก์ชันดึงข้อมูล Ticket และแสดงผลใน Table
     autoFetchTicket: function(btn) {
+      // 1. ตรวจสอบว่าเลือกวันที่หรือยัง
       var d = document.getElementById('inputDate').value;
       if (!d) return UIManager.showToast("กรุณาเลือกวันที่ก่อน", 'warning');
 
+      // 2. จัดการสถานะปุ่ม (Loading State)
       var originalText = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
 
-      Server.call('getTicketDetails', d)
-        .then(function(res) {
-          // ✅ เช็ค Success ก่อน
-          if (!res.success) {
-             UIManager.showToast("Error: " + res.error, 'error');
-             document.getElementById('ticketSummary').value = "Error fetching data: " + res.error;
-             return;
-          }
-
-          document.getElementById('ticketSummary').value = res.text;
-          document.getElementById('ticketDetailsRaw').value = res.rawDetails;
-
-          var stats = res.rawStats || {};
-          document.getElementById('ticketTotal').value = stats.total || 0;
-          document.getElementById('ticketOpen').value = stats.open || 0;
-          document.getElementById('ticketPending').value = stats.pending || 0;
-          document.getElementById('ticketResolved').value = stats.resolved || 0;
-          document.getElementById('ticketClosed').value = stats.closed || 0;
-
-          var setText = function(id, val) {
-            var el = document.getElementById(id);
-            if (el) el.innerText = val;
-          };
-          setText('disp-ticket-total', stats.total || 0);
-          setText('disp-ticket-open', stats.open || 0);
-          setText('disp-ticket-pending', stats.pending || 0);
-          setText('disp-ticket-resolved', stats.resolved || 0);
-          setText('disp-ticket-closed', stats.closed || 0);
-
-          UIManager.showToast("อัปเดต Ticket เรียบร้อย", 'success');
-        })
-        .catch(function(err) { UIManager.showToast(err.message, 'error'); })
-        .finally(function() {
+      // 3. เรียกใช้ Server Function
+      google.script.run
+        .withSuccessHandler(function(resStr) {
+          // คืนค่าปุ่มกลับสู่ปกติ
           btn.disabled = false;
           btn.innerHTML = originalText;
-        });
+          
+          // แปลง JSON String กลับเป็น Object
+          var res = JSON.parse(resStr);
+
+          // ตรวจสอบ Error จากฝั่ง Server
+          if (!res.success) {
+              UIManager.showToast("Error: " + res.error, 'error');
+              return;
+          }
+
+          // ------------------------------------------------
+          // ส่วนที่ 1: อัปเดตตัวเลขสถิติ (Stats Cards)
+          // ------------------------------------------------
+          var stats = res.stats || {};
+          var statKeys = ['total', 'open', 'pending', 'resolved', 'closed'];
+          
+          statKeys.forEach(function(key) {
+             // อัปเดตค่าลงใน Hidden Input (สำหรับ Submit Form)
+             var inputId = 'ticket' + key.charAt(0).toUpperCase() + key.slice(1);
+             var inputEl = document.getElementById(inputId);
+             if(inputEl) inputEl.value = stats[key] || 0;
+             
+             // อัปเดตตัวเลขที่แสดงบนหน้าจอ
+             var dispId = 'disp-ticket-' + key;
+             var dispEl = document.getElementById(dispId);
+             if(dispEl) dispEl.innerText = stats[key] || 0;
+          });
+
+          // ------------------------------------------------
+          // ส่วนที่ 2: เก็บ Text Summary ไว้ (สำหรับ PDF/Preview)
+          // ------------------------------------------------
+          document.getElementById('ticketSummary').value = res.text; 
+
+          // ------------------------------------------------
+          // ส่วนที่ 3: สร้างแถวตาราง (Table Rows) จากรายการ List
+          // ------------------------------------------------
+          var tableBody = document.getElementById('ticketTableBody');
+          tableBody.innerHTML = ""; // ล้างข้อมูลเก่าออกก่อน
+
+          if (res.list && res.list.length > 0) {
+            
+            res.list.forEach(function(item) {
+              // item จะมีโครงสร้าง { id: "...", status: "...", detail: "..." }
+              
+              // กำหนดสี Badge ตามสถานะ
+              var badgeClass = "badge-ghost";
+              if (item.status === 'OPEN') badgeClass = "badge-info";
+              else if (item.status === 'PENDING') badgeClass = "badge-warning";
+              else if (item.status === 'RESOLVED') badgeClass = "badge-success";
+              else if (item.status === 'CLOSED') badgeClass = "badge-neutral";
+
+              // สร้าง HTML ของแถว
+              var row = '<tr class="hover">';
+              // Col 1: Status Badge
+              row += '<td class="text-center"><div class="badge ' + badgeClass + ' badge-sm font-bold text-[10px] w-20">' + item.status + '</div></td>';
+              // Col 2: Ticket ID
+              row += '<td class="font-mono text-xs font-semibold whitespace-nowrap">' + item.id + '</td>';
+              // Col 3: Detail
+              row += '<td class="text-xs min-w-[200px]">' + item.detail + '</td>';
+              row += '</tr>';
+              
+              // แทรกแถวลงในตาราง
+              tableBody.insertAdjacentHTML('beforeend', row);
+            });
+
+          } else {
+            // กรณีไม่พบข้อมูล
+            tableBody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-base-content/50">ไม่พบข้อมูล Ticket ในช่วงเวลานี้</td></tr>';
+          }
+
+          // แจ้งเตือนความสำเร็จ
+          UIManager.showToast("ดึงข้อมูลเรียบร้อย (" + (stats.total || 0) + " รายการ)", 'success');
+        })
+        .withFailureHandler(function(err) {
+           // กรณี Server Error (Network หลุด หรือ Script พัง)
+           btn.disabled = false;
+           btn.innerHTML = originalText;
+           UIManager.showToast("Server Error: " + err.message, 'error');
+           console.error("Fetch Error:", err);
+        })
+        .getTicketDetails(d); // ชื่อฟังก์ชันฝั่ง Server (Code.gs)
     },
 
     autoFetchMatch: function(btn) {
@@ -187,34 +242,74 @@
       btn.disabled = true;
       btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
 
-      Server.call('getMatchesByDate', d)
-        .then(function(res) {
-          // ✅ เช็ค Success ก่อน เพื่อไม่ให้ขึ้น undefined
+      google.script.run
+        .withSuccessHandler(function(resStr) {
+           btn.disabled = false;
+           btn.innerHTML = originalText;
+           var res = JSON.parse(resStr);
+
           if (!res.success) {
-             UIManager.showToast("Error: " + res.error, 'error');
-             document.getElementById('matchSummary').value = "Error fetching data: " + res.error;
-             var dispStatus = document.getElementById('disp-match-status');
-             if (dispStatus) dispStatus.innerText = 'Error!';
-             return;
+              UIManager.showToast("Error: " + res.error, 'error');
+              document.getElementById('matchSummary').value = "Error: " + res.error;
+              return;
           }
 
+          // 1. Update Hidden Inputs & Textarea
           document.getElementById('matchSummary').value = res.text;
           document.getElementById('matchDataJSON').value = JSON.stringify(res.data);
           document.getElementById('matchTotal').value = res.total;
-
+          
+          // Update Total Display (เผื่อใช้ ID นี้ที่อื่น)
           var dispTotal = document.getElementById('disp-match-total');
-          if (dispTotal) dispTotal.innerText = res.total || 0;
+          if(dispTotal) dispTotal.innerText = res.total || 0;
 
-          var dispStatus = document.getElementById('disp-match-status');
-          if (dispStatus) dispStatus.innerText = 'Fetched: ' + res.total + ' Items';
+          // 2. 🚩 สร้าง Dynamic Cards สำหรับแต่ละลีก
+          var container = document.getElementById('match-stats-container');
+          var html = '';
 
-          UIManager.showToast("อัปเดต Match เรียบร้อย", 'success');
+          // Card 1: Total Matches (สีเทาเข้ม เหมือน Ticket Total)
+          html += '<div class="flex flex-col items-center p-2 bg-base-200 rounded-lg border border-base-300 shadow-sm">';
+          html +=   '<span class="text-[10px] font-bold uppercase opacity-60">Total</span>';
+          html +=   '<span class="text-lg font-black">' + (res.total || 0) + '</span>';
+          html += '</div>';
+
+          // Loop สร้าง Card ตามลีกที่มีค่า > 0
+          if (res.data && Object.keys(res.data).length > 0) {
+            var hasLeagues = false;
+            
+            Object.keys(res.data).forEach(function(leagueName) {
+               var count = res.data[leagueName];
+               
+               // 🚩 เงื่อนไข: แสดงเฉพาะลีกที่มีจำนวน > 0
+               if (count > 0) {
+                   hasLeagues = true;
+                   
+                   // สไตล์ Card แบบเดียวกับ Ticket Status แต่ใช้โทนสีกลางๆ หรือสีฟ้าอ่อน
+                   html += '<div class="flex flex-col items-center p-2 bg-white rounded-lg border border-base-200 shadow-sm hover:border-info/50 transition-colors">';
+                   // ตัดคำชื่อลีกถ้าสั้นๆ ให้แสดงเต็ม ถ้าไม่มีให้แสดงชื่อปกติ
+                   html +=   '<span class="text-[10px] font-bold uppercase text-info text-center truncate w-full" title="' + leagueName + '">' + leagueName + '</span>';
+                   html +=   '<span class="text-lg font-black text-base-content">' + count + '</span>';
+                   html += '</div>';
+               }
+            });
+
+            // กรณีดึงข้อมูลมาแต่ไม่มีคู่แข่งเลย (Count 0 ทุกตัว)
+            if (!hasLeagues && res.total === 0) {
+                html += '<div class="col-span-2 md:col-span-3 flex items-center justify-center p-2 text-xs text-base-content/50 border border-dashed rounded-lg">';
+                html +=   'No matches found for this date';
+                html += '</div>';
+            }
+          }
+
+          container.innerHTML = html;
+          UIManager.showToast("อัปเดต Match เรียบร้อย (" + res.total + " คู่)", 'success');
         })
-        .catch(function(err) { UIManager.showToast(err.message, 'error'); })
-        .finally(function() {
-          btn.disabled = false;
-          btn.innerHTML = originalText;
-        });
+        .withFailureHandler(function(err) {
+           btn.disabled = false;
+           btn.innerHTML = originalText;
+           UIManager.showToast(err.message, 'error');
+        })
+        .getMatchesByDate(d);
     },
 
     // --- Form Submission ---
@@ -240,7 +335,7 @@
         date: form.date.value,
         reporter: reporterVal,
         shift: form.shift.value,
-        ticketSummary: form.ticketSummary.value,
+        ticketSummary: document.getElementById('ticketSummary').value, // เอาค่าจาก Hidden
         ticketStats: {
           total: document.getElementById('ticketTotal').value,
           open: document.getElementById('ticketOpen').value,
@@ -280,9 +375,9 @@
 
       Promise.all(promises).then(function() {
           if (typeof google === 'undefined' || !google.script) {
-             UIManager.hideLoading();
-             UIManager.showToast("Google Script Environment not found", 'error');
-             return;
+              UIManager.hideLoading();
+              UIManager.showToast("Google Script Environment not found", 'error');
+              return;
           }
 
           google.script.run
@@ -300,6 +395,13 @@
                   self.updateFileListUi('mono', 'monoFileList');
                   self.updateFileListUi('ais', 'aisFileList');
                   self.updateFileListUi('start', 'startFileList');
+                  
+                  // ล้าง Table และ Stats
+                  document.getElementById('ticketTableBody').innerHTML = '<tr><td colspan="3" class="text-center py-8 text-base-content/50">ยังไม่มีข้อมูล (กรุณากดดึงข้อมูล)</td></tr>';
+                  ['total','open','pending','resolved','closed'].forEach(k => {
+                     document.getElementById('disp-ticket-'+k).innerText = '-';
+                  });
+
                   if (typeof Router !== 'undefined') {
                     setTimeout(function() { Router.navigateTo('page-history'); }, 1000);
                   }
@@ -312,7 +414,7 @@
               UIManager.hideLoading();
               UIManager.showToast("Server Failed: " + err.message, 'error');
             })
-            .processShiftReport(formData);
+            .processForm(formData); // ชื่อ Function ฝั่ง Server
 
       }).catch(function(err) {
           UIManager.hideLoading();
