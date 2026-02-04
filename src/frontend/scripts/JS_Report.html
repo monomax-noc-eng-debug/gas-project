@@ -2,7 +2,7 @@
   /**
    * JS_Report.html
    * Logic สำหรับหน้า Shift Report
-   * Updated: รองรับ Ticket Table Layout
+   * Updated: Fixed SyntaxError (Comma) & TypeError (ticketDetailsRaw)
    */
   var Report = {
     proofFiles: { mono: [], ais: [], start: [] },
@@ -14,14 +14,41 @@
     // --- UI Interactions ---
 
     checkReporterOther: function() {
-      var val = document.getElementById('reporterSelect').value;
-      var other = document.getElementById('reporterOther');
-      if (val === 'อื่นๆ') {
-        other.classList.remove('hidden');
-        other.focus();
+      var select = document.getElementById('reporterSelect');
+      var group = document.getElementById('reporterOtherGroup');
+      
+      // Support both old/new HTML structure
+      if (group) {
+        var input = document.getElementById('reporterOther');
+        if (select.value === 'อื่นๆ') {
+          select.classList.add('hidden');
+          group.classList.remove('hidden');
+          input.required = true;
+          input.focus();
+        }
       } else {
-        other.classList.add('hidden');
+        // Fallback for old HTML
+        var input = document.getElementById('reporterOther');
+        if (select.value === 'อื่นๆ') {
+           input.classList.remove('hidden');
+           input.focus();
+        } else {
+           input.classList.add('hidden');
+        }
       }
+    },
+
+    resetReporter: function() {
+      var select = document.getElementById('reporterSelect');
+      var group = document.getElementById('reporterOtherGroup');
+      var input = document.getElementById('reporterOther');
+      
+      select.value = ""; 
+      input.value = "";
+      input.required = false;
+
+      select.classList.remove('hidden');
+      group.classList.add('hidden');
     },
 
     toggleUploadSection: function(selectId, divId, fileType) {
@@ -112,13 +139,19 @@
 
     updateFileListUi: function(type, listId) {
       var container = document.getElementById(listId);
+      var autoItems = Array.from(container.querySelectorAll('.auto-proof-item'));
       container.innerHTML = '';
+      
+      autoItems.forEach(function(item) {
+          container.appendChild(item);
+      });
+
       var self = this;
       this.proofFiles[type].forEach(function(file, index) {
         var div = document.createElement('div');
         div.className = 'flex items-center justify-between bg-base-100 border border-base-300 px-3 py-2 rounded-lg mb-1 shadow-sm';
         var html = '';
-        html += '<span class="truncate pr-4 font-mono">' + file.name + '</span>';
+        html += '<span class="truncate pr-4 font-mono text-xs">' + file.name + '</span>';
         html += '<button type="button" onclick="Report.removeFile(\'' + type + '\', ' + index + ', \'' + listId + '\')" class="btn btn-xs btn-square btn-ghost text-error">';
         html +=   '<i class="fas fa-times"></i>';
         html += '</button>';
@@ -132,106 +165,69 @@
       this.updateFileListUi(type, listId);
     },
 
-    // --- Data Fetching (Updated for Table Layout) ---
+    // --- Data Fetching ---
 
-    // ฟังก์ชันดึงข้อมูล Ticket และแสดงผลใน Table
     autoFetchTicket: function(btn) {
-      // 1. ตรวจสอบว่าเลือกวันที่หรือยัง
       var d = document.getElementById('inputDate').value;
       if (!d) return UIManager.showToast("กรุณาเลือกวันที่ก่อน", 'warning');
 
-      // 2. จัดการสถานะปุ่ม (Loading State)
       var originalText = btn.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
+      btn.innerHTML = '<span class="loading loading-dots loading-xs"></span>';
 
-      // 3. เรียกใช้ Server Function
+      document.getElementById('ticketTableBody').innerHTML = 
+        '<tr><td colspan="3" class="text-center py-8 text-base-content/50"><span class="loading loading-dots loading-md text-primary"></span></td></tr>';
+
       google.script.run
         .withSuccessHandler(function(resStr) {
-          // คืนค่าปุ่มกลับสู่ปกติ
           btn.disabled = false;
           btn.innerHTML = originalText;
-          
-          // แปลง JSON String กลับเป็น Object
           var res = JSON.parse(resStr);
 
-          // ตรวจสอบ Error จากฝั่ง Server
           if (!res.success) {
               UIManager.showToast("Error: " + res.error, 'error');
               return;
           }
 
-          // ------------------------------------------------
-          // ส่วนที่ 1: อัปเดตตัวเลขสถิติ (Stats Cards)
-          // ------------------------------------------------
           var stats = res.stats || {};
-          var statKeys = ['total', 'open', 'pending', 'resolved', 'closed'];
-          
-          statKeys.forEach(function(key) {
-             // อัปเดตค่าลงใน Hidden Input (สำหรับ Submit Form)
+          ['total', 'open', 'pending', 'resolved', 'closed'].forEach(function(key) {
              var inputId = 'ticket' + key.charAt(0).toUpperCase() + key.slice(1);
-             var inputEl = document.getElementById(inputId);
-             if(inputEl) inputEl.value = stats[key] || 0;
-             
-             // อัปเดตตัวเลขที่แสดงบนหน้าจอ
              var dispId = 'disp-ticket-' + key;
-             var dispEl = document.getElementById(dispId);
-             if(dispEl) dispEl.innerText = stats[key] || 0;
+             if(document.getElementById(inputId)) document.getElementById(inputId).value = stats[key] || 0;
+             if(document.getElementById(dispId)) document.getElementById(dispId).innerText = stats[key] || 0;
           });
 
-          // ------------------------------------------------
-          // ส่วนที่ 2: เก็บ Text Summary ไว้ (สำหรับ PDF/Preview)
-          // ------------------------------------------------
           document.getElementById('ticketSummary').value = res.text; 
 
-          // ------------------------------------------------
-          // ส่วนที่ 3: สร้างแถวตาราง (Table Rows) จากรายการ List
-          // ------------------------------------------------
           var tableBody = document.getElementById('ticketTableBody');
-          tableBody.innerHTML = ""; // ล้างข้อมูลเก่าออกก่อน
+          tableBody.innerHTML = ""; 
 
           if (res.list && res.list.length > 0) {
-            
             res.list.forEach(function(item) {
-              // item จะมีโครงสร้าง { id: "...", status: "...", detail: "..." }
-              
-              // กำหนดสี Badge ตามสถานะ
               var badgeClass = "badge-ghost";
               if (item.status === 'OPEN') badgeClass = "badge-info";
               else if (item.status === 'PENDING') badgeClass = "badge-warning";
               else if (item.status === 'RESOLVED') badgeClass = "badge-success";
               else if (item.status === 'CLOSED') badgeClass = "badge-neutral";
 
-              // สร้าง HTML ของแถว
               var row = '<tr class="hover">';
-              // Col 1: Status Badge
               row += '<td class="text-center"><div class="badge ' + badgeClass + ' badge-sm font-bold text-[10px] w-20">' + item.status + '</div></td>';
-              // Col 2: Ticket ID
               row += '<td class="font-mono text-xs font-semibold whitespace-nowrap">' + item.id + '</td>';
-              // Col 3: Detail
               row += '<td class="text-xs min-w-[200px]">' + item.detail + '</td>';
               row += '</tr>';
-              
-              // แทรกแถวลงในตาราง
               tableBody.insertAdjacentHTML('beforeend', row);
             });
-
           } else {
-            // กรณีไม่พบข้อมูล
             tableBody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-base-content/50">ไม่พบข้อมูล Ticket ในช่วงเวลานี้</td></tr>';
           }
-
-          // แจ้งเตือนความสำเร็จ
-          UIManager.showToast("ดึงข้อมูลเรียบร้อย (" + (stats.total || 0) + " รายการ)", 'success');
+          UIManager.showToast("Ticket Updated (" + (stats.total || 0) + ")", 'success');
         })
         .withFailureHandler(function(err) {
-           // กรณี Server Error (Network หลุด หรือ Script พัง)
            btn.disabled = false;
            btn.innerHTML = originalText;
            UIManager.showToast("Server Error: " + err.message, 'error');
-           console.error("Fetch Error:", err);
         })
-        .getTicketDetails(d); // ชื่อฟังก์ชันฝั่ง Server (Code.gs)
+        .getTicketDetails(d);
     },
 
     autoFetchMatch: function(btn) {
@@ -240,7 +236,10 @@
 
       var originalText = btn.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
+      btn.innerHTML = '<span class="loading loading-dots loading-xs"></span>';
+
+      var container = document.getElementById('match-stats-container');
+      container.innerHTML = '<div class="col-span-full flex justify-center py-6"><span class="loading loading-dots loading-md text-info"></span></div>';
 
       google.script.run
         .withSuccessHandler(function(resStr) {
@@ -254,55 +253,37 @@
               return;
           }
 
-          // 1. Update Hidden Inputs & Textarea
           document.getElementById('matchSummary').value = res.text;
           document.getElementById('matchDataJSON').value = JSON.stringify(res.data);
           document.getElementById('matchTotal').value = res.total;
           
-          // Update Total Display (เผื่อใช้ ID นี้ที่อื่น)
-          var dispTotal = document.getElementById('disp-match-total');
-          if(dispTotal) dispTotal.innerText = res.total || 0;
+          if(document.getElementById('disp-match-total')) document.getElementById('disp-match-total').innerText = res.total || 0;
 
-          // 2. 🚩 สร้าง Dynamic Cards สำหรับแต่ละลีก
-          var container = document.getElementById('match-stats-container');
+          container.innerHTML = '';
           var html = '';
-
-          // Card 1: Total Matches (สีเทาเข้ม เหมือน Ticket Total)
-          html += '<div class="flex flex-col items-center p-2 bg-base-200 rounded-lg border border-base-300 shadow-sm">';
+          html += '<div class="flex flex-col items-center p-2 bg-base-200 rounded-lg border border-base-300 shadow-sm col-span-2 md:col-span-1">';
           html +=   '<span class="text-[10px] font-bold uppercase opacity-60">Total</span>';
           html +=   '<span class="text-lg font-black">' + (res.total || 0) + '</span>';
           html += '</div>';
 
-          // Loop สร้าง Card ตามลีกที่มีค่า > 0
           if (res.data && Object.keys(res.data).length > 0) {
             var hasLeagues = false;
-            
             Object.keys(res.data).forEach(function(leagueName) {
                var count = res.data[leagueName];
-               
-               // 🚩 เงื่อนไข: แสดงเฉพาะลีกที่มีจำนวน > 0
                if (count > 0) {
                    hasLeagues = true;
-                   
-                   // สไตล์ Card แบบเดียวกับ Ticket Status แต่ใช้โทนสีกลางๆ หรือสีฟ้าอ่อน
                    html += '<div class="flex flex-col items-center p-2 bg-white rounded-lg border border-base-200 shadow-sm hover:border-info/50 transition-colors">';
-                   // ตัดคำชื่อลีกถ้าสั้นๆ ให้แสดงเต็ม ถ้าไม่มีให้แสดงชื่อปกติ
                    html +=   '<span class="text-[10px] font-bold uppercase text-info text-center truncate w-full" title="' + leagueName + '">' + leagueName + '</span>';
                    html +=   '<span class="text-lg font-black text-base-content">' + count + '</span>';
                    html += '</div>';
                }
             });
-
-            // กรณีดึงข้อมูลมาแต่ไม่มีคู่แข่งเลย (Count 0 ทุกตัว)
             if (!hasLeagues && res.total === 0) {
-                html += '<div class="col-span-2 md:col-span-3 flex items-center justify-center p-2 text-xs text-base-content/50 border border-dashed rounded-lg">';
-                html +=   'No matches found for this date';
-                html += '</div>';
+                html += '<div class="col-span-2 md:col-span-3 flex items-center justify-center p-2 text-xs text-base-content/50 border border-dashed rounded-lg">No matches found</div>';
             }
           }
-
           container.innerHTML = html;
-          UIManager.showToast("อัปเดต Match เรียบร้อย (" + res.total + " คู่)", 'success');
+          UIManager.showToast("Match Updated (" + res.total + ")", 'success');
         })
         .withFailureHandler(function(err) {
            btn.disabled = false;
@@ -312,30 +293,122 @@
         .getMatchesByDate(d);
     },
 
+    autoFetchProof: function() {
+      var dateVal = document.getElementById('inputDate').value;
+      if (!dateVal) return;
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          document.querySelectorAll('.auto-proof-item').forEach(el => el.remove());
+
+          if (res.success && res.data) {
+            var hasData = false;
+
+            if (res.data.start && res.data.start.length > 0) {
+              res.data.start.forEach(function(item) {
+                 Report.renderProofPreview('start', item.url, item.label);
+              });
+              var statusSelect = document.getElementById('statusStart');
+              if(statusSelect) statusSelect.value = 'เรียบร้อย';
+              var proofDiv = document.getElementById('proofStartDiv');
+              if(proofDiv) proofDiv.classList.remove('hidden');
+              var collapse = document.getElementById('collapse-start');
+              if(collapse) collapse.checked = true;
+              hasData = true;
+            }
+
+            if (res.data.stop && res.data.stop.length > 0) {
+              res.data.stop.forEach(function(item) {
+                 Report.renderProofPreview('mono', item.url, item.label);
+              });
+              var statusSelect = document.getElementById('statusMono');
+              if(statusSelect) statusSelect.value = 'เรียบร้อย';
+              var collapse = document.getElementById('collapse-mono');
+              if(collapse) collapse.checked = true;
+              hasData = true;
+            }
+
+            if (hasData && typeof UIManager !== 'undefined') {
+               UIManager.showToast('ดึงรูปภาพจาก Dashboard เรียบร้อย', 'success');
+            }
+          }
+        })
+        .getDailyProofImages(dateVal);
+    },
+
+    renderProofPreview: function(type, url, label) {
+      var listId = type + 'FileList';
+      var container = document.getElementById(listId);
+      if(!container) return;
+
+      if(container.innerHTML.indexOf(url) !== -1) return;
+
+      var html = '';
+      html += '<div class="auto-proof-item flex items-center justify-between bg-blue-50 border border-blue-200 px-3 py-2 rounded-lg mb-1 shadow-sm gap-2">';
+      html +=   '<div class="flex items-center gap-2 overflow-hidden flex-1 min-w-0">';
+      html +=     '<i class="fas fa-link text-blue-500 flex-shrink-0"></i>';
+      
+      if (label) {
+        html +=   '<span class="text-xs font-bold text-blue-700 truncate max-w-[120px] md:max-w-[200px]" title="' + label + '">' + label + ':</span>';
+      } else {
+        html +=   '<span class="text-xs font-bold text-blue-700">Dashboard:</span>';
+      }
+
+      html +=     '<a href="' + url + '" target="_blank" class="text-xs text-blue-600 hover:underline hover:text-blue-800 whitespace-nowrap font-mono ml-auto">เปิดดูรูป</a>';
+      html +=   '</div>';
+      html +=   '<div class="badge badge-info badge-xs text-white flex-shrink-0">AUTO</div>';
+      html += '</div>';
+
+      container.insertAdjacentHTML('afterbegin', html);
+    },
+
     // --- Form Submission ---
+
+    // --- Form Submission (Full Version) ---
 
     submitForm: function(e, mode) {
       if (e) e.preventDefault();
       var form = document.getElementById('mainForm');
+      
+      // ถ้าไม่ได้ระบุ mode ให้ถือว่าเป็น 'send' (ส่งจริง)
       if(!mode) mode = 'send';
 
+      // 1. ตรวจสอบความถูกต้องของฟอร์ม (HTML5 Validation)
       if (!form.checkValidity()) return form.reportValidity();
-      if (this.proofFiles.mono.length === 0) {
+      
+      // 2. ตรวจสอบรูปภาพ Mono (ต้องมีอย่างน้อย 1 รูป จากการอัปโหลด หรือ Auto)
+      var monoContainer = document.getElementById('monoFileList');
+      var hasMonoAuto = monoContainer && monoContainer.querySelector('.auto-proof-item');
+      var hasMonoManual = this.proofFiles.mono.length > 0;
+
+      if (!hasMonoManual && !hasMonoAuto) {
           UIManager.showToast("กรุณาแนบรูป Mono อย่างน้อย 1 รูป", 'warning');
           return;
       }
 
-      UIManager.showLoading();
+      // 3. แสดง Loading Bar ตามโหมดการทำงาน
+      var loadingMsg = mode === 'preview' ? 'Generating Preview...' : 'Sending Report...';
+      UIManager.showLoading(loadingMsg);
       var self = this;
 
+      // จัดการค่าผู้รายงาน (กรณีเลือก 'อื่นๆ')
       var reporterVal = form.reporter.value;
       if(reporterVal === 'อื่นๆ') reporterVal = document.getElementById('reporterOther').value;
 
+      // Helper: ดึง URL จากรูป Auto ที่แสดงอยู่หน้าเว็บ
+      const getAutoUrls = (listId) => {
+         const container = document.getElementById(listId);
+         return container ? Array.from(container.querySelectorAll('.auto-proof-item a')).map(a => a.href) : [];
+      };
+
+      // 4. เตรียมข้อมูลที่จะส่งไป Server
       var formData = {
         date: form.date.value,
         reporter: reporterVal,
         shift: form.shift.value,
-        ticketSummary: document.getElementById('ticketSummary').value, // เอาค่าจาก Hidden
+        ticketSummary: document.getElementById('ticketSummary').value,
+        
+        // ข้อมูล Ticket Stats
         ticketStats: {
           total: document.getElementById('ticketTotal').value,
           open: document.getElementById('ticketOpen').value,
@@ -343,88 +416,150 @@
           resolved: document.getElementById('ticketResolved').value,
           closed: document.getElementById('ticketClosed').value
         },
-        ticketDetails: document.getElementById('ticketDetailsRaw').value,
+        
+        // ข้อมูล Match & Transfer
         matchSummary: form.matchSummary.value,
         matchTotal: document.getElementById('matchTotal').value,
         matchData: JSON.parse(document.getElementById('matchDataJSON').value || "{}"),
         transferReport: form.transferReport.value,
+        
+        // ข้อมูล Status Checklist
         statusMono: document.getElementById('statusMono').value,
         statusAis: document.getElementById('statusAis').value,
         statusStart: document.getElementById('statusStart').value,
         chatTarget: form.chatTarget.value,
-        proofImages: {},
+        
+        // รูปภาพ
+        proofImages: {}, // จะถูกเติมค่าหลังจาก Compress เสร็จ
+        autoProofUrls: {
+           mono: getAutoUrls('monoFileList'),
+           ais: getAutoUrls('aisFileList'),
+           start: getAutoUrls('startFileList')
+        },
+        
+        // ระบุว่าเป็น Draft (Preview) หรือไม่
         isDraft: (mode === 'preview')
       };
 
+      // 5. บีบอัดรูปภาพ (Compress Images)
+      // *ถ้าเป็น Preview ไม่ต้องเสียเวลาบีบอัดและอัปโหลด*
       var promises = [];
-      if (this.proofFiles.mono.length > 0) {
-         var pMono = Promise.all(this.proofFiles.mono.map(function(f) { return self.compressImage(f); }))
-            .then(function(res) { formData.proofImages.mono = res; });
-         promises.push(pMono);
-      }
-      if (this.proofFiles.ais.length > 0) {
-         var pAis = Promise.all(this.proofFiles.ais.map(function(f) { return self.compressImage(f); }))
-            .then(function(res) { formData.proofImages.ais = res; });
-         promises.push(pAis);
-      }
-      if (this.proofFiles.start.length > 0) {
-         var pStart = Promise.all(this.proofFiles.start.map(function(f) { return self.compressImage(f); }))
-            .then(function(res) { formData.proofImages.start = res; });
-         promises.push(pStart);
+      if (mode !== 'preview') {
+        if (this.proofFiles.mono.length > 0) {
+            promises.push(Promise.all(this.proofFiles.mono.map(function(f) { return self.compressImage(f); }))
+                .then(function(res) { formData.proofImages.mono = res; }));
+        }
+        if (this.proofFiles.ais.length > 0) {
+            promises.push(Promise.all(this.proofFiles.ais.map(function(f) { return self.compressImage(f); }))
+                .then(function(res) { formData.proofImages.ais = res; }));
+        }
+        if (this.proofFiles.start.length > 0) {
+            promises.push(Promise.all(this.proofFiles.start.map(function(f) { return self.compressImage(f); }))
+                .then(function(res) { formData.proofImages.start = res; }));
+        }
       }
 
+      // รอให้บีบอัดรูปเสร็จทั้งหมด (ถ้ามี) แล้วค่อยส่ง
       Promise.all(promises).then(function() {
+          
           if (typeof google === 'undefined' || !google.script) {
               UIManager.hideLoading();
               UIManager.showToast("Google Script Environment not found", 'error');
               return;
           }
 
+          // เรียกฟังก์ชัน Server
           google.script.run
             .withSuccessHandler(function(resStr) {
               UIManager.hideLoading();
               var res = JSON.parse(resStr); 
 
               if (res.success) {
+                
+                // --- กรณี PREVIEW ---
                 if (res.isPreview) {
-                  self.showPreviewModal(res.pdfUrl, res.chatPreview);
-                } else {
+                  // ส่ง null url ไป เพราะ Preview แบบ Realtime ไม่ได้สร้าง PDF จริง
+                  Report.showPreviewModal(null, res.chatPreview);
+                } 
+                
+                // --- กรณี SEND สำเร็จ ---
+                else {
+                  // เปลี่ยนข้อความ Loading เพื่อแจ้งผู้ใช้ว่ากำลังรีเฟรชข้อมูล
+                  UIManager.showLoading('Refreshing History...'); 
                   UIManager.showToast("ส่งรายงานเรียบร้อยแล้ว!", 'success');
+                  
+                  // 1. ล้างค่าในฟอร์ม
                   form.reset();
+                  
+                  // 2. ล้างค่ารูปภาพในตัวแปรและหน้าเว็บ
                   self.proofFiles = { mono: [], ais: [], start: [] };
                   self.updateFileListUi('mono', 'monoFileList');
                   self.updateFileListUi('ais', 'aisFileList');
                   self.updateFileListUi('start', 'startFileList');
+                  document.querySelectorAll('.auto-proof-item').forEach(function(el) { el.remove(); });
                   
-                  // ล้าง Table และ Stats
+                  // 3. ล้างค่าตาราง Ticket และ Stats
                   document.getElementById('ticketTableBody').innerHTML = '<tr><td colspan="3" class="text-center py-8 text-base-content/50">ยังไม่มีข้อมูล (กรุณากดดึงข้อมูล)</td></tr>';
-                  ['total','open','pending','resolved','closed'].forEach(k => {
-                     document.getElementById('disp-ticket-'+k).innerText = '-';
+                  ['total','open','pending','resolved','closed'].forEach(function(k) {
+                     var el = document.getElementById('disp-ticket-'+k);
+                     if(el) el.innerText = '-';
                   });
+                  var dispMatch = document.getElementById('disp-match-total');
+                  if(dispMatch) dispMatch.innerText = '-';
 
+                  // 4. รีเฟรชหน้า History อัตโนมัติ (ใช้ ShiftHistory ตามที่แก้ชื่อไป)
+                  try {
+                    if (typeof ShiftHistory !== 'undefined' && typeof ShiftHistory.loadData === 'function') {
+                        ShiftHistory.loadData(true); 
+                    }
+                  } catch (e) { console.warn("Auto-refresh history failed:", e); }
+
+                  // 5. เปลี่ยนหน้าไปที่ History (หน่วงเวลาเล็กน้อยเพื่อให้เห็น Toast)
                   if (typeof Router !== 'undefined') {
-                    setTimeout(function() { Router.navigateTo('page-history'); }, 1000);
+                    setTimeout(function() { 
+                        UIManager.hideLoading();
+                        Router.navigateTo('page-history'); 
+                    }, 1500);
+                  } else {
+                     UIManager.hideLoading();
                   }
                 }
               } else {
+                // กรณี Server ตอบกลับว่า Error
+                UIManager.hideLoading();
                 UIManager.showToast("Error: " + res.error, 'error');
               }
             })
             .withFailureHandler(function(err) {
+              // กรณีเชื่อมต่อ Server ไม่ได้
               UIManager.hideLoading();
               UIManager.showToast("Server Failed: " + err.message, 'error');
             })
-            .processForm(formData); // ชื่อ Function ฝั่ง Server
-
+            .processShiftReport(formData); // ชื่อฟังก์ชันฝั่ง Server
+            
       }).catch(function(err) {
+          // กรณี Client Error (เช่น บีบอัดรูปไม่ผ่าน)
           UIManager.hideLoading();
-          UIManager.showToast("Client Error (Compress): " + err.message, 'error');
+          UIManager.showToast("Client Error: " + err.message, 'error');
           console.error(err);
       });
     },
 
     showPreviewModal: function(url, chatText) {
-      document.getElementById('previewLink').href = url;
+      // ✅ ถ้าเป็น Realtime Preview (url = null) ให้ซ่อนปุ่ม PDF
+      var pdfBtn = document.getElementById('previewLink');
+      var pdfBox = pdfBtn.parentElement;
+      
+      if (!url) {
+         pdfBox.classList.add('hidden'); // ซ่อนกล่อง PDF
+         // ปรับ Chat Box ให้เต็มจอ
+         document.getElementById('chatPreviewText').parentElement.className = "w-full flex flex-col h-full";
+      } else {
+         pdfBox.classList.remove('hidden');
+         pdfBtn.href = url;
+         document.getElementById('chatPreviewText').parentElement.className = "md:w-1/2 flex flex-col h-full";
+      }
+
       document.getElementById('chatPreviewText').textContent = chatText;
       document.getElementById('preview_modal').showModal();
     },
@@ -432,6 +567,6 @@
     confirmSend: function() {
       document.getElementById('preview_modal').close();
       this.submitForm(null, 'send');
-    }
+    },
   };
 </script>

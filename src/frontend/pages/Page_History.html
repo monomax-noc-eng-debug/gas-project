@@ -1,25 +1,27 @@
-<div id="page-history" class="page-section hidden p-6 fade-in h-full flex flex-col">
+<div id="page-history" class="page-section hidden p-6 fade-in h-full flex flex-col overflow-y-auto">
   <div class="flex justify-between items-center mb-6">
-    <div>
-      <h2 class="text-2xl font-bold text-base-content">Report History</h2>
-      <p class="text-base-content/60 text-sm">ประวัติการส่งรายงาน 20 รายการล่าสุด</p>
-    </div>
-    <button onclick="HistoryPage.load()" class="btn btn-sm btn-ghost"><i class="fas fa-sync-alt"></i> Refresh</button>
+    <h2 class="text-2xl font-bold flex items-center gap-2">
+      <i class="fas fa-history text-base-content/50"></i> History
+    </h2>
+    <button class="btn btn-sm btn-ghost" onclick="ShiftHistory.loadData(true)">
+      <i class="fas fa-sync-alt"></i> Refresh
+    </button>
   </div>
 
-  <div class="card bg-base-100 shadow-xl border border-base-200 flex-1 overflow-hidden">
-    <div class="overflow-x-auto h-full">
-      <table class="table table-zebra table-pin-rows w-full">
-        <thead>
+  <div class="card bg-base-100 shadow-sm border border-base-200">
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead class="bg-base-200">
           <tr>
-            <th>วันที่</th>
-            <th>ผู้ส่ง</th>
-            <th class="text-center">PDF</th>
+            <th class="w-32">Date</th>
+            <th>Reporter</th>
+            <th class="w-24">Status</th>
+            <th class="w-24">Link</th>
           </tr>
         </thead>
-        <tbody id="historyTableBody">
+        <tbody id="history-table-body">
           <tr>
-            <td colspan="3" class="text-center py-10 opacity-50">Loading...</td>
+            <td colspan="4" class="text-center py-8 opacity-50">Loading...</td>
           </tr>
         </tbody>
       </table>

@@ -108,26 +108,33 @@ function getMatches(filterType, filterValue) {
 
 function getShiftHistory() {
   try {
-    const sheet = _getSheet("DB_Reports");
-    if (!sheet) return JSON.stringify([]);
+    const ss = SpreadsheetApp.openById(CONFIG.DB_ID);
+    const sheet = ss.getSheetByName("DB_Reports");
     const data = sheet.getDataRange().getValues();
-    if (data.length <= 1) return JSON.stringify([]);
+    const headers = data.shift();
 
-    const headers = data[0];
+    // ค้นหาตำแหน่ง Index ของคอลัมน์ที่ต้องการ
     const idxDate = headers.indexOf("Report Date");
-    const idxReporter = headers.indexOf("Reporter");
-    const idxPdf = headers.indexOf("PDF Report Link");
+    const idxName = headers.indexOf("Reporter");
+    const idxLink = headers.indexOf("PDF Report Link");
+    const idxGroup = headers.indexOf("Chat Target"); // ✅ ดึงข้อมูลกลุ่ม
 
-    const logs = [];
-    for (let i = data.length - 1; i >= 1 && logs.length < 20; i--) {
-      const row = data[i];
-      logs.push({
-        date: row[idxDate] instanceof Date ? Utilities.formatDate(row[idxDate], CONFIG.TIMEZONE, "dd/MM/yyyy") : row[idxDate],
-        name: row[idxReporter] || "ไม่ระบุ",
-        pdfUrl: row[idxPdf] || "#",
-      });
-    }
-    return JSON.stringify(logs);
+    const history = data.reverse().slice(0, 20).map(row => {
+      // ดึง URL จากสูตร Hyperlink (ถ้ามี)
+      let url = row[idxLink] || "#";
+      if (url.indexOf('=HYPERLINK') !== -1) {
+        url = url.match(/"([^"]+)"/)[1];
+      }
+
+      return {
+        date: row[idxDate] ? Utilities.formatDate(new Date(row[idxDate]), CONFIG.TIMEZONE, "dd/MM/yyyy") : "-",
+        name: row[idxName] || "-",
+        pdfUrl: url,
+        group: row[idxGroup] || "N/A" // ✅ ส่งชื่อกลุ่มกลับไป
+      };
+    });
+
+    return JSON.stringify(history);
   } catch (e) {
     return JSON.stringify([]);
   }
@@ -472,6 +479,79 @@ function getTicketDetails(dateString) {
   }
 }
 
+// ฟังก์ชันดึงรูป Start/Stop จาก Sheet "DB_Matches" โดยอ้างอิงชื่อหัวตาราง
+function getDailyProofImages(dateStr) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.DB_ID);
+    const sheet = ss.getSheetByName("DB_Matches");
+
+    if (!sheet) return { success: false, error: "Sheet 'DB_Matches' not found" };
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    // Helper ค้นหา Index
+    const getIdx = (n) => headers.findIndex(h => String(h).toLowerCase().trim() === n.toLowerCase().trim());
+
+    const colIdx = {
+      date: getIdx("Date"),
+      time: getIdx("Time"), // ✅ เพิ่ม Time เพื่อคำนวณ Shift
+      home: getIdx("Home"),
+      away: getIdx("Away"),
+      startImg: headers.indexOf("Start Image"),
+      stopImg: headers.indexOf("Stop Image")
+    };
+
+    if (colIdx.startImg === -1 || colIdx.stopImg === -1) {
+      return { success: false, error: "ไม่พบคอลัมน์ 'Start Image' หรือ 'Stop Image'" };
+    }
+
+    // --- Time Window Logic (เหมือน getMatchesByDate) ---
+    // dateStr Format: "YYYY-MM-DD"
+    const [y, m, d] = dateStr.split('-').map(Number);
+
+    // จุดสิ้นสุด: 06:00 น. ของวันที่เลือก (End Bound)
+    const endBound = new Date(y, m - 1, d, 6, 0, 0);
+    // จุดเริ่มต้น: ย้อนกลับไป 24 ชั่วโมง = 06:00 น. ของเมื่อวาน (Start Bound)
+    const startBound = new Date(endBound.getTime() - 24 * 60 * 60 * 1000);
+
+    let proofData = { start: [], stop: [] };
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row[colIdx.date]) continue;
+
+      // รวม Date + Time เป็น DateTime Object
+      let matchDateTime = combineDateTime(row[colIdx.date], row[colIdx.time]);
+      if (!matchDateTime) continue;
+
+      // ✅ เช็คว่าอยู่ในช่วงเวลาหรือไม่ (Start Bound <= MatchTime < End Bound)
+      if (matchDateTime >= startBound && matchDateTime < endBound) {
+
+        let sUrl = row[colIdx.startImg];
+        let eUrl = row[colIdx.stopImg];
+
+        // สร้าง Label ชื่อคู่แข่งขัน
+        let home = (colIdx.home !== -1) ? row[colIdx.home] : "-";
+        let away = (colIdx.away !== -1) ? row[colIdx.away] : "-";
+        let matchLabel = `${home} vs ${away}`;
+
+        if (sUrl && String(sUrl).trim() !== "") {
+          proofData.start.push({ url: sUrl, label: matchLabel });
+        }
+        if (eUrl && String(eUrl).trim() !== "") {
+          proofData.stop.push({ url: eUrl, label: matchLabel });
+        }
+      }
+    }
+
+    return { success: true, data: proofData };
+
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
 // =================================================================
 // 🔧 HELPER FUNCTIONS (คงเดิม)
 // =================================================================
@@ -516,29 +596,67 @@ function _formatTime(val) {
   return String(val).replace(/'/g, "").trim();
 }
 
-// ... CRUD Create/Update (Optional if needed) ...
+// =================================================================
+// 📝 REPORT GENERATION (COMPLETE DATA SAVE)
+// =================================================================
 
 function processShiftReport(formData) {
   try {
     const ss = SpreadsheetApp.openById(CONFIG.DB_ID);
-    const sheet = _getSheet("DB_Reports");
-    const imgFolder = DriveApp.getFolderById(CONFIG.IMG_FOLDER);
-    const pdfFolder = DriveApp.getFolderById(CONFIG.PDF_FOLDER);
-    const templateFile = DriveApp.getFileById(CONFIG.TEMPLATE_ID);
+    const sheet = ss.getSheetByName("DB_Reports");
+    if (!sheet) throw new Error("Sheet 'DB_Reports' not found");
 
+    // --- 1. เตรียมข้อมูลพื้นฐาน ---
+    const ts = formData.ticketStats || {};
+    const matchLines = (formData.matchSummary || "").split("\n").filter(l => l.trim().startsWith("-"));
+    const handoverLines = (formData.transferReport || "ไม่มีข้อมูล").split("\n");
+
+    // สร้างข้อความสรุปสำหรับ Chat (ใช้ทั้ง Preview และส่งจริง)
+    let chatBody = `สรุปรายงานผลการปฏิบัติงาน\nประจำวันที่: ${formData.date}\nผู้รายงาน: ${formData.reporter}\n─────────────────────────────\n\n`;
+    chatBody += `1. สรุปสถานะ Ticket\n> Total: ${ts.total || 0}\n> Open: ${ts.open || 0}\n> Pending: ${ts.pending || 0}\n> Resolved: ${ts.resolved || 0}\n> Closed: ${ts.closed || 0}\n\n`;
+    chatBody += `2. Stop channel\n> Mono: ${formData.statusMono}\n> AIS: ${formData.statusAis}\n> Start Channel: ${formData.statusStart}\n\n`;
+    chatBody += `3. Shift Transfer\n`;
+    if (handoverLines.length > 0 && handoverLines[0] !== "") {
+      handoverLines.forEach(l => chatBody += `> - ${l.trim()}\n`);
+    } else {
+      chatBody += `> - ไม่มีข้อมูล\n`;
+    }
+    chatBody += `\n─────────────────────────────\n4. สรุปจำนวน Match\n${formData.matchTotal ? `(Match รวม ${formData.matchTotal} คู่ )\n\n` : ""}`;
+    if (matchLines.length > 0) {
+      matchLines.forEach(l => chatBody += `${l.replace("- ", "").trim()}\n`);
+    } else {
+      chatBody += "ไม่มีรายการแข่งขัน\n";
+    }
+    chatBody += `─────────────────────────────`;
+
+    // 🚀 [MODE] REALTIME PREVIEW: ส่งแค่ข้อความกลับไป ไม่สร้างไฟล์
+    if (formData.isDraft) {
+      return JSON.stringify({
+        success: true,
+        isPreview: true,
+        pdfUrl: null,
+        chatPreview: chatBody
+      });
+    }
+
+    // --- 2. จัดการไฟล์และโฟลเดอร์ (REAL SUBMIT) ---
+    const targetFolder = getOrCreateDateFolder(CONFIG.PDF_FOLDER, formData.date);
     let allImageUrls = [];
 
+    // Helper: จัด Style แบบปลอดภัย
+    const safeSetAttr = (element, attrs) => { try { element.setAttributes(attrs); } catch (e) { } };
+
+    // Helper: Upload รูปใหม่ลงโฟลเดอร์วันที่
     const uploadImages = (imgArray, prefix) => {
-      if (!imgArray || !Array.isArray(imgArray) || imgArray.length === 0) return [];
+      if (!imgArray || !imgArray.length) return [];
       let blobs = [];
       const safeName = (formData.reporter || "Staff").replace(/[^a-zA-Z0-9]/g, "");
       const timeStr = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, "HHmm");
-
       imgArray.forEach((imgObj, i) => {
         try {
           const fileName = `${prefix}_${formData.date}_${timeStr}_${safeName}_${i + 1}.jpg`;
           const blob = Utilities.newBlob(Utilities.base64Decode(imgObj.data), imgObj.mimeType, fileName);
-          const file = imgFolder.createFile(blob);
+          const file = targetFolder.createFile(blob); // ✅ เก็บรูปในโฟลเดอร์วันเดียวกัน
           allImageUrls.push(file.getUrl());
           blobs.push(blob);
         } catch (err) { console.error(err); }
@@ -546,12 +664,28 @@ function processShiftReport(formData) {
       return blobs;
     };
 
-    const blobsMono = uploadImages(formData.proofImages?.mono, "Mono");
-    const blobsAis = uploadImages(formData.proofImages?.ais, "Ais");
-    const blobsStart = uploadImages(formData.proofImages?.start, "Start");
+    // Helper: ดึงรูปจาก Auto URL
+    const getBlobsFromUrls = (urls) => {
+      if (!urls || !urls.length) return [];
+      return urls.map(url => {
+        try {
+          let id = url.match(/id=([a-zA-Z0-9_-]+)/)?.[1] || url.split('/d/')?.[1]?.split('/')?.[0];
+          if (id) {
+            allImageUrls.push(url);
+            return DriveApp.getFileById(id).getBlob();
+          }
+        } catch (e) { }
+        return null;
+      }).filter(b => b !== null);
+    };
 
-    const filePrefix = formData.isDraft ? "[PREVIEW] " : "";
-    const tempCopy = templateFile.makeCopy(`${filePrefix}Report_${formData.date}_${formData.reporter}`, pdfFolder);
+    const blobsMono = [...uploadImages(formData.proofImages?.mono, "Mono"), ...getBlobsFromUrls(formData.autoProofUrls?.mono)];
+    const blobsAis = [...uploadImages(formData.proofImages?.ais, "Ais"), ...getBlobsFromUrls(formData.autoProofUrls?.ais)];
+    const blobsStart = [...uploadImages(formData.proofImages?.start, "Start"), ...getBlobsFromUrls(formData.autoProofUrls?.start)];
+
+    // --- 3. สร้าง PDF ---
+    const templateFile = DriveApp.getFileById(CONFIG.TEMPLATE_ID);
+    const tempCopy = templateFile.makeCopy(`Report_${formData.date}_${formData.reporter}`, targetFolder);
     const tempDoc = DocumentApp.openById(tempCopy.getId());
     const body = tempDoc.getBody();
 
@@ -559,116 +693,160 @@ function processShiftReport(formData) {
     body.replaceText("{{Reporter}}", formData.reporter);
     body.replaceText("{{Shift}}", formData.shift);
 
-    const insertStyledTable = (placeholder, tableData) => {
+    const insertSection = (placeholder, tableData, forcePageBreakAfter) => {
       const range = body.findText(placeholder);
-      if (!range) return null;
-      const element = range.getElement();
-      const parent = element.getParent();
-      const index = body.getChildIndex(parent);
+      if (!range) return;
+      const element = range.getElement().getParent();
+      const index = body.getChildIndex(element);
       const table = body.insertTable(index, tableData);
       table.setBorderWidth(1).setBorderColor("#cbd5e1");
       const headerRow = table.getRow(0);
       for (let i = 0; i < tableData[0].length; i++) {
         headerRow.getCell(i).setBackgroundColor("#1e293b").getChild(0).asParagraph().setBold(true).setForegroundColor("#ffffff");
       }
-      parent.removeFromParent();
-      return table;
+      element.removeFromParent();
+      if (forcePageBreakAfter) body.insertPageBreak(body.getChildIndex(table) + 1);
     };
 
-    const ts = formData.ticketStats || {};
-    insertStyledTable("{{Ticket_Table}}", [
-      ["Category", "Amount"],
-      ["Open / New", String(ts.open || 0)],
-      ["Pending", String(ts.pending || 0)],
-      ["Resolved", String(ts.resolved || 0)],
-      ["Closed", String(ts.closed || 0)],
-      ["TOTAL", String(ts.total || 0)]
-    ]);
+    insertSection("{{Ticket_Table}}", [["Category", "Amount"], ["Open", String(ts.open || 0)], ["Pending", String(ts.pending || 0)], ["Resolved", String(ts.resolved || 0)], ["Closed", String(ts.closed || 0)], ["TOTAL", String(ts.total || 0)]], true);
 
-    const matchLines = (formData.matchSummary || "").split("\n").filter(l => l.trim().startsWith("-"));
-    const matchTableData = [["League", "Count"]];
-    if (matchLines.length > 0) {
-      matchLines.forEach(line => {
-        const parts = line.replace("-", "").split(":");
-        matchTableData.push([parts[0].trim(), parts[1] ? parts[1].trim() : "0"]);
-      });
-    } else {
-      matchTableData.push(["-", "-"]);
-    }
-    insertStyledTable("{{Match_Table}}", matchTableData);
+    const mData = [["League", "Count"]];
+    if (matchLines.length) matchLines.forEach(l => mData.push([l.replace("-", "").split(":")[0].trim(), l.split(":")[1]?.trim() || "0"]));
+    else mData.push(["-", "-"]);
+    insertSection("{{Match_Table}}", mData, true);
 
-    insertStyledTable("{{Status_Table}}", [
-      ["Checklist", "Status"],
-      ["Mono Channel", formData.statusMono || "-"],
-      ["AIS Clear Cache", formData.statusAis || "-"],
-      ["Start Channel", formData.statusStart || "-"],
-    ]);
+    const hData = [["#", "Details"]];
+    handoverLines.forEach((l, i) => hData.push([(i + 1).toString(), l.trim()]));
+    insertSection("{{Handover_Table}}", hData, true);
 
-    const handoverLines = (formData.transferReport || "ไม่มีข้อมูล").split("\n");
-    const handoverData = [["#", "Details"]];
-    handoverLines.forEach((l, i) => handoverData.push([(i + 1).toString(), l.trim()]));
-    insertStyledTable("{{Handover_Table}}", handoverData);
+    insertSection("{{Status_Table}}", [["Item", "Status"], ["Mono", formData.statusMono], ["AIS", formData.statusAis], ["Start", formData.statusStart]], false);
 
-    if (blobsMono.length > 0 || blobsAis.length > 0 || blobsStart.length > 0) {
+    // ส่วนรูปภาพ
+    if (blobsMono.length || blobsAis.length || blobsStart.length) {
       body.appendPageBreak();
-      body.appendParagraph("Proof of Work").setHeading(DocumentApp.ParagraphHeading.HEADING2);
-      const addImgs = (title, blobs) => {
-        if (!blobs || blobs.length === 0) return;
-        body.appendParagraph(title).setHeading(DocumentApp.ParagraphHeading.HEADING3);
-        blobs.forEach(b => {
+      const h2 = body.appendParagraph("Proof of Work").setHeading(DocumentApp.ParagraphHeading.HEADING2);
+      safeSetAttr(h2, { [DocumentApp.Attribute.KEEP_WITH_NEXT]: true });
+
+      const addImgSec = (t, bs) => {
+        if (!bs.length) return;
+        const h3 = body.appendParagraph(t).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+        safeSetAttr(h3, { [DocumentApp.Attribute.KEEP_WITH_NEXT]: true });
+        bs.forEach(b => {
           try {
             const img = body.appendImage(b);
-            const w = img.getWidth();
-            const h = img.getHeight();
-            const ratio = 450 / w;
-            img.setWidth(450).setHeight(h * ratio);
-            body.appendParagraph("");
-          } catch (e) { console.warn("Image insert failed", e); }
+            const w = img.getWidth(), h = img.getHeight(), ratio = 420 / w;
+            img.setWidth(420).setHeight(h * ratio);
+            const spc = body.appendParagraph(" ");
+            safeSetAttr(spc, { [DocumentApp.Attribute.FONT_SIZE]: 4 });
+          } catch (e) { }
         });
+        body.appendParagraph("");
       };
-      addImgs("Mono Proof:", blobsMono);
-      addImgs("AIS Proof:", blobsAis);
-      addImgs("Start Channel Proof:", blobsStart);
+      addImgSec("1. Mono Proof", blobsMono);
+      addImgSec("2. AIS Proof", blobsAis);
+      addImgSec("3. Start Channel Proof", blobsStart);
     }
 
     tempDoc.saveAndClose();
-    const pdfUrl = tempCopy.getUrl();
+    const pdfUrl = targetFolder.createFile(tempCopy.getAs(MimeType.PDF)).getUrl();
+    tempCopy.setTrashed(true);
 
-    if (formData.isDraft) {
-      const chatPreview = `*Shift Report Preview*\n📅 Date: ${formData.date}\n👤 Reporter: ${formData.reporter}\n\n*Ticket Stats:*\nTotal: ${ts.total}, Open: ${ts.open}\n\n*Matches:*\n${formData.matchSummary}`;
-      return JSON.stringify({ success: true, isPreview: true, pdfUrl: pdfUrl, chatPreview: chatPreview });
-    }
-
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    let newRow = new Array(headers.length).fill("");
-    const setVal = (h, v) => { const idx = headers.indexOf(h); if (idx !== -1) newRow[idx] = v; };
+    // --- 4. บันทึกลง Google Sheet (ครบทุกช่อง) ---
+    const dbHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    let newRow = new Array(dbHeaders.length).fill("");
+    const setVal = (h, v) => { const i = dbHeaders.indexOf(h); if (i !== -1) newRow[i] = v; };
 
     setVal("Timestamp", new Date());
     setVal("Report Date", formData.date);
     setVal("Shift", formData.shift);
     setVal("Reporter", formData.reporter);
-    setVal("Ticket Total", ts.total);
+    setVal("Ticket Total", ts.total || 0);
+    setVal("Ticket Open", ts.open || 0);
+    setVal("Ticket Pending", ts.pending || 0);
+    setVal("Ticket Resolved", ts.resolved || 0);
+    setVal("Ticket Closed", ts.closed || 0);
+    setVal("Ticket Details", formData.ticketSummary || "-");
     setVal("Match Summary", formData.matchSummary);
+    setVal("Match Total", formData.matchTotal || 0);
+    setVal("Transfer Report", formData.transferReport);
+    setVal("Status Mono", formData.statusMono);
+    setVal("Status AIS", formData.statusAis);
+    setVal("Status Start", formData.statusStart);
     setVal("Image URLs", allImageUrls.join(",\n"));
-    setVal("PDF Report Link", pdfUrl);
+    setVal("PDF Report Link", `=HYPERLINK("${pdfUrl}", "คลิกที่นี่")`);
+    setVal("Chat Target", formData.chatTarget || "Internal");
 
     sheet.appendRow(newRow);
 
+    // --- 5. ส่ง Google Chat Card (Adobe PDF SQUARE) ---
     if (formData.chatTarget && CONFIG.WEBHOOKS[formData.chatTarget]) {
-      const msg = `*New Report Sent*\n📅 Date: ${formData.date}\n👤 By: ${formData.reporter}\n📎 PDF: ${pdfUrl}`;
+      const cardPayload = {
+        cardsV2: [{
+          cardId: "report-card",
+          card: {
+            header: {
+              title: "สรุปรายงานผลการปฏิบัติงาน",
+              subtitle: `${formData.date} | ${formData.reporter}`,
+              imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/PDF_file_icon.svg/400px-PDF_file_icon.svg.png",
+              imageType: "SQUARE" // ✅ เปลี่ยนเป็นทรงสี่เหลี่ยม
+            },
+            sections: [
+              { widgets: [{ textParagraph: { text: chatBody } }] },
+              {
+                widgets: [{
+                  buttonList: {
+                    buttons: [{
+                      text: "เปิดรายงาน PDF 📄",
+                      onClick: { openLink: { url: pdfUrl } }
+                    }]
+                  }
+                }]
+              }
+            ]
+          }
+        }]
+      };
+
       try {
         UrlFetchApp.fetch(CONFIG.WEBHOOKS[formData.chatTarget], {
           method: "post",
           contentType: "application/json",
-          payload: JSON.stringify({ text: msg }),
+          payload: JSON.stringify(cardPayload)
         });
-      } catch (e) { console.warn("Webhook failed", e); }
+      } catch (e) {
+        UrlFetchApp.fetch(CONFIG.WEBHOOKS[formData.chatTarget], {
+          method: "post",
+          contentType: "application/json",
+          payload: JSON.stringify({ text: chatBody + `\n📎 PDF: ${pdfUrl}` })
+        });
+      }
     }
 
     return JSON.stringify({ success: true, pdfUrl: pdfUrl });
 
   } catch (e) {
     return JSON.stringify({ success: false, error: e.toString() });
+  }
+}
+
+// ฟังก์ชันสร้างโฟลเดอร์ตามวัน
+function getOrCreateDateFolder(baseFolderId, dateStr) {
+  try {
+    const [year, month, day] = dateStr.split("-");
+    const baseFolder = DriveApp.getFolderById(baseFolderId);
+
+    const getSubFolder = (parent, name) => {
+      const folders = parent.getFoldersByName(name);
+      if (folders.hasNext()) return folders.next();
+      return parent.createFolder(name);
+    };
+
+    const yFolder = getSubFolder(baseFolder, year);
+    const mFolder = getSubFolder(yFolder, month);
+    const dFolder = getSubFolder(mFolder, day);
+    return dFolder;
+  } catch (e) {
+    return DriveApp.getFolderById(baseFolderId);
   }
 }
 

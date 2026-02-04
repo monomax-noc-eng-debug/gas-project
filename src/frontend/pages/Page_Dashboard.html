@@ -12,8 +12,8 @@
         <input class="join-item btn btn-sm" type="radio" name="dash-mode" aria-label="Month" onclick="Dashboard.switchMode('MONTH')"/>
       </div>
 
-      <input type="date" id="dash-date-picker" class="input input-bordered input-sm" onchange="Dashboard.loadData()" />
-      <input type="month" id="dash-month-picker" class="input input-bordered input-sm hidden" onchange="Dashboard.loadData()" />
+      <input type="date" id="dash-date-picker" class="input input-bordered input-sm" onchange="Dashboard.loadData(true)" />
+      <input type="month" id="dash-month-picker" class="input input-bordered input-sm hidden" onchange="Dashboard.loadData(true)" />
 
       <button class="btn btn-sm btn-success text-white" onclick="Dashboard.addMatch()">
         <i class="fas fa-plus"></i> New

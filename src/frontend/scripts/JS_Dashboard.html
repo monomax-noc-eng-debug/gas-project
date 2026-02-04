@@ -65,16 +65,24 @@
     },
 
     loadData: function(forceRefresh) {
-      var icon = document.getElementById("dash-refresh-icon");
+      // 1. จับ Element ปุ่ม Refresh (ปุ่มแม่ของ icon)
+      var btnRefresh = document.getElementById("dash-refresh-icon")?.parentElement; 
+      var originalBtnContent = btnRefresh ? btnRefresh.innerHTML : '';
+      
       var tbody = document.getElementById("match-table-body");
       var dateVal = document.getElementById("dash-date-picker").value;
       var monthVal = document.getElementById("dash-month-picker").value;
       var filterValue = this.viewMode === "DAY" ? dateVal : monthVal;
 
-      if (icon) icon.classList.add("fa-spin");
+      // 2. ✅ แก้ไข: ใช้ loading-spinner (วงกลมหมุน) สำหรับปุ่มนี้โดยเฉพาะ
+      if (btnRefresh) {
+          btnRefresh.disabled = true;
+          btnRefresh.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
+      }
       
+      // ส่วน Table ยังคงใช้ loading-dots (จุด 3 จุด) ตามเดิม
       if (forceRefresh || !this.data.length) {
-         if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-20"><span class="loading loading-dots loading-lg"></span></td></tr>';
+         if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-20"><span class="loading loading-dots loading-lg text-primary"></span></td></tr>';
       }
 
       var self = this;
@@ -90,7 +98,11 @@
           if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-10 text-error">Error: ' + err.message + '</td></tr>';
         })
         .finally(function() {
-          if (icon) icon.classList.remove("fa-spin");
+          // คืนค่าปุ่มกลับสู่สภาพเดิม (icon fa-sync-alt)
+          if (btnRefresh) {
+              btnRefresh.innerHTML = originalBtnContent;
+              btnRefresh.disabled = false;
+          }
         });
     },
 
