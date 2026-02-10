@@ -1,575 +1,678 @@
 <script>
-  /**
-   * JS_Dashboard.html
-   * - Pagination System (Client-side)
-   * - Progress Bar & Fixed Button
-   * - CRUD System (Add/Edit)
-   * - Safe Syntax for Google Apps Script
-   * - Update: Time Input Type
-   * - Update: Lazy Loading Support
-   */
-
-  // ✅ LAZY LOADING FLAG
-  var isDashboardLoaded = false;
-
-  var Dashboard = {
-    viewMode: "DAY",
-    data: [], // ข้อมูลทั้งหมด
-    currentUpload: null,
-
-    // Pagination Config
-    currentPage: 1,
-    pageSize: 15, // จำนวนรายการต่อหน้า
-
-    init: function () {
-      var now = new Date();
-      var year = now.getFullYear();
-      var month = String(now.getMonth() + 1).padStart(2, '0');
-      var day = String(now.getDate()).padStart(2, '0');
-
-      var today = year + '-' + month + '-' + day;
-      var thisMonth = year + '-' + month;
-
-      var datePicker = document.getElementById("dash-date-picker");
-      var monthPicker = document.getElementById("dash-month-picker");
-
-      if (datePicker) datePicker.value = today;
-      if (monthPicker) monthPicker.value = thisMonth;
-
-      var self = this;
-      document.addEventListener('paste', function (e) { self.handlePaste(e); });
-
-      // ✅ Reset flag and force load on init (bypass backend cache)
-      isDashboardLoaded = false;
-      this.loadData(true);
-    },
-
-    switchMode: function (mode) {
-      this.viewMode = mode;
-      var datePicker = document.getElementById("dash-date-picker");
-      var monthPicker = document.getElementById("dash-month-picker");
-      var tbody = document.getElementById("match-table-body");
-
-      if (mode === "DAY") {
-        datePicker.classList.remove("hidden");
-        monthPicker.classList.add("hidden");
-      } else {
-        datePicker.classList.add("hidden");
-        monthPicker.classList.remove("hidden");
-      }
-
-      // Reset State
-      this.currentPage = 1;
-      this.data = [];
-
-      // Show Loading
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-20"><span class="loading loading-dots loading-lg"></span></td></tr>';
-      }
-      this.updatePaginationUI(0, 0, 0);
-
-      this.loadData(true);
-    },
-
-    loadData: function (forceRefresh) {
-      // ✅ LAZY LOADING CHECK
-      if (!forceRefresh && isDashboardLoaded) {
-        console.log("Dashboard: Using cached data");
-        return;
-      }
-
-      // 1. จับ Element ปุ่ม Refresh (ปุ่มแม่ของ icon)
-      var btnRefresh = document.getElementById("dash-refresh-icon")?.parentElement;
-      var originalBtnContent = btnRefresh ? btnRefresh.innerHTML : '';
-
-      var tbody = document.getElementById("match-table-body");
-      var dateVal = document.getElementById("dash-date-picker").value;
-      var monthVal = document.getElementById("dash-month-picker").value;
-      var filterValue = this.viewMode === "DAY" ? dateVal : monthVal;
-
-      // 2. ✅ แก้ไข: ใช้ loading-spinner (วงกลมหมุน) สำหรับปุ่มนี้โดยเฉพาะ
-      if (btnRefresh) {
-        btnRefresh.disabled = true;
-        btnRefresh.innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
-      }
-
-      // ส่วน Table ยังคงใช้ loading-dots (จุด 3 จุด) ตามเดิม
-      if (forceRefresh || !this.data.length) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-20"><span class="loading loading-dots loading-lg text-primary"></span></td></tr>';
-      }
-
-      var self = this;
-      Server.call("getMatches", this.viewMode, filterValue, forceRefresh)
-        .then(function (matches) {
-          self.data = matches;
-          self.currentPage = 1;
-          self.renderTable();
-
-          // ✅ SET LOADED FLAG
-          isDashboardLoaded = true;
-
-          if (forceRefresh) UIManager.showToast("Updated", "success");
-        })
-        .catch(function (err) {
-          if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-10 text-error">Error: ' + err.message + '</td></tr>';
-        })
-        .finally(function () {
-          // คืนค่าปุ่มกลับสู่สภาพเดิม (icon fa-sync-alt)
-          if (btnRefresh) {
-            btnRefresh.innerHTML = originalBtnContent;
-            btnRefresh.disabled = false;
-          }
-        });
-    },
-
-    changePage: function (direction) {
-      var totalPages = Math.ceil(this.data.length / this.pageSize);
-      var newPage = this.currentPage + direction;
-
-      if (newPage > 0 && newPage <= totalPages) {
-        this.currentPage = newPage;
-        this.renderTable();
-      }
-    },
-
-    updateSignal: function (id, val) {
-      var selectEl = document.getElementById('signal-select-' + id);
-      var containerEl = document.getElementById('signal-container-' + id);
-
-      if (selectEl) selectEl.disabled = true;
-
-      var spinner = document.createElement("span");
-      spinner.id = 'spinner-' + id;
-      spinner.className = "loading loading-spinner loading-xs text-primary absolute -right-6 top-1/2 transform -translate-y-1/2";
-      if (containerEl) containerEl.appendChild(spinner);
-
-      var self = this;
-      Server.call("toggleSignalOwner", id, val)
-        .then(function () {
-          var match = self.data.find(function (m) { return String(m.id) === String(id); });
-          if (match) match.signalOwner = val;
-
-          self.renderTable();
-          UIManager.showToast("Saved", "success");
-        })
-        .catch(function (err) {
-          if (selectEl) selectEl.disabled = false;
-          if (containerEl && spinner) spinner.remove();
-          UIManager.showToast("Update Failed: " + err.message, "error");
-        });
-    },
-
-    renderTable: function () {
-      var matches = this.data;
-      var tbody = document.getElementById("match-table-body");
-      if (!tbody) return;
-      tbody.innerHTML = "";
-
-      if (!matches || matches.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center p-4 text-gray-500">No matches found</td></tr>';
-        this.updatePaginationUI(0, 0, 0);
-        return;
-      }
-
-      var startIdx = (this.currentPage - 1) * this.pageSize;
-      var endIdx = startIdx + this.pageSize;
-      var pageData = matches.slice(startIdx, endIdx);
-
-      var self = this;
-      pageData.forEach(function (match) {
-        var tr = document.createElement("tr");
-        tr.className = "hover";
-
-        var signalVal = match.signalOwner || "NON";
-
-        var optionsHtml = "";
-        var opts = [
-          { val: "NON", label: "ไม่มี" },
-          { val: "HOST", label: "NOC" },
-          { val: "RECEIVE", label: "ลูกค้า" }
-        ];
-        opts.forEach(function (opt) {
-          var selected = (signalVal === opt.val) ? "selected" : "";
-          optionsHtml += '<option value="' + opt.val + '" ' + selected + '>' + opt.label + '</option>';
-        });
-
-        var hasStart = !!match.start_img;
-        var hasStop = !!match.stop_img;
-        var isStartDone = hasStart || signalVal === "RECEIVE";
-        var isComplete = isStartDone && hasStop;
-
-        var disableStart = "";
-        if (signalVal === "NON" || hasStart || signalVal === "RECEIVE") {
-          disableStart = "disabled";
-        }
-        var disableStop = (signalVal === "NON" || hasStop) ? "disabled" : "";
-        var disableAction = isComplete ? "disabled" : "";
-
-        var btnStartClass = isStartDone ? "btn-disabled bg-success/20 text-success" : "btn-success text-white";
-        var btnStopClass = hasStop ? "btn-disabled bg-error/20 text-error" : "btn-error text-white";
-
-        var statusSymbol = '<span class="text-gray-300"><i class="fas fa-minus"></i></span>';
-        if (isComplete) {
-          statusSymbol = '<div class="tooltip" data-tip="Completed"><i class="fas fa-check-circle text-success text-xl"></i></div>';
-        } else if (isStartDone) {
-          statusSymbol = '<div class="tooltip" data-tip="On Air"><i class="fas fa-video text-error text-xl animate-pulse"></i></div>';
-        } else if (hasStop) {
-          statusSymbol = '<div class="tooltip" data-tip="Stop Only"><i class="fas fa-stop-circle text-warning text-xl"></i></div>';
-        }
-
-        var html = '';
-        html += '<td class="align-middle font-mono text-xs whitespace-nowrap">' + match.time + '</td>';
-
-        html += '<td class="align-middle">';
-        html += '<div class="font-bold text-sm truncate max-w-[180px]" title="' + match.league + '">' + match.league + '</div>';
-        html += '<div class="text-xs text-gray-500 truncate max-w-[180px]" title="' + match.home + ' vs ' + match.away + '">' + match.home + ' vs ' + match.away + '</div>';
-        html += '</td>';
-
-        html += '<td class="align-middle">';
-        html += '<span class="badge badge-ghost badge-sm whitespace-nowrap">' + match.channel + '</span>';
-        html += '</td>';
-
-        html += '<td class="align-middle text-center">';
-        html += '<div id="signal-container-' + match.id + '" class="relative inline-block w-full max-w-[120px]">';
-        html += '<select id="signal-select-' + match.id + '" class="select select-bordered select-xs w-full" onchange="Dashboard.updateSignal(\'' + match.id + '\', this.value)">';
-        html += optionsHtml;
-        html += '</select>';
-        html += '</div>';
-        html += '</td>';
-
-        html += '<td class="align-middle text-center">';
-        html += '<button class="btn btn-xs ' + btnStartClass + ' w-full" ' + disableStart + ' onclick="Dashboard.openUploadModal(\'' + match.id + '\', \'START\')">';
-        html += (isStartDone ? '<i class="fas fa-check"></i>' : 'Start');
-        html += '</button>';
-        html += '</td>';
-
-        html += '<td class="align-middle text-center">';
-        html += '<button class="btn btn-xs ' + btnStopClass + ' w-full" ' + disableStop + ' onclick="Dashboard.openUploadModal(\'' + match.id + '\', \'STOP\')">';
-        html += (hasStop ? '<i class="fas fa-check"></i>' : 'Stop');
-        html += '</button>';
-        html += '</td>';
-
-        html += '<td class="align-middle text-center">' + statusSymbol + '</td>';
-
-        html += '<td class="align-middle text-center">';
-        html += '<div class="join">';
-        html += '<button class="btn btn-xs btn-ghost join-item text-warning" ' + disableAction + ' onclick="Dashboard.editMatch(\'' + match.id + '\')"><i class="fas fa-edit"></i></button>';
-        html += '<button class="btn btn-xs btn-ghost join-item text-error" ' + disableAction + ' onclick="Dashboard.deleteMatch(\'' + match.id + '\')"><i class="fas fa-trash-alt"></i></button>';
-        html += '</div>';
-        html += '</td>';
-
-        tr.innerHTML = html;
-        tbody.appendChild(tr);
-      });
-
-      this.updatePaginationUI(matches.length, startIdx, endIdx);
-    },
-
-    updatePaginationUI: function (totalItems, start, end) {
-      var totalPages = Math.ceil(totalItems / this.pageSize);
-
-      var infoText = document.getElementById("pagination-info");
-      var pageNum = document.getElementById("page-num");
-
-      if (infoText) infoText.innerText = "Total " + totalItems + " | Showing " + (start + 1) + "-" + Math.min(end, totalItems);
-      if (pageNum) pageNum.innerText = this.currentPage + " / " + (totalPages || 1);
-
-      var btnPrev = document.getElementById("btn-prev");
-      var btnNext = document.getElementById("btn-next");
-
-      if (btnPrev) btnPrev.disabled = (this.currentPage === 1);
-      if (btnNext) btnNext.disabled = (this.currentPage === totalPages || totalPages === 0);
-    },
-
-    // --- UPLOAD SYSTEM ---
-
-    openUploadModal: function (id, type) {
-      this.currentUpload = { matchId: id, type: type, file: null };
-
-      var bodyHtml = '';
-      bodyHtml += '<div class="text-center space-y-4">';
-      bodyHtml += '<p class="text-sm text-gray-500">คลิกเพื่อเลือกไฟล์ หรือ Paste (Ctrl+V) รูปภาพที่นี่</p>';
-      bodyHtml += '<div id="upload-zone" onclick="document.getElementById(\'hidden-file-input\').click()" class="border-2 border-dashed border-base-300 rounded-lg p-6 cursor-pointer hover:bg-base-100 transition relative min-h-[150px] flex items-center justify-center">';
-      bodyHtml += '<input type="file" id="hidden-file-input" class="hidden" accept="image/*" onchange="Dashboard.handleFileSelect(this)">';
-      bodyHtml += '<div id="upload-placeholder" class="pointer-events-none">';
-      bodyHtml += '<i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>';
-      bodyHtml += '<p class="text-xs">Browse or Paste Image</p>';
-      bodyHtml += '</div>';
-      bodyHtml += '<img id="upload-preview" class="hidden max-h-48 rounded shadow-sm object-contain" />';
-      bodyHtml += '</div>';
-      bodyHtml += '</div>';
-
-      var titleText = "เพิ่มรูปภาพ (" + (type === 'START' ? 'Start' : 'Stop') + ")";
-      var self = this;
-
-      UIManager.showModal({
-        title: titleText,
-        body: bodyHtml,
-        confirmText: 'ยืนยันอัปโหลด',
-        manualClose: true,
-        onConfirm: function () { self.submitUpload(); }
-      });
-    },
-
-    handleFileSelect: function (input) {
-      if (input.files && input.files[0]) this.processFile(input.files[0]);
-    },
-
-    handlePaste: function (e) {
-      if (!this.currentUpload) return;
-      var items = (e.clipboardData || e.originalEvent.clipboardData).items;
-      for (var i = 0; i < items.length; i++) {
-        if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
-          this.processFile(items[i].getAsFile());
-          break;
-        }
-      }
-    },
-
-    processFile: function (file) {
-      this.currentUpload.file = file;
-      var reader = new FileReader();
-      reader.onload = function (e) {
-        var img = document.getElementById('upload-preview');
-        var ph = document.getElementById('upload-placeholder');
-        if (img && ph) {
-          img.src = e.target.result;
-          img.classList.remove('hidden');
-          ph.classList.add('hidden');
-        }
-      };
-      reader.readAsDataURL(file);
-    },
-
-    submitUpload: function () {
-      if (!this.currentUpload || !this.currentUpload.file) {
-        UIManager.showToast("กรุณาเลือกรูปภาพก่อนครับ", "warning");
-        return;
-      }
-
-      var modalBox = document.querySelector('.modal[open] .modal-box') || document.querySelector('.modal-box');
-      var confirmBtn = modalBox ? modalBox.querySelector('.btn-primary') : null;
-      var originalBtnText = confirmBtn ? confirmBtn.innerHTML : 'ยืนยันอัปโหลด';
-
-      if (confirmBtn) {
-        var rect = confirmBtn.getBoundingClientRect();
-        confirmBtn.style.width = rect.width + 'px';
-        confirmBtn.style.height = rect.height + 'px';
-
-        confirmBtn.style.position = 'relative';
-        confirmBtn.style.overflow = 'hidden';
-        confirmBtn.disabled = true;
-
-        var progressHtml = '';
-        progressHtml += '<div id="btn-progress-bar" style="position: absolute; top: 0; left: 0; bottom: 0; width: 0%; background-color: rgba(0,0,0,0.3); transition: width 0.2s linear;"></div>';
-        progressHtml += '<span id="btn-progress-text" style="position: relative; z-index: 1;">Uploading... 0%</span>';
-
-        confirmBtn.innerHTML = progressHtml;
-      }
-
-      var progress = 0;
-      var progressInterval = setInterval(function () {
-        if (progress < 90) {
-          progress += Math.floor(Math.random() * 5) + 1;
-          if (progress > 90) progress = 90;
-        }
-        if (confirmBtn) {
-          var bar = confirmBtn.querySelector('#btn-progress-bar');
-          var txt = confirmBtn.querySelector('#btn-progress-text');
-          if (bar) bar.style.width = progress + '%';
-          if (txt) txt.innerText = 'Uploading... ' + progress + '%';
-        }
-      }, 300);
-
-      var uploadData = this.currentUpload;
-      var reader = new FileReader();
-      reader.readAsDataURL(uploadData.file);
-
-      var self = this;
-      reader.onload = function () {
-        var base64 = reader.result.split(',')[1];
-
-        Server.call("uploadMatchImage", uploadData.matchId, uploadData.type, base64, uploadData.file.type)
-          .then(function (res) {
-            clearInterval(progressInterval);
-
-            if (confirmBtn) {
-              var bar = confirmBtn.querySelector('#btn-progress-bar');
-              var txt = confirmBtn.querySelector('#btn-progress-text');
-              if (bar) bar.style.width = '100%';
-              if (txt) txt.innerText = 'Completed 100%!';
-            }
-
-            if (res.success) {
-              UIManager.showToast("อัปโหลดสำเร็จ", "success");
-              self.currentUpload = null;
-
-              setTimeout(function () {
-                var modal = document.querySelector('.modal[open]') || document.getElementById('core-modal');
-                if (modal) {
-                  if (typeof modal.close === 'function') modal.close();
-                  else modal.removeAttribute('open');
-
-                  if (modal.id.startsWith('dynamic-modal')) modal.remove();
+    /**
+     * JS_Dashboard.html
+     * Logic: Show matches exactly on the selected date (00:00 - 23:59)
+     * Version: Optimized for Stability
+     */
+    const Dashboard = (function () {
+        // --- Helpers ---
+        const getEl = function (id) { return document.getElementById(id); };
+        let _currentDate = new Date();
+        let _allWorkData = [];
+        let _pickers = {};
+        let _currentBlobs = { start: null, stop: null, 'stop-quick': null };
+        let _editMode = 'all'; // 'new', 'all', 'start', 'stop'
+
+        // --- Date Helpers ---
+        const toDisplayDate = (date) => {
+            if (!date) return "";
+            const d = new Date(date);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${day}/${m}/${y}`;
+        };
+
+        const toInputDate = (date) => {
+            if (!date) return "";
+            const d = new Date(date);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        };
+
+        const showToastInModal = (msg, type, modalId) => {
+            const targetEl = getEl(modalId);
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                icon: type,
+                title: msg,
+                target: targetEl || 'body',
+                customClass: { container: 'z-[999999]' }
+            });
+        };
+
+        const createPicker = (elementId, onSelectCallback) => {
+            const el = getEl(elementId);
+            if (!el) return null;
+            return new Pikaday({
+                field: el,
+                format: 'DD/MM/YYYY',
+                theme: 'triangle-theme',
+                i18n: { previousMonth: 'เดือนก่อน', nextMonth: 'เดือนถัดไป', months: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'], weekdays: ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'], weekdaysShort: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'] },
+                toString(date, format) {
+                    const y = date.getFullYear();
+                    const m = String(date.getMonth() + 1).padStart(2, '0');
+                    const d = String(date.getDate()).padStart(2, '0');
+                    return `${d}/${m}/${y}`;
+                },
+                onSelect: onSelectCallback
+            });
+        };
+
+        const compressImage = function (file, quality = 0.8) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = e => { const i = new Image(); i.src = e.target.result; i.onload = () => { const c = document.createElement('canvas'); let w = i.width, h = i.height, m = 1200; if (w > m) { h *= m / w; w = m } c.width = w; c.height = h; c.getContext('2d').drawImage(i, 0, 0, w, h); resolve(c.toDataURL('image/jpeg', quality).split(',')[1]) }; i.onerror = reject }; r.onerror = reject }) };
+
+        const formatDriveUrl = function (url) {
+            if (!url) return "";
+            if (url.startsWith('data:')) return url;
+            try {
+                let id = null;
+                if (url.indexOf('/d/') !== -1) {
+                    const match = url.match(/\/d\/(.+?)(\/|$)/);
+                    if (match) id = match[1];
+                } else if (url.indexOf('id=') !== -1) {
+                    const match = url.match(/id=([^&]+)/);
+                    if (match) id = match[1];
                 }
-                self.loadData(true); // Force refresh after upload
-              }, 1000);
+                if (id) return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w1000';
+                return url;
+            } catch (e) { return url; }
+        };
 
-            } else {
-              UIManager.showToast(res.message || "เกิดข้อผิดพลาด", "error");
-              if (confirmBtn) {
-                confirmBtn.innerHTML = originalBtnText;
-                confirmBtn.disabled = false;
-                confirmBtn.style.position = '';
-                confirmBtn.style.width = '';
-                confirmBtn.style.height = '';
-              }
+        return {
+            init: function () {
+                this.initDatePickers();
+                this.loadWorkList();
+                document.addEventListener('page-change', function (e) {
+                    if (e.detail.pageId === 'page-dashboard') {
+                        if (_pickers.main) _pickers.main.setDate(_currentDate);
+                        Dashboard.loadWorkList();
+                    }
+                });
+            },
+
+            initDatePickers: function () {
+                _pickers.main = createPicker('dash-date-input', (date) => {
+                    _currentDate = date;
+                    Dashboard.updateDateDisplay();
+                    Dashboard.renderFilteredList();
+                });
+                this.updateDateDisplay();
+            },
+
+            changeDate: function (days) {
+                _currentDate.setDate(_currentDate.getDate() + days);
+                if (_pickers.main) { _pickers.main.setDate(_currentDate); }
+                else { this.updateDateDisplay(); this.renderFilteredList(); }
+            },
+
+            updateDateDisplay: function () {
+                const input = getEl('dash-date-input');
+                if (input) input.value = toDisplayDate(_currentDate);
+            },
+
+            loadWorkList: function (forceRefresh) {
+                var loader = getEl('dash-loader');
+                var empty = getEl('dash-empty');
+                if (loader) loader.classList.remove('hidden');
+                if (empty) empty.classList.add('hidden');
+
+                Server.call({ func: 'apiGetWorkList', silent: true })
+                    .then(function (res) {
+                        if (res && res.success) {
+                            _allWorkData = res.data || [];
+                            Dashboard.renderFilteredList();
+                        } else {
+                            if (typeof UIManager !== 'undefined') UIManager.showToast("Load Failed: " + (res ? res.message : "Unknown Error"), 'error');
+                        }
+                    })
+                    .catch(function (err) { console.error(err); })
+                    .finally(function () { if (loader) loader.classList.add('hidden'); });
+            },
+
+            renderFilteredList: function () {
+                var curDateStr = toInputDate(_currentDate);
+
+                var filtered = _allWorkData.filter(item => {
+                    return item.date === curDateStr;
+                });
+
+                filtered.sort((a, b) => {
+                    return a.time.localeCompare(b.time);
+                });
+
+                this.renderTable(filtered);
+                this.updateStats(filtered);
+            },
+
+            formatTime: function (rawTime) {
+                if (!rawTime) return "-";
+                var str = String(rawTime);
+                if (str.indexOf('T') !== -1) return str.split('T')[1].substring(0, 5);
+                return str.substring(0, 5);
+            },
+
+            renderTable: function (data) {
+                var tbody = getEl('work-list-body');
+                var empty = getEl('dash-empty');
+                if (!tbody) return;
+                tbody.innerHTML = '';
+
+                if (!data || data.length === 0) {
+                    if (empty) empty.classList.remove('hidden');
+                    return;
+                }
+                if (empty) empty.classList.add('hidden');
+
+                var html = '';
+                data.forEach(function (item) {
+                    var isLive = item.status === 'LIVE';
+                    var isDone = item.status === 'DONE';
+
+                    var statusWidget = '-';
+                    if (isLive) {
+                        statusWidget = '<div class="flex flex-col items-center justify-center gap-2"><div class="flex items-center gap-1 animate-pulse"><span class="w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.6)]"></span><span class="text-[9px] font-black text-red-500 tracking-wider">ON AIR</span></div><button onclick="Dashboard.openStopModal(\'' + item.id + '\')" class="btn btn-xs btn-outline btn-error bg-white hover:bg-error hover:text-white transition-all shadow-sm w-full max-w-[80px] gap-1"><i class="fas fa-stop"></i> จบงาน</button></div>';
+                    } else if (isDone) {
+                        statusWidget = '<div class="flex flex-col items-center justify-center opacity-70"><div class="w-6 h-6 rounded-full bg-success text-white flex items-center justify-center mb-1 shadow-sm"><i class="fas fa-check text-[10px]"></i></div><span class="text-[9px] font-bold text-success tracking-wider">DONE</span></div>';
+                    } else {
+                        statusWidget = '<span class="badge badge-ghost badge-sm text-[10px] opacity-50">WAIT</span>';
+                    }
+
+                    var btnProof = function (url, label, itemId) {
+                        var itemJson = encodeURIComponent(JSON.stringify(item));
+                        if (!url) {
+                            return '<div onclick="Dashboard.openEditModal(\'' + itemJson + '\', \'' + label.toLowerCase() + '\')" class="tooltip cursor-pointer w-10 h-10 rounded-lg bg-warning/10 border border-warning/30 flex items-center justify-center mx-auto hover:bg-warning/20 transition-colors animate-pulse" data-tip="ยังไม่ใส่รูป ' + label + ' (คลิกเพื่อเพิ่ม)">' +
+                                '<i class="fas fa-exclamation text-warning text-xs"></i>' +
+                                '</div>';
+                        }
+                        var validUrl = formatDriveUrl(url);
+                        return '<div onclick="Dashboard.viewImage(\'' + validUrl + '\')" class="tooltip cursor-pointer hover:scale-110 transition-transform bg-white rounded-lg shadow-sm border border-base-200 p-0.5 inline-block" data-tip="ดูรูป ' + label + '"><img src="' + validUrl + '" class="h-10 w-10 object-cover rounded-md" onerror="this.onerror=null;this.src=\'https://placehold.co/40x40?text=Err\'"></div>';
+                    };
+
+                    var itemJson = encodeURIComponent(JSON.stringify(item));
+                    var editBtn = '<button onclick="Dashboard.openEditModal(\'' + itemJson + '\', \'all\')" class="btn btn-ghost btn-xs text-base-content/40 hover:text-primary hover:bg-base-200 gap-1"><i class="fas fa-pencil-alt"></i> แก้ไข</button>';
+
+                    html += '<tr class="hover:bg-base-50 transition-colors border-b border-base-100 last:border-none"><td class="text-center font-mono font-bold text-base-content/70">' + Dashboard.formatTime(item.time) + '</td><td class="py-3 pl-4"><div class="flex flex-col"><span class="text-[9px] font-bold text-base-content/40 uppercase tracking-widest mb-0.5">' + (item.league || '-') + '</span><div class="font-bold text-sm text-base-content/90 flex flex-wrap items-center gap-1">' + (isLive ? '<span class="text-primary">' + item.home + '</span>' : item.home) + '<span class="text-[10px] text-base-content/30 px-1 font-normal">vs</span>' + (isLive ? '<span class="text-primary">' + item.away + '</span>' : item.away) + '</div></div></td><td class="text-center"><span class="badge badge-ghost badge-sm font-mono text-[10px]">' + (item.channel || '-') + '</span></td><td class="text-center align-middle">' + btnProof(item.start_img, 'Start', item.id) + '</td><td class="text-center align-middle">' + btnProof(item.stop_img, 'Stop', item.id) + '</td><td class="text-center align-middle bg-base-50/50">' + statusWidget + '</td><td class="text-center align-middle">' + editBtn + '</td></tr>';
+                });
+                tbody.innerHTML = html;
+            },
+
+            updateStats: function (data) {
+                var live = data.filter(function (d) { return d.status === 'LIVE'; }).length;
+                var done = data.filter(function (d) { return d.status === 'DONE'; }).length;
+                var liveEl = getEl('stat-live'); if (liveEl) liveEl.innerText = live;
+                var doneEl = getEl('stat-done'); if (doneEl) doneEl.innerText = done;
+            },
+
+            openAddModal: function () {
+                this._editMode = 'new';
+                getEl('form-add-work').reset();
+                getEl('input-edit-id').value = "";
+                getEl('modal-title-work').innerText = "เริ่มงานใหม่ (New Work)";
+
+                getEl('section-import').classList.remove('hidden');
+                getEl('section-img-stop').classList.add('hidden');
+                getEl('btn-delete-work').classList.add('hidden');
+
+                getEl('btn-submit-start').innerHTML = '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกและเริ่มงาน</span>';
+
+                var now = new Date();
+                getEl('input-date').value = toInputDate(now);
+
+                var HH = String(now.getHours()).padStart(2, '0');
+                var ii = String(now.getMinutes()).padStart(2, '0');
+                getEl('input-time').value = HH + ':' + ii;
+
+                this.clearImage('start');
+                this.clearImage('stop');
+                getEl('modal-add-work').showModal();
+
+                this.checkUploadState();
+            },
+
+            openEditModal: function (itemEncoded, mode) {
+                this._editMode = mode || 'all';
+                var item = JSON.parse(decodeURIComponent(itemEncoded));
+                getEl('input-edit-id').value = item.id;
+                getEl('input-date').value = item.date;
+                getEl('input-time').value = item.time;
+                getEl('input-league').value = item.league;
+                getEl('input-home').value = item.home;
+                getEl('input-away').value = item.away;
+                getEl('input-channel').value = item.channel;
+
+                getEl('modal-title-work').innerText = "แก้ไขข้อมูล (Edit)";
+                getEl('section-import').classList.add('hidden');
+                // getEl('section-img-stop').classList.remove('hidden'); // Let checkUploadState handle this
+                getEl('btn-delete-work').classList.remove('hidden');
+                getEl('btn-submit-start').innerHTML = '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกการแก้ไข</span>';
+
+                this.clearImage('start');
+                this.clearImage('stop');
+
+                if (item.start_img) {
+                    getEl('preview-start-img').src = formatDriveUrl(item.start_img);
+                    getEl('wrapper-preview-start').classList.remove('hidden');
+                }
+                if (item.stop_img) {
+                    getEl('preview-stop-img').src = formatDriveUrl(item.stop_img);
+                    getEl('wrapper-preview-stop').classList.remove('hidden');
+                }
+                getEl('modal-add-work').showModal();
+
+                this.checkUploadState();
+            },
+
+            handleDeleteWork: function () {
+                var id = getEl('input-edit-id').value;
+                if (!id) return;
+
+                Swal.fire({
+                    title: 'ยืนยันการลบ?',
+                    text: "คุณต้องการลบรายการนี้ใช่หรือไม่",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'ใช่, ลบรายการ',
+                    cancelButtonText: 'ยกเลิก',
+                    target: getEl('modal-add-work')
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        var btn = getEl('btn-delete-work');
+                        var btnTxt = btn.innerHTML;
+                        btn.disabled = true;
+                        btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> กำลังลบ...';
+
+                        Server.call({ func: 'apiDeleteWorkItem', silent: true }, id)
+                            .then(res => {
+                                if (res && res.success) {
+                                    showToastInModal("ลบรายการเรียบร้อย", "success", "modal-add-work");
+                                    setTimeout(() => {
+                                        getEl('modal-add-work').close();
+                                        Dashboard.loadWorkList(true);
+                                    }, 1000);
+                                } else { throw new Error(res ? res.message : "Unknown Error"); }
+                            })
+                            .catch(e => Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-add-work') }))
+                            .finally(() => { btn.disabled = false; btn.innerHTML = btnTxt; });
+                    }
+                });
+            },
+
+            handleSubmitWork: function () {
+                var form = getEl('form-add-work');
+                if (!form.checkValidity()) { form.reportValidity(); return; }
+
+                var id = getEl('input-edit-id').value;
+                var isEdit = !!id;
+
+                var rawDate = getEl('input-date').value;
+                var rawTime = getEl('input-time').value;
+
+                var payload = {
+                    id: id,
+                    date: rawDate,
+                    time: rawTime,
+                    league: getEl('input-league').value,
+                    home: getEl('input-home').value,
+                    away: getEl('input-away').value,
+                    channel: getEl('input-channel').value
+                };
+
+                var btn = getEl('btn-submit-start');
+                var spinner = getEl('spinner-submit-start');
+                btn.disabled = true; spinner.classList.remove('hidden');
+
+                const sendData = (finalPayload, apiFunc) => {
+                    Server.call({ func: apiFunc, silent: true }, finalPayload)
+                        .then(res => {
+                            if (res && res.success) {
+                                showToastInModal(isEdit ? "แก้ไขข้อมูลสำเร็จ" : "เริ่มงานสำเร็จ", "success", "modal-add-work");
+                                setTimeout(() => {
+                                    getEl('modal-add-work').close();
+                                    Dashboard.loadWorkList(true);
+                                }, 1000);
+                            } else { throw new Error(res ? res.message : "Unknown Error"); }
+                        })
+                        .catch(e => {
+                            Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-add-work') });
+                        })
+                        .finally(() => { btn.disabled = false; spinner.classList.add('hidden'); });
+                };
+
+                if (isEdit) {
+                    const promises = [];
+                    if (_currentBlobs['start']) promises.push(compressImage(_currentBlobs['start']).then(b64 => payload.startImageBase64 = b64));
+                    if (_currentBlobs['stop']) promises.push(compressImage(_currentBlobs['stop']).then(b64 => payload.stopImageBase64 = b64));
+
+                    Promise.all(promises).then(() => { sendData(payload, 'apiUpdateWorkItem'); });
+                } else {
+                    if (_currentBlobs['start']) {
+                        compressImage(_currentBlobs['start']).then(base64 => {
+                            payload.imageBase64 = base64;
+                            payload.mimeType = 'image/jpeg';
+                            sendData(payload, 'apiCreateWorkItem');
+                        });
+                    } else {
+                        payload.imageBase64 = null;
+                        sendData(payload, 'apiCreateWorkItem');
+                    }
+                }
+            },
+
+            openStopModal: function (id) {
+                getEl('inp-stop-id-quick').value = id;
+                this.clearImage('stop-quick');
+                getEl('modal-stop-work').showModal();
+            },
+
+            submitStopWork: function (skipImage) {
+                var id = getEl('inp-stop-id-quick').value;
+                var blob = _currentBlobs['stop-quick'];
+
+                if (!skipImage && !blob) {
+                    showToastInModal("กรุณาอัปโหลดรูปจบงาน", "warning", "modal-stop-work");
+                    return;
+                }
+
+                var btn = getEl('btn-submit-stop');
+                var btnSkip = getEl('btn-submit-stop-skip');
+                var spinner = getEl('spinner-submit-stop');
+
+                if (btn) btn.disabled = true;
+                if (btnSkip) btnSkip.disabled = true;
+                if (spinner) spinner.classList.remove('hidden');
+
+                const sendStop = (base64) => {
+                    Server.call({ func: 'apiStopWorkItem', silent: true }, {
+                        id: id,
+                        imageBase64: base64,
+                        mimeType: 'image/jpeg',
+                        isSkipImage: skipImage
+                    })
+                        .then(function (res) {
+                            if (res && res.success) {
+                                showToastInModal("จบงานเรียบร้อย!", "success", "modal-stop-work");
+                                setTimeout(() => {
+                                    getEl('modal-stop-work').close();
+                                    Dashboard.loadWorkList(true);
+                                }, 1000);
+                            } else { throw new Error(res ? res.message : "Unknown Error"); }
+                        })
+                        .catch(function (e) {
+                            Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-stop-work') });
+                        })
+                        .finally(() => {
+                            if (btn) btn.disabled = false;
+                            if (btnSkip) btnSkip.disabled = false;
+                            if (spinner) spinner.classList.add('hidden');
+                        });
+                };
+
+                if (skipImage) {
+                    sendStop(null);
+                } else {
+                    compressImage(blob).then(sendStop);
+                }
+            },
+
+            triggerPaste: async function (mode) {
+                var modalId = mode === 'stop-quick' ? 'modal-stop-work' : 'modal-add-work';
+                var areaId = mode === 'stop-quick' ? 'paste-area-stop-quick' : 'paste-area-' + mode;
+                var area = getEl(areaId);
+
+                if (area) {
+                    area.style.width = '1px'; area.style.height = '1px'; area.style.opacity = '0';
+                    area.style.position = 'fixed'; area.focus();
+                    if (!area.hasAttribute('data-listening')) {
+                        area.addEventListener('paste', (e) => Dashboard.handlePasteEvent(e, mode));
+                        area.setAttribute('data-listening', 'true');
+                    }
+                }
+
+                try {
+                    const clipboardItems = await navigator.clipboard.read();
+                    let imageFound = false;
+                    for (const item of clipboardItems) {
+                        const imageTypes = item.types.filter(type => type.startsWith('image/'));
+                        for (const type of imageTypes) {
+                            const blob = await item.getType(type);
+                            this.setPreview(mode, blob);
+                            showToastInModal("วางรูปสำเร็จ", "success", modalId);
+                            imageFound = true;
+                            break;
+                        }
+                        if (imageFound) break;
+                    }
+                    if (!imageFound) showToastInModal("ไม่พบรูปภาพใน Clipboard", "warning", modalId);
+                } catch (err) {
+                    console.warn("Clipboard API failed:", err);
+                    showToastInModal("กด Ctrl+V เพื่อวางรูป", "info", modalId);
+                }
+            },
+
+            handlePasteEvent: function (e, mode) {
+                var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf("image") !== -1) {
+                        var blob = items[i].getAsFile();
+                        this.setPreview(mode, blob);
+                        e.preventDefault();
+                        var modalId = mode === 'stop-quick' ? 'modal-stop-work' : 'modal-add-work';
+                        showToastInModal("วางรูปเรียบร้อย", "success", modalId);
+                        return;
+                    }
+                }
+            },
+
+            toggleCalendar: function () {
+                var content = getEl('import-content');
+                var chevron = getEl('import-chevron');
+                if (content.classList.contains('hidden')) {
+                    content.classList.remove('hidden');
+                    chevron.classList.add('rotate-180');
+                    var currentVal = getEl('input-date').value;
+                    if (currentVal) getEl('import-date-picker').value = currentVal;
+                    this.fetchCalendarEvents();
+                } else {
+                    content.classList.add('hidden');
+                    chevron.classList.remove('rotate-180');
+                }
+            },
+
+            fetchCalendarEvents: function () {
+                var dateVal = getEl('import-date-picker').value;
+                if (!dateVal) dateVal = getEl('input-date').value;
+                if (!dateVal) return;
+
+                var loader = getEl('cal-loader');
+                var list = getEl('calendar-picker-list');
+                loader.classList.remove('hidden');
+                list.innerHTML = '';
+
+                Server.call({ func: 'apiGetCalendarEvents', silent: true }, dateVal)
+                    .then(function (res) {
+                        loader.classList.add('hidden');
+                        if (res && res.success) Dashboard.renderImportList(res.data);
+                        else list.innerHTML = '<div class="text-error text-center text-xs p-4">' + (res ? res.message : "No Data") + '</div>';
+                    })
+                    .catch(function (err) {
+                        loader.classList.add('hidden');
+                        list.innerHTML = '<div class="text-error text-center text-xs p-4">Connection failed</div>';
+                    });
+            },
+
+            renderImportList: function (events) {
+                var list = getEl('calendar-picker-list');
+                if (!events || events.length === 0) {
+                    list.innerHTML = '<div class="text-center text-xs text-base-content/40 py-6">ไม่พบรายการแข่งขัน</div>';
+                    return;
+                }
+
+                var html = '';
+                events.forEach(function (evt) {
+                    var evtJson = encodeURIComponent(JSON.stringify(evt));
+                    var isPrev = evt.isPreviousDay;
+                    var timeBadgeClass = isPrev ? 'badge-error text-white border-none' : 'badge-neutral';
+                    var timeLabel = evt.time + (isPrev ? '<span class="ml-1 text-[9px] opacity-90 font-normal">(ข้ามวัน)</span>' : '');
+
+                    html += '<div onclick="Dashboard.selectImportEvent(\'' + evtJson + '\')" class="p-2 bg-white hover:bg-primary/5 border border-base-200 rounded-lg cursor-pointer transition-all hover:shadow-sm group mb-1"><div class="flex items-center gap-3"><div class="badge ' + timeBadgeClass + ' font-mono font-bold h-6 whitespace-nowrap">' + timeLabel + '</div><div class="flex-1 min-w-0"><div class="text-[10px] font-bold text-primary/70 uppercase tracking-wider truncate">' + (evt.league || 'Unknown') + '</div><div class="text-sm font-bold text-base-content/80 truncate group-hover:text-primary transition-colors">' + evt.home + ' <span class="text-xs text-base-content/40 font-normal px-1">vs</span> ' + evt.away + '</div></div><i class="fas fa-plus-circle text-base-content/10 group-hover:text-primary text-xl transition-colors"></i></div></div>';
+                });
+                list.innerHTML = html;
+            },
+
+            selectImportEvent: function (evtEncoded) {
+                try {
+                    var evt = JSON.parse(decodeURIComponent(evtEncoded));
+                    getEl('input-time').value = evt.time;
+                    getEl('input-league').value = evt.league;
+                    getEl('input-home').value = evt.home;
+                    getEl('input-away').value = evt.away;
+                    getEl('input-channel').value = evt.channel || 'N/A';
+
+                    var importDate = getEl('import-date-picker').value;
+                    if (importDate) getEl('input-date').value = importDate;
+
+                    this.toggleCalendar();
+                    showToastInModal("นำเข้าข้อมูลเรียบร้อย", "success", "modal-add-work");
+                    this.checkFormInput();
+                } catch (e) { console.error(e); }
+            },
+
+            checkFormInput: function () {
+                var home = getEl('input-home').value.trim();
+                var away = getEl('input-away').value.trim();
+                var sectionStart = getEl('section-img-start');
+
+                if (!sectionStart) return;
+
+                if (this._editMode === 'new') {
+                    if (home && away) {
+                        sectionStart.classList.remove('hidden');
+                    } else {
+                        sectionStart.classList.add('hidden');
+                    }
+                }
+            },
+
+            checkUploadState: function () {
+                // 1. Determine State
+                var hasStartDb = !getEl('wrapper-preview-start').classList.contains('hidden') && !getEl('preview-start-img').src.endsWith('undefined');
+                var hasStartNew = !!_currentBlobs['start'];
+                var hasStart = hasStartDb || hasStartNew;
+
+                var hasStopDb = !getEl('wrapper-preview-stop').classList.contains('hidden') && !getEl('preview-stop-img').src.endsWith('undefined');
+                var hasStopNew = !!_currentBlobs['stop'];
+                // Stop considered present if DB has it OR new upload exists
+                var hasStop = hasStopDb || hasStopNew;
+
+                // Elements
+                var startUpload = getEl('box-upload-start');
+                var startSection = getEl('section-img-start');
+                var stopSection = getEl('section-img-stop');
+                var stopUpload = getEl('box-upload-stop');
+                var btnSubmit = getEl('btn-submit-start');
+
+                // 2. Mode-Based Visibility Control (The "Macro" View)
+                if (this._editMode === 'new') {
+                    // Start Section: Controlled by checkFormInput (called separately or via event)
+                    this.checkFormInput();
+                    // Stop Section: Always Hidden
+                    if (stopSection) stopSection.classList.add('hidden');
+                    // Submit: Always Visible
+                    if (btnSubmit) btnSubmit.classList.remove('hidden');
+
+                } else if (this._editMode === 'start') {
+                    // Start Section: Always Visible
+                    if (startSection) startSection.classList.remove('hidden');
+                    // Stop Section: Always Hidden
+                    if (stopSection) stopSection.classList.add('hidden');
+                    // Submit: Always Visible
+                    if (btnSubmit) btnSubmit.classList.remove('hidden');
+
+                } else if (this._editMode === 'stop') {
+                    // Start Section: Always Hidden
+                    if (startSection) startSection.classList.add('hidden');
+                    // Stop Section: Always Visible
+                    if (stopSection) stopSection.classList.remove('hidden');
+                    // Submit: Always Visible
+                    if (btnSubmit) btnSubmit.classList.remove('hidden');
+
+                } else { // 'all' (Regular Edit)
+                    // Start Section: Always Visible
+                    if (startSection) startSection.classList.remove('hidden');
+                    // Stop Section: Always Visible
+                    if (stopSection) stopSection.classList.remove('hidden');
+                    // Submit: Always Visible
+                    if (btnSubmit) btnSubmit.classList.remove('hidden');
+                }
+
+                // 3. Upload Box vs Preview Control (The "Micro" View)
+                // If image exists (DB or New), hide upload button, show preview wrapper (handled in setPreview/openModal)
+                // Here we just ensure upload box is hidden if image exists
+
+                if (hasStart) {
+                    if (startUpload) startUpload.classList.add('hidden');
+                } else {
+                    if (startUpload) startUpload.classList.remove('hidden');
+                }
+
+                if (hasStop) {
+                    if (stopUpload) stopUpload.classList.add('hidden');
+                } else {
+                    if (stopUpload) stopUpload.classList.remove('hidden');
+                }
+            },
+
+            clearImage: function (mode) {
+                _currentBlobs[mode] = null;
+                if (mode === 'start') getEl('input-start-img').value = '';
+                if (mode === 'stop') getEl('inp-file-stop').value = '';
+                if (mode === 'stop-quick') getEl('inp-file-stop-quick').value = '';
+
+                var wrapperId = mode === 'stop-quick' ? 'wrapper-preview-stop-quick' : 'wrapper-preview-' + mode;
+                var w = getEl(wrapperId);
+                if (w) w.classList.add('hidden');
+
+                var imgId = mode === 'stop-quick' ? 'preview-stop-quick-img' : 'preview-' + mode + '-img';
+                var img = getEl(imgId);
+                if (img) img.src = '';
+
+                this.checkUploadState();
+            },
+
+            setPreview: function (mode, blob) {
+                var url = URL.createObjectURL(blob);
+                var wrapperId = mode === 'stop-quick' ? 'wrapper-preview-stop-quick' : 'wrapper-preview-' + mode;
+                var imgId = mode === 'stop-quick' ? 'preview-stop-quick-img' : 'preview-' + mode + '-img';
+                var wrapper = getEl(wrapperId);
+                var img = getEl(imgId);
+
+                if (img) img.src = url;
+                if (wrapper) wrapper.classList.remove('hidden');
+                _currentBlobs[mode] = blob;
+
+                this.checkUploadState();
+            },
+
+            handleFileSelect: function (input, mode) {
+                if (input.files && input.files[0]) this.setPreview(mode, input.files[0]);
+            },
+
+            viewImage: function (url) {
+                if (!url) return;
+                getEl('img-preview-target').src = formatDriveUrl(url);
+                getEl('modal-view-image').showModal();
             }
-          })
-          .catch(function (err) {
-            clearInterval(progressInterval);
-            UIManager.showToast(err.message, "error");
-            if (confirmBtn) {
-              confirmBtn.innerHTML = originalBtnText;
-              confirmBtn.disabled = false;
-              confirmBtn.style.position = '';
-              confirmBtn.style.width = '';
-              confirmBtn.style.height = '';
-            }
-          });
-      };
-    },
+        };
+    })();
 
-    // --- CRUD SYSTEM ---
-
-    addMatch: function () {
-      this.openMatchForm('ADD', null);
-    },
-
-    editMatch: function (id) {
-      this.openMatchForm('EDIT', id);
-    },
-
-    openMatchForm: function (mode, matchId) {
-      var match = { date: '', time: '', league: '', home: '', away: '', channel: '' };
-
-      if (mode === 'EDIT' && matchId) {
-        var found = this.data.find(function (m) { return String(m.id) === String(matchId); });
-        if (found) match = found;
-      } else {
-        match.date = document.getElementById("dash-date-picker").value;
-      }
-
-      var title = mode === 'ADD' ? 'เพิ่มรายการใหม่' : 'แก้ไขรายการ';
-
-      var html = '';
-      html += '<form id="match-form" class="text-left space-y-3 pt-2">';
-      html += '<input type="hidden" id="m-id" value="' + (matchId || '') + '">';
-
-      html += '<div class="grid grid-cols-2 gap-3">';
-      html += '<div class="form-control">';
-      html += '<label class="label"><span class="label-text">Date</span></label>';
-      html += '<input type="date" id="m-date" class="input input-bordered input-sm w-full" value="' + match.date + '" required>';
-      html += '</div>';
-      html += '<div class="form-control">';
-      html += '<label class="label"><span class="label-text">Time</span></label>';
-      html += '<input type="time" id="m-time" class="input input-bordered input-sm w-full" value="' + match.time + '" required>';
-      html += '</div>';
-      html += '</div>';
-
-      html += '<div class="form-control">';
-      html += '<label class="label"><span class="label-text">League</span></label>';
-      html += '<input type="text" id="m-league" class="input input-bordered input-sm w-full" value="' + match.league + '" required>';
-      html += '</div>';
-
-      html += '<div class="grid grid-cols-2 gap-3">';
-      html += '<div class="form-control">';
-      html += '<label class="label"><span class="label-text">Home Team</span></label>';
-      html += '<input type="text" id="m-home" class="input input-bordered input-sm w-full" value="' + match.home + '" required>';
-      html += '</div>';
-      html += '<div class="form-control">';
-      html += '<label class="label"><span class="label-text">Away Team</span></label>';
-      html += '<input type="text" id="m-away" class="input input-bordered input-sm w-full" value="' + match.away + '" required>';
-      html += '</div>';
-      html += '</div>';
-
-      html += '<div class="form-control">';
-      html += '<label class="label"><span class="label-text">Channel</span></label>';
-      html += '<input type="text" id="m-channel" class="input input-bordered input-sm w-full" value="' + (match.channel || '') + '">';
-      html += '</div>';
-      html += '</form>';
-
-      var self = this;
-      UIManager.showModal({
-        title: title,
-        body: html,
-        confirmText: 'บันทึกข้อมูล',
-        onConfirm: function () { self.saveMatch(mode); }
-      });
-    },
-
-    saveMatch: function (mode) {
-      var id = document.getElementById('m-id').value;
-      var date = document.getElementById('m-date').value;
-      var time = document.getElementById('m-time').value;
-      var league = document.getElementById('m-league').value;
-      var home = document.getElementById('m-home').value;
-      var away = document.getElementById('m-away').value;
-      var channel = document.getElementById('m-channel').value;
-
-      if (!date || !time || !league || !home || !away) {
-        UIManager.showToast("กรุณากรอกข้อมูลให้ครบถ้วน", "warning");
-        return;
-      }
-
-      var payload = {
-        id: id,
-        date: date,
-        time: time,
-        league: league,
-        home: home,
-        away: away,
-        channel: channel
-      };
-
-      var apiName = mode === 'ADD' ? 'createMatch' : 'updateMatch';
-
-      UIManager.showLoading();
-      var self = this;
-
-      Server.call(apiName, payload)
-        .then(function (res) {
-          if (res.success) {
-            UIManager.showToast(res.message, "success");
-            self.loadData(true);
-          } else {
-            UIManager.showToast(res.message, "error");
-          }
-        })
-        .catch(function (err) {
-          UIManager.showToast("Error: " + err.message, "error");
-        })
-        .finally(function () {
-          UIManager.hideLoading();
-        });
-    },
-
-    deleteMatch: function (id) {
-      var self = this;
-      UIManager.showModal({
-        title: "ลบรายการ",
-        body: "คุณแน่ใจหรือไม่ที่จะลบรายการนี้?",
-        confirmText: "ลบรายการ",
-        onConfirm: function () {
-          Server.call('deleteMatch', id)
-            .then(function () { UIManager.showToast("ลบสำเร็จ", "success"); self.loadData(true); })
-            .catch(function (err) { console.error(err); });
-        }
-      });
-    }
-  };
-
-  document.addEventListener("DOMContentLoaded", function () {
-    if (typeof Dashboard !== 'undefined' && Dashboard.init) { }
-  });
+    document.addEventListener('DOMContentLoaded', function () {
+        Dashboard.init();
+    });
 </script>

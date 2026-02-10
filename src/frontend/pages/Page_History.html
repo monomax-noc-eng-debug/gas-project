@@ -1,28 +1,68 @@
-<div id="page-history" class="page-section hidden p-6 fade-in h-full flex flex-col overflow-y-auto">
+<div id="page-history" x-data="historyModule" x-init="init()"
+  class="page-section hidden p-6 fade-in h-full flex flex-col overflow-y-auto">
   <div class="flex justify-between items-center mb-6">
     <h2 class="text-2xl font-bold flex items-center gap-2">
-      <i class="fas fa-history text-base-content/50"></i> History
+      <i class="fas fa-history text-base-content/50"></i> ประวัติย้อนหลัง (History)
     </h2>
-    <button class="btn btn-sm btn-ghost" onclick="ShiftHistory.loadData(true)">
-      <i class="fas fa-sync-alt"></i> Refresh
+    <button class="btn btn-sm btn-ghost" @click="loadData(true)" :disabled="isLoading">
+      <i class="fas fa-sync-alt" :class="{'fa-spin': isLoading}"></i>
+      <span x-text="isLoading ? 'กำลังโหลด...' : 'รีเฟรช'"></span>
     </button>
   </div>
 
-  <div class="card bg-base-100 shadow-sm border border-base-200">
+  <div class="card bg-base-100 shadow-sm border border-base-200 relative">
+    <!-- Loading Overlay -->
+    <div x-show="isLoading" x-transition.opacity.duration.200ms
+      class="absolute inset-0 flex items-center justify-center transition-all duration-200 z-10 rounded-xl"
+      :class="data.length === 0 ? 'bg-base-100' : 'bg-base-100/60 backdrop-blur-[1px]'">
+      <div class="flex flex-col items-center gap-2">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <span class="text-sm text-base-content/60 animate-pulse">กำลังโหลดข้อมูล...</span>
+      </div>
+    </div>
     <div class="overflow-x-auto">
       <table class="table table-sm">
         <thead class="bg-base-200">
           <tr>
-            <th class="w-32">Date</th>
-            <th>Reporter</th>
-            <th class="w-24">Status</th>
-            <th class="w-24">Link</th>
+            <th class="w-32">วันที่</th>
+            <th>ผู้รายงาน</th>
+            <th class="w-24">สถานะ</th>
+            <th class="w-24">ลิงก์</th>
           </tr>
         </thead>
         <tbody id="history-table-body">
-          <tr>
-            <td colspan="4" class="text-center py-8 opacity-50">Loading...</td>
-          </tr>
+          <!-- Empty State -->
+          <template x-if="!isLoading && data.length === 0">
+            <tr>
+              <td colspan="4" class="text-center py-8 text-base-content/50">ไม่พบประวัติการส่งรายงาน</td>
+            </tr>
+          </template>
+
+          <!-- Data Loop -->
+          <template x-for="item in data" :key="item.date + item.name">
+            <tr class="hover border-b border-base-200">
+              <td class="font-mono text-xs text-base-content/70" x-text="item.date"></td>
+              <td class="font-medium" x-text="item.name"></td>
+              <td>
+                <div class="badge gap-2 font-bold" :class="getGroupLabel(item.group).class">
+                  <i x-show="getGroupLabel(item.group).icon" class="fas text-[10px]"
+                    :class="getGroupLabel(item.group).icon"></i>
+                  <span x-text="getGroupLabel(item.group).text"></span>
+                </div>
+              </td>
+              <td>
+                <template x-if="item.pdfUrl && item.pdfUrl !== '#'">
+                  <a :href="item.pdfUrl" target="_blank"
+                    class="btn btn-xs btn-ghost text-error hover:bg-error/10 transition-colors">
+                    <i class="fas fa-file-pdf"></i> PDF
+                  </a>
+                </template>
+                <template x-if="!item.pdfUrl || item.pdfUrl === '#'">
+                  <span class="text-base-content/20">-</span>
+                </template>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>

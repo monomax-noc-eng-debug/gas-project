@@ -1,93 +1,248 @@
-<div id="page-settings" class="page-section hidden p-6 fade-in h-full flex flex-col max-w-4xl mx-auto w-full">
+<div id="page-settings" x-data="settingsModule" x-init="init()"
+  class="page-section hidden fade-in w-full h-full bg-base-200 overflow-y-auto">
+  <div class="h-full flex flex-col p-4 md:p-6 space-y-4 max-w-[1920px] mx-auto">
 
-  <div class="mb-6">
-    <h2 class="text-2xl font-bold text-base-content">Settings</h2>
-    <p class="text-base-content/60 text-sm">Manage your preferences and system config</p>
-  </div>
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-center gap-4 flex-shrink-0">
+      <div>
+        <h1 class="text-3xl font-bold flex items-center gap-3">
+          <i class="fas fa-cogs text-primary"></i>
+          <span>ตั้งค่า (Settings)</span>
+        </h1>
+        <p class="text-base-content/60 mt-1">จัดการการตั้งค่าระบบและทิคเก็ต</p>
+      </div>
+      <div class="flex flex-wrap gap-2 w-full md:w-auto justify-end">
+        <button id="btn-settings-reset" @click="loadSettings()" :disabled="isLoading"
+          class="btn btn-ghost btn-sm min-w-[100px] border border-base-200">
+          <i class="fas fa-undo" :class="{'fa-spin': isLoading}"></i>
+          <span x-text="isLoading ? 'Loading...' : 'รีเซ็ต'"></span>
+        </button>
+        <button @click="saveSettings()" :disabled="isSaving" class="btn btn-primary btn-sm min-w-[140px] shadow-lg">
+          <template x-if="!isSaving">
+            <span><i class="fas fa-save mr-2"></i> บันทึกการเปลี่ยนแปลง</span>
+          </template>
+          <template x-if="isSaving">
+            <span><span class="loading loading-spinner loading-xs"></span> Saving...</span>
+          </template>
+        </button>
+      </div>
+    </div>
 
-  <div class="grid grid-cols-1 gap-6">
+    <!-- Main Content Grid -->
+    <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden relative">
+      <!-- Loading Overlay -->
+      <div x-show="isLoading" x-transition.opacity.duration.200ms
+        class="absolute inset-0 flex items-center justify-center transition-all duration-200 z-20 rounded-xl"
+        :class="!isLoaded ? 'bg-base-200' : 'bg-base-200/60 backdrop-blur-[1px]'">
+        <div class="flex flex-col items-center gap-2">
+          <span class="loading loading-spinner loading-lg text-primary"></span>
+          <span class="text-sm text-base-content/60 animate-pulse">กำลังโหลดการตั้งค่า...</span>
+        </div>
+      </div>
 
-    <div class="card bg-base-100 shadow-xl border border-base-200">
-      <div class="card-body">
-        <h3 class="card-title text-lg border-b pb-2 mb-4">
-          <i class="fas fa-user-circle mr-2 text-primary"></i> Profile
-        </h3>
+      <!-- COLUMN 1: Attributes -->
+      <div class="h-full flex flex-col gap-6 min-h-0 pr-2">
 
-        <div class="flex items-center gap-6">
-          <div class="avatar placeholder">
-            <div class="bg-neutral text-neutral-content rounded-full w-20">
-              <span class="text-3xl font-bold" id="set-avatar-txt">JS</span>
+        <!-- Ticket Status -->
+        <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 min-h-0 flex flex-col">
+          <div class="card-body p-4 flex flex-col h-full">
+            <h2
+              class="card-title text-sm uppercase tracking-wider text-base-content/50 border-b pb-2 mb-2 flex-shrink-0">
+              <i class="fas fa-info-circle text-info mr-2"></i> สถานะทิคเก็ต
+            </h2>
+            <div class="bg-base-200/50 rounded-box p-2 flex-1 overflow-y-auto mb-3 custom-scrollbar" id="list-statuses">
+              <template x-for="(item, index) in config.statuses" :key="index + item">
+                <div
+                  class="flex justify-between items-center bg-base-100 p-2 rounded border border-base-200 shadow-sm mb-1">
+                  <span class="font-mono text-sm" x-text="item"></span>
+                  <button class="btn btn-xs btn-ghost text-error" @click="deleteItem('statuses', index)">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </template>
+            </div>
+            <div class="join w-full flex-shrink-0">
+              <input type="text" x-model="newStatus" class="input input-bordered input-sm join-item w-full"
+                placeholder="เพิ่ม..." @keyup.enter="addItem('statuses')" />
+              <button @click="addItem('statuses')" class="btn btn-sm btn-info join-item w-10 text-white"><i
+                  class="fas fa-plus"></i></button>
             </div>
           </div>
-          <div class="flex-1 space-y-3">
-            <div class="form-control w-full max-w-xs">
-              <label class="label"><span class="label-text">Display Name</span></label>
-              <input type="text" id="set-name" class="input input-bordered w-full" />
+        </div>
+
+        <!-- Ticket Types -->
+        <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 min-h-0 flex flex-col">
+          <div class="card-body p-4 flex flex-col h-full">
+            <h2
+              class="card-title text-sm uppercase tracking-wider text-base-content/50 border-b pb-2 mb-2 flex-shrink-0">
+              <i class="fas fa-tags text-secondary mr-2"></i> ประเภททิคเก็ต
+            </h2>
+            <div class="bg-base-200/50 rounded-box p-2 flex-1 overflow-y-auto mb-3 custom-scrollbar" id="list-types">
+              <template x-for="(item, index) in config.types" :key="index + item">
+                <div
+                  class="flex justify-between items-center bg-base-100 p-2 rounded border border-base-200 shadow-sm mb-1">
+                  <span class="font-mono text-sm" x-text="item"></span>
+                  <button class="btn btn-xs btn-ghost text-error" @click="deleteItem('types', index)">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </template>
             </div>
-            <div class="badge badge-ghost" id="set-role">Role: Loading...</div>
+            <div class="join w-full flex-shrink-0">
+              <input type="text" x-model="newType" class="input input-bordered input-sm join-item w-full"
+                placeholder="เพิ่ม..." @keyup.enter="addItem('types')" />
+              <button @click="addItem('types')" class="btn btn-sm btn-secondary join-item w-10"><i
+                  class="fas fa-plus"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Severity Levels -->
+        <div class="card bg-base-100 shadow-sm border border-base-200 flex-1 min-h-0 flex flex-col">
+          <div class="card-body p-4 flex flex-col h-full">
+            <h2
+              class="card-title text-sm uppercase tracking-wider text-base-content/50 border-b pb-2 mb-2 flex-shrink-0">
+              <i class="fas fa-exclamation-triangle text-error mr-2"></i> ระดับความรุนแรง
+            </h2>
+            <div class="bg-base-200/50 rounded-box p-2 flex-1 overflow-y-auto mb-3 custom-scrollbar"
+              id="list-severities">
+              <template x-for="(item, index) in config.severities" :key="index + item">
+                <div
+                  class="flex justify-between items-center bg-base-100 p-2 rounded border border-base-200 shadow-sm mb-1">
+                  <span class="font-mono text-sm" x-text="item"></span>
+                  <button class="btn btn-xs btn-ghost text-error" @click="deleteItem('severities', index)">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </template>
+            </div>
+            <div class="join w-full flex-shrink-0">
+              <input type="text" x-model="newSeverity" class="input input-bordered input-sm join-item w-full"
+                placeholder="เพิ่ม..." @keyup.enter="addItem('severities')" />
+              <button @click="addItem('severities')"
+                class="btn btn-sm btn-error join-item border-error text-white w-10"><i class="fas fa-plus"></i></button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="card bg-base-100 shadow-xl border border-base-200">
-      <div class="card-body">
-        <h3 class="card-title text-lg border-b pb-2 mb-4">
-          <i class="fas fa-sliders-h mr-2 text-secondary"></i> Preferences
-        </h3>
+      <!-- COLUMN 2: Categories -->
+      <div class="min-h-0 h-full">
+        <div class="card bg-base-100 shadow-sm border border-base-200 h-full flex flex-col">
+          <div class="card-body p-4 flex flex-col h-full">
+            <div class="flex justify-between items-center border-b pb-2 mb-3 flex-shrink-0">
+              <div class="font-bold text-sm uppercase tracking-wider text-base-content/50">
+                <i class="fas fa-folder-tree text-accent mr-2"></i> หมวดหมู่
+              </div>
+              <div class="join">
+                <input type="text" x-model="newCategory" class="input input-bordered input-sm join-item"
+                  placeholder="หมวดหมู่ใหม่..." @keyup.enter="addCategory()" />
+                <button @click="addCategory()" class="btn btn-sm btn-accent join-item text-white w-10"><i
+                    class="fas fa-plus"></i></button>
+              </div>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2" id="container-categories">
+              <template x-for="(subs, catName) in config.categories" :key="catName">
+                <div class="card bg-base-100 border border-base-200 shadow-sm">
+                  <div class="card-body p-3">
+                    <div class="flex justify-between items-center mb-2 border-b pb-1">
+                      <span class="font-bold text-sm text-primary" x-text="catName"></span>
+                      <button class="btn btn-xs btn-ghost text-error" @click="deleteCategory(catName)">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
 
-        <div class="form-control">
-          <label class="label cursor-pointer justify-start gap-4">
-            <span class="label-text font-bold w-32">Theme Mode</span>
-            <input type="checkbox" class="toggle toggle-primary" id="set-theme-toggle"
-              onchange="SettingsPage.toggleTheme(this.checked)" />
-            <span class="label-text" id="set-theme-label">Light</span>
-          </label>
-        </div>
+                    <div class="space-y-1 mb-2">
+                      <template x-for="(sub, idx) in subs" :key="idx + sub">
+                        <div class="flex justify-between items-center pl-2 text-xs group hover:bg-base-200 p-1 rounded">
+                          <span x-text="sub"></span>
+                          <button class="btn btn-xs btn-ghost text-error opacity-0 group-hover:opacity-100"
+                            @click="deleteSubCategory(catName, idx)">
+                            <i class="fas fa-times"></i>
+                          </button>
+                        </div>
+                      </template>
+                    </div>
 
-        <div class="divider"></div>
-        <h4 class="font-bold text-sm mb-2 text-base-content/70">Notifications</h4>
-
-        <div class="form-control">
-          <label class="label cursor-pointer justify-start gap-4">
-            <input type="checkbox" class="checkbox checkbox-sm checkbox-success" id="set-notif-email" />
-            <span class="label-text">Email Alerts (Summary & Incidents)</span>
-          </label>
-        </div>
-        <div class="form-control">
-          <label class="label cursor-pointer justify-start gap-4">
-            <input type="checkbox" class="checkbox checkbox-sm checkbox-success" id="set-notif-line" />
-            <span class="label-text">LINE Notify (Real-time)</span>
-          </label>
-        </div>
-      </div>
-    </div>
-
-    <div class="card bg-base-100 shadow-xl border border-base-200">
-      <div class="card-body">
-        <h3 class="card-title text-lg border-b pb-2 mb-4 text-accent">
-          <i class="fas fa-server mr-2"></i> System Management
-        </h3>
-
-        <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div>
-            <div class="font-bold">Sync Calendar Data</div>
-            <div class="text-xs text-base-content/60">ดึงข้อมูลตารางแข่งล่าสุดจาก Google Calendar ลงฐานข้อมูล
-              (DB_Matches)</div>
+                    <div class="flex gap-1 mt-auto">
+                      <!-- Use newSubCategory object map -->
+                      <input type="text" x-model="newSubCategory[catName]" class="input input-bordered input-xs w-full"
+                        placeholder="Add sub..." @keyup.enter="addSubCategory(catName)">
+                      <button class="btn btn-xs btn-square btn-ghost text-secondary" @click="addSubCategory(catName)">
+                        <i class="fas fa-plus"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
           </div>
-          <button class="btn btn-accent btn-sm sm:btn-md" onclick="syncCalendarData()" id="btn-sync-cal">
-            <i class="fas fa-sync"></i> Sync Now
-          </button>
         </div>
       </div>
-    </div>
 
-    <div class="flex justify-end gap-3 mt-4">
-      <button class="btn btn-ghost" onclick="SettingsPage.init()">Reset</button>
-      <button class="btn btn-primary px-8" onclick="SettingsPage.save()">
-        <i class="fas fa-save"></i> Save Changes
-      </button>
-    </div>
+      <!-- COLUMN 3: System Operations (Sync) -->
+      <div class="min-h-0 h-full flex flex-col gap-4">
+        <div class="card bg-base-100 shadow-sm border border-base-200 h-full flex flex-col">
+          <div class="card-body p-4 flex flex-col h-full">
+            <h2 class="card-title text-sm uppercase tracking-wider text-base-content/50 border-b pb-2 mb-4">
+              <i class="fas fa-tools text-primary mr-2"></i> การจัดการระบบ
+            </h2>
 
+            <!-- Sync Control -->
+            <div class="flex flex-col gap-4 flex-none">
+              <div class="alert bg-base-200 text-xs py-2">
+                <i class="fas fa-info-circle text-info"></i>
+                <span>ซิงค์ข้อมูลจาก Google Calendar ไปยัง DB_Matches</span>
+              </div>
+
+              <div class="flex items-center gap-4">
+                <div class="flex-1">
+                  <div class="text-xs uppercase font-bold opacity-50 mb-1">สถานะล่าสุด</div>
+                  <div class="text-lg font-mono font-bold" id="last-sync-time">-</div>
+                </div>
+                <button id="btn-sync-cal" @click="syncCalendar()" :disabled="isSyncing"
+                  class="btn btn-primary shadow-lg w-auto whitespace-nowrap">
+                  <i class="fas fa-sync-alt" :class="{'fa-spin': isSyncing}"></i>
+                  <span x-text="isSyncing ? 'Syncing...' : 'ซิงค์ทันที'"></span>
+                </button>
+              </div>
+
+              <!-- Progress Bar -->
+              <div id="sync-progress-container" class="space-y-1 transition-all" x-show="isSyncing || sync.progress > 0"
+                x-transition>
+                <div class="flex justify-between text-xs font-bold px-1">
+                  <span id="sync-status-text" class="text-primary" x-text="sync.status"></span>
+                  <span id="sync-percent" x-text="sync.percent"></span>
+                </div>
+                <progress id="sync-progress" class="progress progress-primary w-full h-2" :value="sync.progress"
+                  max="100"></progress>
+              </div>
+            </div>
+
+            <!-- Logs -->
+            <div class="divider my-2"></div>
+            <div class="flex-1 min-h-0 flex flex-col bg-[#1e1e1e] rounded-lg overflow-hidden text-white shadow-inner">
+              <div
+                class="flex justify-between items-center px-4 py-2 border-b border-gray-700 bg-[#252526] flex-shrink-0">
+                <span class="text-xs uppercase tracking-widest text-gray-400">System Logs</span>
+                <button class="btn btn-xs btn-ghost text-gray-400 hover:text-white"
+                  @click="sync.logs = []">Clear</button>
+              </div>
+              <div id="sync-logs"
+                class="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1 text-green-400 custom-scrollbar">
+                <template x-if="sync.logs.length === 0">
+                  <div class="opacity-30 select-none">Waiting for operations...</div>
+                </template>
+                <template x-for="(log, i) in sync.logs" :key="i">
+                  <div x-text="log"></div>
+                </template>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>

@@ -1,191 +1,173 @@
 <script>
   // ----------------------------------------------------------------------
-  // 1. ROUTER: จัดการการเปลี่ยนหน้า
+  // 1. ROUTER: จัดการการเปลี่ยนหน้า (Safe Object Version)
   // ----------------------------------------------------------------------
-  class Router {
-    static routes = {
-      'page-dashboard': 'Page_Dashboard',
-      'page-report': 'Page_Report',
-      'page-ticket': 'Page_Ticket',
-      'page-history': 'Page_History',
-      'page-email': 'Page_Email',
-      'page-settings': 'Page_Settings'
-    };
+  const Router = {
+    activePage: 'page-dashboard',
 
-    static navigateTo(pageId) {
-      document.querySelectorAll('.page-section').forEach(el => el.classList.add('hidden'));
-      const target = document.getElementById(pageId);
+    navigateTo: function(pageId) {
+      // Hide all pages
+      var sections = document.querySelectorAll('.page-section');
+      for (var i = 0; i < sections.length; i++) {
+        sections[i].classList.add('hidden');
+      }
+
+      // Show Target Page
+      var target = document.getElementById(pageId);
       if (target) {
         target.classList.remove('hidden');
-        target.classList.remove('fade-in');
-        void target.offsetWidth;
         target.classList.add('fade-in');
+        this.activePage = pageId;
+      } else {
+        console.error("Router: Page not found", pageId);
+        return;
       }
-      document.querySelectorAll('aside a[data-target]').forEach(link => link.classList.remove('active'));
-      const activeLink = document.querySelector(`aside a[data-target="${pageId}"]`);
-      if (activeLink) activeLink.classList.add('active');
 
-      const titleEl = document.getElementById('header-title');
-      if (titleEl && activeLink) {
-        titleEl.innerText = activeLink.innerText.trim();
+      // Update Sidebar
+      var links = document.querySelectorAll('aside a[data-target]');
+      for (var i = 0; i < links.length; i++) {
+        var link = links[i];
+        link.classList.remove('active', 'bg-primary', 'text-white');
+        if (link.dataset.target === pageId) {
+          link.classList.add('active', 'bg-primary', 'text-white');
+          // Update Header Title
+          var titleEl = document.getElementById('header-title');
+          if (titleEl) titleEl.innerText = link.innerText.trim();
+        }
       }
+
+      setTimeout(function() {
+        document.dispatchEvent(new CustomEvent('page-change', { detail: { pageId: pageId } }));
+      }, 50);
     }
-  }
+  };
 
-  // ----------------------------------------------------------------------
-  // 🚀 GLOBAL NAVIGATION ROUTER with LAZY LOADING
-  // ----------------------------------------------------------------------
   function changePage(pageId) {
-    // 1. Hide all pages and show target
     Router.navigateTo(pageId);
-
-    // 2. Trigger lazy loading based on page
-    switch (pageId) {
-      case 'page-dashboard':
-        if (typeof Dashboard !== 'undefined' && typeof Dashboard.loadData === 'function') {
-          loadMatches(false);
-        }
-        break;
-      case 'page-history':
-        if (typeof loadHistory === 'function') {
-          loadHistory(false);
-        }
-        break;
-      case 'page-ticket':
-        if (typeof loadTickets === 'function') {
-          loadTickets(false);
-        }
-        break;
-      case 'page-report':
-        if (typeof loadReportData === 'function') {
-          loadReportData(false);
-        }
-        break;
-      case 'page-email':
-        if (typeof loadEmailData === 'function') {
-          loadEmailData(false);
-        }
-        break;
-      case 'page-settings':
-        if (typeof loadSettings === 'function') {
-          loadSettings(false);
-        }
-        break;
-      default:
-        console.log('Unknown page: ' + pageId);
-    }
-  }
-
-  // Wrapper functions for lazy loading (called from changePage)
-  function loadMatches(forceRefresh) {
-    if (typeof Dashboard !== 'undefined') {
-      // First visit: call init() which sets date picker and loads data
-      if (!isDashboardLoaded && typeof Dashboard.init === 'function') {
-        Dashboard.init();
-      }
-      // Subsequent visits or force refresh: call loadData directly
-      else if (typeof Dashboard.loadData === 'function') {
-        Dashboard.loadData(forceRefresh);
-      }
-    }
   }
 
   // ----------------------------------------------------------------------
-  // 2. SERVER: ตัวกลางเรียก Google Apps Script
+  // 2. SERVER
   // ----------------------------------------------------------------------
   const Server = {
-    call(funcName, ...args) {
-      return new Promise((resolve, reject) => {
+    call: function(target) {
+      var args = Array.prototype.slice.call(arguments, 1);
+      return new Promise(function(resolve, reject) {
         if (typeof google === 'undefined' || !google.script) {
-          reject(new Error("Google Script Run not found"));
+          console.error("Local Dev Mode: Google Script not found");
+          reject(new Error("Local Dev Mode"));
           return;
         }
-        google.script.run
-          .withSuccessHandler(res => {
+
+        var funcName = target;
+        var options = { silent: false, loadingMsg: null };
+
+        if (typeof target === 'object' && target !== null) {
+          funcName = target.func;
+          if (target.silent) options.silent = true;
+          if (target.loadingMsg) options.loadingMsg = target.loadingMsg;
+        }
+
+        if (!options.silent) UIManager.showLoading(options.loadingMsg);
+
+        var runner = google.script.run
+          .withSuccessHandler(function(res) {
+            if (!options.silent) UIManager.hideLoading();
             try {
-              const data = typeof res === 'string' ? JSON.parse(res) : res;
+              var data = typeof res === 'string' ? JSON.parse(res) : res;
               resolve(data);
             } catch (e) { resolve(res); }
           })
-          .withFailureHandler(err => reject(err))
-        [funcName](...args);
+          .withFailureHandler(function(err) {
+            if (!options.silent) UIManager.hideLoading();
+            console.error("Server Error:", err);
+            if(typeof UIManager !== 'undefined') UIManager.showToast(err.message, "error");
+            reject(err);
+          });
+          
+        runner[funcName].apply(runner, args);
       });
     }
   };
 
   // ----------------------------------------------------------------------
-  // 3. UI MANAGER: จัดการ Toast, Loading, Modal
+  // 3. UI MANAGER (Fixed: Bottom-Right & High Z-Index)
   // ----------------------------------------------------------------------
   const UIManager = {
-    showToast(msg, type = 'info') {
-      let container = document.getElementById('toast-container');
+    showToast: function(msg, type) {
+      type = type || 'info';
+      var container = document.getElementById('toast-container');
+      
       if (!container) {
         container = document.createElement('div');
         container.id = 'toast-container';
-        container.className = 'toast toast-top toast-end z-[9999]';
         document.body.appendChild(container);
       }
-      const alert = document.createElement('div');
-      const alertClass = type === 'error' ? 'alert-error' :
-        type === 'success' ? 'alert-success' :
-          type === 'warning' ? 'alert-warning' : 'alert-info';
 
-      alert.className = `alert ${alertClass} text-white shadow-lg min-w-[250px] flex justify-between animate-bounce-in`;
-      alert.innerHTML = `<span>${msg}</span>`;
+      // 🔥 FIX: ใช้ DaisyUI Class 'toast-bottom' และบังคับ z-index สูงสุด
+      container.className = 'toast toast-bottom toast-end'; 
+      container.style.zIndex = '2147483647'; // ค่าสูงสุดของ Integer (เหนือทุก Modal)
+      container.style.position = 'fixed';
+      container.style.bottom = '20px';
+      container.style.right = '20px';
+      container.style.pointerEvents = 'none'; // ให้คลิกทะลุพื้นที่ว่างได้
+      
+      var alert = document.createElement('div');
+      var extraClass = type === 'error' ? 'alert-error' : type === 'success' ? 'alert-success' : 'alert-info';
+
+      // เพิ่ม pointer-events-auto เพื่อให้ตัว Toast เองรับคลิกได้
+      alert.className = 'alert ' + extraClass + ' text-white shadow-lg mb-2 min-w-[300px] pointer-events-auto animate-bounce';
+      alert.innerHTML = '<span>' + msg + '</span>';
       container.appendChild(alert);
-      setTimeout(() => {
-        alert.classList.add('opacity-0', 'transition-opacity', 'duration-500');
-        setTimeout(() => alert.remove(), 500);
-      }, 3000);
+
+      setTimeout(function() { alert.remove(); }, 3000);
     },
 
-    showLoading() {
+    showLoading: function(msg) {
       if (document.getElementById('global-loading')) return;
-      const modal = document.createElement('dialog');
-      modal.id = 'global-loading';
-      modal.className = 'modal modal-bottom sm:modal-middle';
-      modal.innerHTML = `
-      <div class="modal-box bg-transparent shadow-none border-none flex justify-center items-center">
-        <span class="loading loading-spinner loading-lg text-primary scale-150"></span>
-      </div>
-    `;
-      document.body.appendChild(modal);
-      modal.showModal();
+      var d = document.createElement('dialog');
+      d.id = 'global-loading';
+      d.className = 'modal';
+      // ให้ Loading อยู่รองลงมาจาก Toast เล็กน้อย
+      d.style.zIndex = '2147483646'; 
+      d.innerHTML = 
+        '<div class="modal-box bg-transparent shadow-none flex flex-col items-center justify-center overflow-hidden">' +
+             '<span class="loading loading-spinner loading-lg text-primary"></span>' +
+             (msg ? '<p class="mt-2 text-white font-bold drop-shadow-md text-sm">' + msg + '</p>' : '') +
+        '</div>';
+      document.body.appendChild(d);
+      d.showModal();
     },
 
-    hideLoading() {
-      const modal = document.getElementById('global-loading');
-      if (modal) { modal.close(); modal.remove(); }
+    hideLoading: function() {
+      var d = document.getElementById('global-loading');
+      if (d) { d.close(); d.remove(); }
     },
 
-    // ✅ แก้ไข: เพิ่ม parameter 'manualClose'
-    showModal({ title, body, confirmText = 'OK', onConfirm, showCancel = true, manualClose = false }) {
-      const modalId = 'dynamic-modal-' + Date.now();
-      const modalHtml = `
-      <dialog id="${modalId}" class="modal">
-        <div class="modal-box">
-          <h3 class="font-bold text-lg">${title}</h3>
-          <div class="py-4">${body}</div>
-          <div class="modal-action">
-            ${showCancel ? `<form method="dialog"><button class="btn">Cancel</button></form>` : ''}
-            <button class="btn btn-primary" id="${modalId}-confirm">${confirmText}</button>
-          </div>
-        </div>
-      </dialog>
-    `;
-      document.body.insertAdjacentHTML('beforeend', modalHtml);
-      const modal = document.getElementById(modalId);
-
-      document.getElementById(`${modalId}-confirm`).onclick = () => {
-        if (onConfirm) onConfirm();
-        // ถ้า manualClose = true เราจะไม่สั่งปิด Modal ทันที (รอให้ Dashboard สั่งปิดเมื่อ Upload เสร็จ)
-        if (!manualClose) {
-          modal.close();
+    confirm: function(msg) {
+      return new Promise(function(resolve) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            title: 'Are you sure?',
+            text: msg,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes',
+            didOpen: function() {
+              // บังคับ SweetAlert ให้อยู่เหนือ Modal ปกติ
+              var container = Swal.getContainer();
+              if (container) container.style.zIndex = '100000';
+            }
+          }).then(function(result) {
+            resolve(result.isConfirmed);
+          });
+        } else {
+          var res = confirm(msg);
+          resolve(res);
         }
-      };
-
-      modal.addEventListener('close', () => modal.remove());
-      modal.showModal();
+      });
     }
   };
 
@@ -193,29 +175,13 @@
   // 4. STORE
   // ----------------------------------------------------------------------
   const Store = {
-    state: {
-      currentUser: null,
-      settings: { theme: 'light' },
-      isInitialized: false
-    },
-    async init() {
-      try {
-        console.log('App Initializing...');
-        const data = await Server.call('getUserSettings');
-        if (data) {
-          this.state.currentUser = data.profile;
-          this.state.settings = data.settings || { theme: 'light' };
-          document.documentElement.setAttribute('data-theme', this.state.settings.theme);
-        }
-        this.state.isInitialized = true;
-        return true;
-      } catch (err) {
-        console.error('Store Init Error:', err);
-        return false;
-      }
-    },
-    getUser() {
-      return this.state.currentUser;
+    state: { currentUser: null, settings: {}, isAppLoaded: false },
+    init: function() {
+      var self = this;
+      return Server.call('getUserSettings').then(function(res) {
+        self.state.currentUser = res.profile;
+        self.state.settings = res;
+      });
     }
   };
 </script>

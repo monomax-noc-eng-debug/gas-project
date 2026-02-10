@@ -1,80 +1,334 @@
 <script>
-  /**
-   * JS_Ticket.html
-   * Handle Ticket Page Logic
-   * Updated: Lazy Loading Support
-   */
+    /**
+     * Ticket Module (Vanilla JS Refactor)
+     * Handles Ticket CRUD and Dynamic Config without Alpine.js
+     */
+    const TicketManager = (() => {
+        // --- State ---
+        let _tickets = [];
+        let _config = { types: [], severities: [], statuses: [], categories: {} };
+        let _isLoading = false;
 
-  // ✅ LAZY LOADING FLAG
-  var isTicketLoaded = false;
+        // --- HTML Elements ---
+        const getEl = (id) => document.getElementById(id);
 
-  // ✅ GLOBAL LOADER FUNCTION (called from changePage)
-  async function loadTickets(forceRefresh) {
-    // ✅ LAZY LOADING CHECK
-    if (!forceRefresh && isTicketLoaded) {
-      console.log("Tickets: Using cached data");
-      return;
-    }
+        // --- Public Methods ---
+        return {
+            init: function () {
+                console.log("🚀 Ticket Manager Initialized");
+                this.loadConfig(); // Load config first
 
-    console.log("Loading Tickets...");
-    const tbody = document.getElementById('ticket-table-body');
-    if (!tbody) return;
+                // Listen for page show to refresh data
+                document.addEventListener('page-change', (e) => {
+                    if (e.detail.pageId === 'page-ticket') {
+                        this.loadTickets();
+                    }
+                });
+            },
 
-    tbody.innerHTML = `<tr><td colspan="19" class="text-center py-10"><span class="loading loading-dots loading-lg text-primary"></span></td></tr>`;
+            loadConfig: function () {
+                Server.call({ func: 'getTicketConfig', silent: true })
+                    .then(res => {
+                        if (res.success) {
+                            _config = res.data || _config;
+                            // Normalize
+                            _config.types = _config.types || [];
+                            _config.severities = _config.severities || [];
+                            _config.statuses = _config.statuses || [];
+                            _config.categories = _config.categories || {};
+                        }
+                    })
+                    .catch(err => console.error("Config Load Error", err));
+            },
 
-    try {
-      const data = await Server.call('getTickets', forceRefresh);
-      renderTicketTable(data);
-      // ✅ SET LOADED FLAG
-      isTicketLoaded = true;
-    } catch (err) {
-      console.error(err);
-      tbody.innerHTML = `<tr><td colspan="19" class="text-center text-error py-4">Failed to load: ${err.message}</td></tr>`;
-    }
-  }
+            loadTickets: function (force = false) {
+                const loader = getEl('ticket-loader');
+                const empty = getEl('ticket-empty');
+                const tbody = getEl('ticket-table-body');
 
-  function renderTicketTable(tickets) {
-    const tbody = document.getElementById('ticket-table-body');
-    tbody.innerHTML = '';
+                if (!loader || !tbody) return;
 
-    if (!tickets || tickets.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="19" class="text-center py-8 text-base-content/50">No tickets found</td></tr>`;
-      return;
-    }
+                // UI: Loading
+                loader.classList.remove('hidden');
+                empty.classList.add('hidden');
+                tbody.innerHTML = '';
 
-    tickets.forEach((t, i) => {
-      const tr = document.createElement('tr');
-      tr.className = "hover";
+                const apiCall = force ? 'getTickets' : { func: 'getTickets', silent: true };
 
-      // Status Badge Logic
-      let statusBadge = `<div class="badge badge-ghost badge-sm">${t.status || '-'}</div>`;
-      const s = String(t.status).toLowerCase();
-      if (s.includes('open') || s.includes('new')) statusBadge = `<div class="badge badge-info badge-sm text-white">${t.status}</div>`;
-      if (s.includes('pending') || s.includes('wait')) statusBadge = `<div class="badge badge-warning badge-sm text-white">${t.status}</div>`;
-      if (s.includes('resolved') || s.includes('close')) statusBadge = `<div class="badge badge-success badge-sm text-white">${t.status}</div>`;
+                Server.call(apiCall)
+                    .then(res => {
+                        if (res.success) {
+                            _tickets = res.data || [];
+                            this.renderTable(_tickets);
+                            this.updateStats(_tickets);
+                        } else {
+                            UIManager.showToast("Load Failed: " + res.message, "error");
+                        }
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        UIManager.showToast("Connection Error", "error");
+                    })
+                    .finally(() => {
+                        loader.classList.add('hidden');
+                    });
+            },
 
-      tr.innerHTML = `
-            <th class="font-normal text-xs opacity-70">${t.no || i + 1}</th>
-            <td class="whitespace-nowrap font-mono text-xs">${t.date || '-'}</td>
-            <td class="font-medium text-primary">${t.ticketNo || '-'}</td>
-            <td>${t.type || '-'}</td>
-            <td>${statusBadge}</td>
-            <td>${t.severity || '-'}</td>
-            <td>${t.category || '-'}</td>
-            <td>${t.subCategory || '-'}</td>
-            <td class="truncate max-w-[200px]" title="${t.desc}">${t.desc || '-'}</td>
-            <td class="truncate max-w-[300px]" title="${t.detail}">${t.detail || '-'}</td>
-            <td>${t.action || '-'}</td>
-            <td class="truncate max-w-[150px]">${t.resolvedDetail || '-'}</td>
-            <td>${t.resp || '-'}</td>
-            <td>${t.assign || '-'}</td>
-            <td>${t.remark || '-'}</td>
-            <td class="whitespace-nowrap text-xs text-base-content/70">${t.created || '-'}</td>
-            <td class="whitespace-nowrap text-xs text-base-content/70">${t.resolved || '-'}</td>
-            <td>${t.duration || '-'}</td>
-            <td class="text-xs">${t.log || '-'}</td>
-        `;
-      tbody.appendChild(tr);
-    });
-  }
+            filterData: function () {
+                const search = getEl('ticket-search').value.toLowerCase();
+
+                const filtered = _tickets.filter(t => {
+                    const id = String(t[2] || '').toLowerCase(); // ID at index 2
+                    const subj = String(t[8] || '').toLowerCase(); // Subject at index 8
+                    const type = String(t[3] || '').toLowerCase(); // Type at index 3
+                    const status = String(t[4] || '').toLowerCase(); // Status at index 4
+
+                    return !search || id.includes(search) || subj.includes(search) || type.includes(search) || status.includes(search);
+                });
+
+                this.renderTable(filtered);
+            },
+
+            renderTable: function (data) {
+                const tbody = getEl('ticket-table-body');
+                const empty = getEl('ticket-empty');
+
+                if (!data || data.length === 0) {
+                    empty.classList.remove('hidden');
+                    tbody.innerHTML = '';
+                    return;
+                }
+                empty.classList.add('hidden');
+
+                const html = data.map((row, i) => this.renderRow(row, i)).join('');
+                tbody.innerHTML = html;
+            },
+
+            renderRow: function (row, index) {
+                // row structure: [timestamp, date, id, type, status, severity, cat, sub, subj, detail, action, res, resp, assign, remark]
+                const id = row[2];
+                const date = dayjs(row[1]).format('DD/MM/YY');
+                const type = row[3];
+                const status = row[4];
+                const severity = row[5];
+                const subject = row[8] || '(No Subject)';
+
+                // Badges
+                const statusClass = this.getStatusClass(status);
+                const sevClass = this.getSeverityClass(severity);
+
+                return `
+                <tr class="hover:bg-base-100 transition-colors border-b border-base-200/50">
+                    <td class="text-center opacity-50 font-mono">${index + 1}</td>
+                    <td class="text-center text-xs opacity-70">${date}</td>
+                    <td class="text-center font-mono font-bold text-xs">
+                        <span class="badge badge-ghost badge-sm text-[10px]">${id}</span>
+                    </td>
+                    <td>
+                        <div class="font-medium truncate max-w-[250px]" title="${subject}">${subject}</div>
+                    </td>
+                    <td class="text-center text-xs">${type}</td>
+                    <td class="text-center"><span class="badge ${sevClass} badge-sm badge-outline">${severity}</span></td>
+                    <td class="text-center"><span class="badge ${statusClass} badge-sm">${status}</span></td>
+                    <td class="text-center">
+                        <div class="join">
+                            <button onclick="TicketManager.openModal('EDIT', '${id}')" class="btn btn-ghost btn-xs join-item text-warning hover:bg-warning/10">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="TicketManager.deleteTicket('${id}')" class="btn btn-ghost btn-xs join-item text-error hover:bg-error/10">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            },
+
+            updateStats: function (data) {
+                let s = { total: 0, open: 0, pending: 0, resolved: 0, closed: 0, incident: 0, request: 0 };
+                data.forEach(r => {
+                    s.total++;
+                    const st = String(r[4] || '').toLowerCase();
+                    const ty = String(r[3] || '').toLowerCase();
+
+                    if (st.includes('open')) s.open++;
+                    else if (st.includes('pending') || st.includes('wait')) s.pending++;
+                    else if (st.includes('resolved') || st.includes('fix')) s.resolved++;
+                    else if (st.includes('close')) s.closed++;
+
+                    if (ty.includes('incident')) s.incident++;
+                    else if (ty.includes('request')) s.request++;
+                });
+
+                getEl('stat-total').innerText = s.total;
+                getEl('stat-open').innerText = s.open;
+                getEl('stat-pending').innerText = s.pending;
+                getEl('stat-resolved').innerText = s.resolved;
+                getEl('stat-closed').innerText = s.closed;
+                getEl('stat-incident').innerText = s.incident;
+                getEl('stat-request').innerText = s.request;
+            },
+
+            // --- Modal & Form ---
+
+            openModal: function (mode, id = null) {
+                const modal = getEl('modal-ticket-form');
+                const title = getEl('ticket-modal-title');
+                const form = getEl('form-ticket');
+
+                // Populate Dropdowns first
+                this.populateDropdowns();
+
+                if (mode === 'CREATE') {
+                    title.innerText = 'สร้าง Ticket ใหม่';
+                    form.reset();
+                    getEl('inp-ticket-id').value = '';
+
+                    // Defaults
+                    const today = new Date();
+                    getEl('inp-ticket-date').value = dayjs().format('YYYY-MM-DD');
+                    getEl('inp-ticket-time').value = dayjs().format('HH:mm');
+                    getEl('sel-ticket-status').value = 'Open';
+
+                } else {
+                    title.innerText = 'แก้ไข Ticket: ' + id;
+                    const row = _tickets.find(r => r[2] == id);
+                    if (row) this.fillForm(row);
+                }
+
+                modal.showModal();
+            },
+
+            fillForm: function (row) {
+                // row: [timestamp, dateFull, id, type, status, severity, cat, sub, subj, detail, action, res, resp, assign, remark]
+                getEl('inp-ticket-id').value = row[2];
+
+                // Split Date/Time
+                const dt = row[1].split(' ');
+                getEl('inp-ticket-date').value = dt[0] || '';
+                getEl('inp-ticket-time').value = dt[1] || '';
+
+                getEl('sel-ticket-type').value = row[3];
+                getEl('sel-ticket-status').value = row[4];
+                getEl('sel-ticket-severity').value = row[5];
+
+                getEl('sel-ticket-category').value = row[6];
+                this.updateSubCategories(); // Refresh subs based on cat
+                getEl('sel-ticket-subcategory').value = row[7];
+
+                getEl('inp-ticket-subject').value = row[8];
+                getEl('txt-ticket-detail').value = row[9];
+                getEl('txt-ticket-action').value = row[10];
+                getEl('txt-ticket-resolved').value = row[11];
+                getEl('inp-ticket-resp').value = row[12];
+                getEl('inp-ticket-assign').value = row[13];
+                getEl('txt-ticket-remark').value = row[14];
+            },
+
+            populateDropdowns: function () {
+                const fill = (id, items) => {
+                    const el = getEl(id);
+                    const cur = el.value;
+                    el.innerHTML = items.map(i => `<option value="${i}">${i}</option>`).join('');
+                    if (cur && items.includes(cur)) el.value = cur;
+                };
+
+                fill('sel-ticket-type', _config.types);
+                fill('sel-ticket-status', _config.statuses);
+                fill('sel-ticket-severity', _config.severities);
+
+                // Categories
+                const cats = Object.keys(_config.categories);
+                const catEl = getEl('sel-ticket-category');
+                const curCat = catEl.value;
+                catEl.innerHTML = '<option value="">Select Category...</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+                if (curCat && cats.includes(curCat)) catEl.value = curCat;
+            },
+
+            updateSubCategories: function () {
+                const cat = getEl('sel-ticket-category').value;
+                const subEl = getEl('sel-ticket-subcategory');
+                subEl.innerHTML = '';
+
+                if (cat && _config.categories[cat]) {
+                    const subs = _config.categories[cat];
+                    subEl.innerHTML = subs.map(s => `<option value="${s}">${s}</option>`).join('');
+                }
+            },
+
+            handleSubmit: function (event) {
+                event.preventDefault();
+                const form = event.target;
+                const btn = getEl('btn-save-ticket');
+                const spinner = getEl('spinner-save-ticket');
+
+                btn.disabled = true;
+                spinner.classList.remove('hidden');
+
+                const formData = new FormData(form);
+                const id = formData.get('id');
+                const data = Object.fromEntries(formData.entries());
+
+                const func = id ? 'updateTicket' : 'createTicket';
+
+                Server.call(func, data)
+                    .then(res => {
+                        if (res.success) {
+                            UIManager.showToast("บันทึกข้อมูลสำเร็จ", "success");
+                            getEl('modal-ticket-form').close();
+                            this.loadTickets(true); // Refund
+                        } else {
+                            Swal.fire('Error', res.message, 'error');
+                        }
+                    })
+                    .catch(err => Swal.fire('Error', err.message, 'error'))
+                    .finally(() => {
+                        btn.disabled = false;
+                        spinner.classList.add('hidden');
+                    });
+            },
+
+            deleteTicket: function (id) {
+                Swal.fire({
+                    title: 'ยืนยันการลบ?',
+                    text: `คุณต้องการลบ Ticket ${id} หรือไม่?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'ลบรายการ'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Server.call('deleteTicket', id)
+                            .then(res => {
+                                if (res.success) {
+                                    Swal.fire('Deleted!', 'ลบรายการสำเร็จ', 'success');
+                                    this.loadTickets(true);
+                                } else {
+                                    Swal.fire('Error', res.message, 'error');
+                                }
+                            });
+                    }
+                });
+            },
+
+            // --- Helpers ---
+            getStatusClass: function (s) {
+                s = (s || '').toLowerCase();
+                if (s.includes('open')) return 'badge-error';
+                if (s.includes('pending')) return 'badge-warning';
+                if (s.includes('resolved')) return 'badge-success';
+                if (s.includes('closed')) return 'badge-neutral';
+                return 'badge-ghost';
+            },
+
+            getSeverityClass: function (s) {
+                s = (s || '').toLowerCase();
+                if (s.includes('critical')) return 'badge-error';
+                if (s.includes('high')) return 'badge-warning';
+                if (s.includes('medium')) return 'badge-info';
+                return 'badge-ghost';
+            }
+
+        };
+    })();
 </script>

@@ -1,7 +1,7 @@
 <style>
   /* CSS_Custom.html - DaisyUI Version */
 
-  /* Scrollbar (ถ้าชอบแบบเดิมก็เก็บไว้ได้) */
+  /* Scrollbar */
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -24,10 +24,359 @@
   .page-section {
     width: 100%;
     height: 100%;
+    min-height: 0;
+    /* Important for flex/grid children */
+    display: flex;
+    flex-direction: column;
   }
 
-  /* DaisyUI Modal Overlay Fix (เผื่อไว้ถ้าอยากให้ background มืดลงอีก) */
+  /* Ensure grid container takes full height */
+  #gridContainer {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* DaisyUI Modal Fix - Modals stay inside x-data for Alpine scope */
+  /* Key: use isolation to create new stacking context at page level */
+  .page-section {
+    isolation: isolate;
+  }
+
+  /* Force modal to break out of parent stacking context */
+  .modal {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 9999 !important;
+    /* Reset any transforms that might affect fixed positioning */
+    transform: none !important;
+  }
+
+  .modal.modal-open,
+  .modal:target {
+    pointer-events: auto !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  /* Backdrop styling */
+  .modal::backdrop,
   .modal-backdrop {
-    background-color: rgba(0, 0, 0, 0.5);
+    position: fixed !important;
+    inset: 0 !important;
+    background-color: rgba(0, 0, 0, 0.5) !important;
+    z-index: -1 !important;
+  }
+
+  dialog.modal[open]::backdrop {
+    background-color: rgba(0, 0, 0, 0.5) !important;
+  }
+
+  /* Ensure modal-box is above backdrop */
+  .modal .modal-box {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ============================================
+     DOT PROGRESS INDICATOR
+     ============================================ */
+  .status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+  }
+
+  .status-dot.pending {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  }
+
+  .status-dot.onair {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+    animation: pulse-yellow 1.5s ease-in-out infinite;
+  }
+
+  .status-dot.completed {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+  }
+
+  @keyframes pulse-yellow {
+
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+
+    50% {
+      transform: scale(1.2);
+      opacity: 0.8;
+    }
+  }
+
+  /* ============================================
+     FLATPICKR CUSTOM THEME
+     ============================================ */
+  .flatpickr-calendar {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+    padding: 8px !important;
+    font-family: inherit !important;
+    z-index: 99999 !important;
+  }
+
+  .flatpickr-calendar.hasTime .flatpickr-time {
+    border-top: 1px solid #334155 !important;
+    margin-top: 8px !important;
+    padding-top: 8px !important;
+    height: auto !important;
+    line-height: normal !important;
+  }
+
+  .flatpickr-months {
+    background: #1e293b !important;
+    border-radius: 12px 12px 0 0 !important;
+    padding: 4px 8px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .flatpickr-current-month {
+    padding-top: 0 !important;
+    height: 28px !important;
+  }
+
+  .flatpickr-months .flatpickr-month {
+    color: #f8fafc !important;
+    fill: #f8fafc !important;
+  }
+
+  .flatpickr-current-month .flatpickr-monthDropdown-months,
+  .flatpickr-current-month input.cur-year {
+    color: #f8fafc !important;
+    font-weight: 600 !important;
+    font-size: 0.9rem !important;
+  }
+
+  .flatpickr-current-month .flatpickr-monthDropdown-months:hover,
+  .flatpickr-current-month input.cur-year:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+  }
+
+  .flatpickr-weekdays {
+    background: transparent !important;
+    height: 24px !important;
+  }
+
+  span.flatpickr-weekday {
+    color: #94a3b8 !important;
+    font-weight: 600 !important;
+    font-size: 0.75rem !important;
+  }
+
+  .flatpickr-day {
+    color: #cbd5e1 !important;
+    border-radius: 6px !important;
+    height: 32px !important;
+    line-height: 32px !important;
+    margin-top: 2px !important;
+    font-size: 0.85rem !important;
+  }
+
+  .flatpickr-day:hover,
+  .flatpickr-day:focus {
+    background: #334155 !important;
+    border-color: transparent !important;
+  }
+
+  .flatpickr-day.today {
+    border: 1px solid #6366f1 !important;
+    color: #6366f1 !important;
+  }
+
+  .flatpickr-day.selected,
+  .flatpickr-day.startRange,
+  .flatpickr-day.endRange,
+  .flatpickr-day.selected.inRange,
+  .flatpickr-day.startRange.inRange,
+  .flatpickr-day.endRange.inRange,
+  .flatpickr-day.selected:focus,
+  .flatpickr-day.startRange:focus,
+  .flatpickr-day.endRange:focus,
+  .flatpickr-day.selected:hover,
+  .flatpickr-day.startRange:hover,
+  .flatpickr-day.endRange:hover {
+    background: #6366f1 !important;
+    border-color: #6366f1 !important;
+    color: white !important;
+    box-shadow: none !important;
+  }
+
+  .flatpickr-day.inRange {
+    background: rgba(99, 102, 241, 0.2) !important;
+    border-color: transparent !important;
+    box-shadow: -5px 0 0 rgba(99, 102, 241, 0.2), 5px 0 0 rgba(99, 102, 241, 0.2) !important;
+  }
+
+  .flatpickr-day.prevMonthDay,
+  .flatpickr-day.nextMonthDay {
+    color: #475569 !important;
+  }
+
+  .flatpickr-months .flatpickr-prev-month,
+  .flatpickr-months .flatpickr-next-month {
+    fill: #94a3b8 !important;
+    padding: 8px !important;
+    height: 28px !important;
+    width: 28px !important;
+  }
+
+  .flatpickr-months .flatpickr-prev-month:hover,
+  .flatpickr-months .flatpickr-next-month:hover {
+    fill: #f8fafc !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  /* Time Picker */
+  .flatpickr-time input {
+    color: #f1f5f9 !important;
+    background: #0f172a !important;
+    border: 1px solid #334155 !important;
+    border-radius: 6px !important;
+    font-size: 0.9rem !important;
+    height: 30px !important;
+  }
+
+  .flatpickr-time .flatpickr-am-pm {
+    color: #f1f5f9 !important;
+    background: #0f172a !important;
+    border: 1px solid #334155 !important;
+    border-radius: 6px !important;
+    font-size: 0.8rem !important;
+    height: 30px !important;
+    margin-left: 4px !important;
+  }
+
+  .flatpickr-time .flatpickr-am-pm:hover,
+  .flatpickr-time input:hover {
+    background: #1e293b !important;
+  }
+
+  /* ============================================
+     TABULATOR CUSTOM THEME
+     ============================================ */
+  .tabulator {
+    border: none !important;
+    background-color: transparent !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .tabulator-header {
+    border-bottom: 2px solid rgba(0, 0, 0, 0.05) !important;
+    background-color: transparent !important;
+    font-weight: 600 !important;
+  }
+
+  .tabulator-header .tabulator-col {
+    background-color: transparent !important;
+    border-right: none !important;
+  }
+
+  .tabulator-header .tabulator-col-content {
+    padding: 12px 8px !important;
+  }
+
+  .tabulator-row {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+    background-color: white !important;
+    transition: all 0.2s ease;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
+  }
+
+  .tabulator-row:hover {
+    background-color: rgba(99, 102, 241, 0.05) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    z-index: 1;
+  }
+
+  .tabulator-row.tabulator-selected {
+    background-color: rgba(99, 102, 241, 0.1) !important;
+  }
+
+  .tabulator-cell {
+    border-right: none !important;
+    padding: 12px 8px !important;
+    font-size: 0.875rem !important;
+    vertical-align: middle !important;
+    height: auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* Subject column left alignment */
+  .tabulator-cell[tabulator-field="subject"],
+  .tabulator-cell[tabulator-field="detail"] {
+    justify-content: flex-start !important;
+  }
+
+  /* Cell overflow fix */
+  .tabulator-cell-overflow {
+    overflow: hidden !important;
+  }
+
+  .tabulator-cell-overflow .tabulator-cell-content {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  /* Hide placeholder by default, show only when NOT loading */
+  .tabulator-placeholder {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: opacity 0.2s ease;
+  }
+
+  :not(.is-loading-mode) .tabulator-placeholder {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .is-loading-mode .tabulator-placeholder {
+    display: none !important;
+  }
+
+  /* Full Screen Table Container */
+  .tabulator-fullscreen {
+    height: 100%;
+    width: 100%;
+  }
+
+  /* Refresh Spin Animation */
+  .spin-loading {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

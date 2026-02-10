@@ -1,323 +1,235 @@
-<div id="page-report"
-  class="page-section hidden p-3 md:p-6 lg:p-8 fade-in h-full flex flex-col overflow-y-auto bg-base-200">
-
-  <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-    <div>
-      <h1 class="text-2xl md:text-3xl font-bold text-base-content flex items-center gap-3">
-        <div class="p-2 bg-primary/10 rounded-xl text-primary">
-          <i class="fas fa-file-invoice"></i>
+<div id="page-report" class="page-section hidden h-full w-full p-4 flex flex-col gap-4 bg-base-200 overflow-hidden">
+    <div class="flex justify-between items-center bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="bg-primary/10 p-2 rounded-xl text-primary"><i class="fas fa-file-invoice text-xl"></i></div>
+            <div>
+                <h2 class="text-base font-bold text-gray-800">รายงานประจำกะ (Daily Report)</h2>
+                <p class="text-[10px] text-gray-400">สรุปงาน Ticket และ ผลการแข่งขัน</p>
+            </div>
         </div>
-        Shift Report
-      </h1>
-      <p class="text-base-content/60 mt-1 ml-1 text-sm md:text-base">รายงานผลการปฏิบัติงานประจำกะดึก</p>
+        <div class="flex items-center gap-2">
+            <div class="relative cursor-pointer" onclick="ReportManager.openDatePicker()">
+                <i class="fas fa-calendar-alt absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                <input type="text" id="inputDate" class="input input-sm input-bordered pl-9 w-40 font-bold text-center cursor-pointer rounded-lg text-xs" readonly>
+            </div>
+            <button id="btn-load-data" onclick="ReportManager.autoFetchAll()" class="btn btn-sm btn-neutral text-white shadow-sm">
+                <i class="fas fa-sync-alt text-xs"></i> <span class="hidden sm:inline text-xs">โหลดข้อมูล</span>
+            </button>
+        </div>
     </div>
 
-    <div role="alert"
-      class="alert bg-red-50 border-l-4 border-error shadow-md w-full md:w-auto md:max-w-md p-4 animate-pulse-subtle">
-      <div class="flex items-start gap-3">
-        <i class="fas fa-exclamation-circle text-error text-2xl mt-1"></i>
-        <div>
-          <h3 class="font-bold text-error uppercase tracking-wider text-sm">Action Required!</h3>
-          <div class="text-base-content/80 font-semibold text-sm">
-            กรุณา <span class="text-error font-bold underline">ตรวจสอบการปิด Channel</span> ให้เรียบร้อยก่อนส่งรายงาน
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <form id="mainForm" class="h-full">
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full pb-20">
-
-      <div class="lg:col-span-2 space-y-4 md:space-y-6">
-
-        <div class="card bg-base-100 shadow-sm border border-base-200">
-          <div class="card-body p-4 md:p-6">
-            <h2 class="card-title text-sm opacity-50 border-b pb-2 mb-4">GENERAL INFORMATION</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="form-control">
-                <label class="label"><span class="label-text font-bold">วันที่ (Date)</span></label>
-                <input type="date" name="date" id="inputDate"
-                       onchange="Report.autoFetchTicket(this); Report.autoFetchMatch(this); Report.autoFetchProof();"
-                       required class="input input-bordered w-full" />
-              </div>
-              <div class="form-control">
-                <label class="label"><span class="label-text font-bold">ผู้รายงาน (Reporter)</span></label>
-
-                <select name="reporter" id="reporterSelect" onchange="Report.checkReporterOther()" required class="select select-bordered w-full">
-                  <option value="">-- เลือกผู้รายงาน --</option>
-                  <option value="เมฆินทร์">เมฆินทร์</option>
-                  <option value="อรรคพล">อรรคพล</option>
-                  <option value="วัชระพล">วัชระพล</option>
-                  <option value="นวพัตร์">นวพัตร์</option>
-                  <option value="อื่นๆ">อื่นๆ (โปรดระบุ)</option>
-                </select>
-
-                <div id="reporterOtherGroup" class="hidden join w-full">
-                  <input type="text" name="reporterOther" id="reporterOther" placeholder="ระบุชื่อ-นามสกุล..." class="input input-bordered join-item w-full" />
-                  <button type="button" class="btn btn-square border-base-300 join-item bg-base-200" onclick="Report.resetReporter()" title="กลับไปเลือกรายชื่อ">
-                    <i class="fas fa-times text-base-content/60"></i>
-                  </button>
-                </div>
-              </div>
-              <input type="hidden" name="shift" value="Night Shift">
-            </div>
-          </div>
-        </div>
-
-        <div
-          class="card bg-base-100 shadow-sm border border-base-200 group focus-within:ring-2 ring-primary/20 transition-all">
-          <div class="card-body p-4 md:p-6">
-            <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
-              <h2 class="card-title text-primary flex gap-2 text-lg">
-                <i class="fas fa-ticket-alt"></i> 1. Ticket Status
-              </h2>
-              <button type="button" onclick="Report.autoFetchTicket(this)" class="btn btn-sm btn-primary btn-outline gap-2 w-full md:w-auto min-w-[140px]">
-                <i class="fas fa-sync-alt"></i> <span>ดึงข้อมูล</span>
-              </button>
-            </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-              <div class="flex flex-col items-center p-2 bg-base-200 rounded-lg border border-base-300">
-                <span class="text-[10px] font-bold uppercase opacity-60">Total</span>
-                <span class="text-lg font-black" id="disp-ticket-total">-</span>
-                <input type="hidden" id="ticketTotal" value="0">
-              </div>
-              <div class="flex flex-col items-center p-2 bg-info/10 rounded-lg border border-info/20 text-info">
-                <span class="text-[10px] font-bold uppercase">Open</span>
-                <span class="text-lg font-black" id="disp-ticket-open">-</span>
-                <input type="hidden" id="ticketOpen" value="0">
-              </div>
-              <div
-                class="flex flex-col items-center p-2 bg-warning/10 rounded-lg border border-warning/20 text-warning">
-                <span class="text-[10px] font-bold uppercase">Pending</span>
-                <span class="text-lg font-black" id="disp-ticket-pending">-</span>
-                <input type="hidden" id="ticketPending" value="0">
-              </div>
-              <div
-                class="flex flex-col items-center p-2 bg-success/10 rounded-lg border border-success/20 text-success">
-                <span class="text-[10px] font-bold uppercase">Resolved</span>
-                <span class="text-lg font-black" id="disp-ticket-resolved">-</span>
-                <input type="hidden" id="ticketResolved" value="0">
-              </div>
-              <div
-                class="flex flex-col items-center p-2 bg-neutral/10 rounded-lg border border-neutral/20 text-neutral col-span-2 md:col-span-1">
-                <span class="text-[10px] font-bold uppercase">Closed</span>
-                <span class="text-lg font-black" id="disp-ticket-closed">-</span>
-                <input type="hidden" id="ticketClosed" value="0">
-              </div>
-            </div>
-
-            <div class="border rounded-lg overflow-hidden bg-base-100">
-              <div class="overflow-x-auto max-h-[300px]">
-                <table class="table table-xs md:table-sm table-pin-rows w-full">
-                  <thead class="bg-base-200">
-                    <tr>
-                      <th class="w-24 text-center">Status</th>
-                      <th class="w-32">Ticket No.</th>
-                      <th>Description</th>
-                    </tr>
-                  </thead>
-                  <tbody id="ticketTableBody">
-                    <tr class="text-center text-base-content/50">
-                      <td colspan="3" class="py-8">ยังไม่มีข้อมูล (กรุณากดดึงข้อมูล)</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <input type="hidden" name="ticketSummary" id="ticketSummary">
-          </div>
-        </div>
-
-        <div class="card bg-base-100 shadow-sm border border-base-200">
-          <div class="card-body p-4 md:p-6">
-            <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
-              <h3 class="card-title text-info flex gap-2 text-lg">
-                <i class="fas fa-futbol"></i> 2. Match Summary
-              </h3>
-              <button type="button" class="btn btn-sm btn-outline btn-info gap-2 w-full md:w-auto min-w-[140px]" onclick="Report.autoFetchMatch(this)">
-                <i class="fas fa-sync-alt"></i> <span>ดึงข้อมูล</span>
-              </button>
-            </div>
-
-            <div id="match-stats-container" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-4">
-              <div
-                class="flex flex-col items-center p-2 bg-base-200 rounded-lg border border-base-300 col-span-2 md:col-span-1">
-                <span class="text-[10px] font-bold uppercase opacity-60">Total Matches</span>
-                <span class="text-lg font-black" id="disp-match-total">0</span>
-              </div>
-              <div
-                class="flex flex-col justify-center items-center p-2 bg-base-50 rounded-lg border border-base-200 border-dashed col-span-2 md:col-span-3 lg:col-span-4 text-xs text-base-content/40">
-                Waiting to fetch data...
-              </div>
-            </div>
-
-            <div class="form-control">
-              <label class="label"><span class="label-text text-xs opacity-60">รายละเอียดเพิ่มเติม (Text Format)</span></label>
-              <textarea name="matchSummary" id="matchSummary" class="textarea textarea-bordered h-24 text-xs font-mono w-full leading-relaxed" placeholder="รายละเอียดคู่แข่งขัน..." required></textarea>
-              <input type="hidden" id="matchTotal" name="matchTotal">
-              <input type="hidden" id="matchDataJSON" name="matchDataJSON">
-            </div>
-          </div>
-        </div>
-
-        <div class="card bg-base-100 shadow-sm border border-base-200">
-          <div class="card-body p-4 md:p-6">
-            <h2 class="card-title text-warning flex gap-2 mb-4 text-lg"> <i class="fas fa-handshake"></i> 3. Handover /
-              Issues </h2>
-            <textarea name="transferReport" rows="3" class="textarea textarea-bordered w-full text-sm leading-relaxed" placeholder="ระบุงานที่ต้องส่งต่อ..."></textarea>
-          </div>
-        </div>
-
-      </div>
-
-      <div class="space-y-6">
-        <div class="lg:sticky lg:top-4 space-y-6">
-
-          <div class="card bg-base-100 shadow-xl border-t-4 border-t-warning">
-            <div class="card-body p-4 md:p-5">
-              <h3 class="font-bold text-lg flex items-center gap-2 mb-4">
-                <i class="fas fa-camera text-warning"></i> Proof of Work
-              </h3>
-
-              <div class="collapse collapse-arrow bg-base-200/50 border border-base-200 rounded-lg">
-                <input type="checkbox" id="collapse-mono" checked />
-                <div class="collapse-title font-bold text-sm flex justify-between">
-                  <span>4.1 Mono <span class="text-error">*</span></span>
-                  <input type="hidden" id="statusMono" value="เรียบร้อย">
-                </div>
-                <div class="collapse-content bg-base-100 pt-2">
-                  <div class="flex gap-2 mb-2">
-                    <button type="button" onclick="document.getElementById('fileMono').click()" class="btn btn-xs btn-outline flex-1"><i class="fas fa-upload"></i> Upload</button>
-                    <button type="button" onclick="Report.pasteImage('mono', 'monoFileList')" class="btn btn-xs btn-outline flex-1"><i class="fas fa-paste"></i> Paste</button>
-                  </div>
-                  <div id="monoFileList" class="text-xs space-y-1 text-base-content/60 break-all"></div>
-                  <input type="file" id="fileMono" multiple accept="image/*" class="hidden" onchange="Report.handleFilesUpload('fileMono', 'monoFileList')">
-                </div>
-              </div>
-
-              <div class="collapse collapse-arrow bg-base-200/50 border border-base-200 rounded-lg mt-2">
-                <input type="checkbox" id="collapse-start" />
-                <div class="collapse-title font-bold text-sm">4.2 Start Channel</div>
-                <div class="collapse-content bg-base-100 pt-2">
-                  <div class="form-control mb-2">
-                    <select id="statusStart" onchange="Report.toggleUploadSection('statusStart', 'proofStartDiv', 'start')" class="select select-xs select-bordered w-full">
-                      <option value="ไม่มี">ไม่มี</option>
-                      <option value="เรียบร้อย">เรียบร้อย</option>
-                      <option value="ติดปัญหา">ติดปัญหา</option>
-                    </select>
-                  </div>
-                  <div id="proofStartDiv" class="hidden">
-                    <div class="flex gap-2 mb-2">
-                      <button type="button" onclick="document.getElementById('fileStart').click()" class="btn btn-xs btn-outline flex-1">Upload</button>
-                      <button type="button" onclick="Report.pasteImage('start', 'startFileList')" class="btn btn-xs btn-outline flex-1">Paste</button>
+    <div class="flex-1 overflow-hidden min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4">
+        
+        <div class="lg:col-span-8 flex flex-col gap-4 overflow-hidden h-full">
+            
+            <div class="card bg-white shadow-sm border border-base-300 flex-[2] flex flex-col overflow-hidden rounded-2xl">
+                <div class="px-5 py-3 border-b border-base-100 bg-white flex flex-col gap-2 shrink-0">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-sm text-gray-700 flex items-center gap-2">
+                            <i class="fas fa-clipboard-list text-indigo-500"></i> ตรวจสอบการแข่งขัน (10:00 - 10:00)
+                        </h3>
+                        <span class="badge badge-neutral badge-sm whitespace-nowrap" id="disp-match-total">0 คู่</span>
                     </div>
-                    <div id="startFileList" class="text-xs space-y-1 break-all"></div>
-                    <input type="file" id="fileStart" multiple accept="image/*" class="hidden" onchange="Report.handleFilesUpload('fileStart', 'startFileList')">
-                  </div>
+                    <div id="league-breakdown" class="flex flex-wrap gap-1.5 justify-start text-[10px] min-h-[24px]">
+                        </div>
                 </div>
-              </div>
 
-              <div class="collapse collapse-arrow bg-base-200/50 border border-base-200 rounded-lg mt-2">
-                <input type="checkbox" id="collapse-ais" />
-                <div class="collapse-title font-bold text-sm">4.3 AIS</div>
-                <div class="collapse-content bg-base-100 pt-2">
-                  <div class="form-control mb-2">
-                    <select id="statusAis" onchange="Report.toggleUploadSection('statusAis', 'proofAisDiv', 'ais')" class="select select-xs select-bordered w-full">
-                      <option value="ไม่มี">ไม่มี</option>
-                      <option value="เรียบร้อย">เรียบร้อย</option>
-                      <option value="ติดปัญหา">ติดปัญหา</option>
-                    </select>
-                  </div>
-                  <div id="proofAisDiv" class="hidden">
-                    <div class="flex gap-2 mb-2">
-                      <button type="button" onclick="document.getElementById('fileAis').click()" class="btn btn-xs btn-outline flex-1">Upload</button>
-                      <button type="button" onclick="Report.pasteImage('ais', 'aisFileList')" class="btn btn-xs btn-outline flex-1">Paste</button>
+                <div class="overflow-y-auto flex-1 p-0 bg-gray-50/30">
+                    <table class="table table-xs w-full table-pin-rows">
+                        <thead class="bg-gray-50 text-gray-500 font-medium">
+                            <tr>
+                                <th class="w-16 text-center">เวลา</th>
+                                <th>คู่แข่งขัน (Match End)</th>
+                                <th class="w-16 text-center">Start</th>
+                                <th class="w-16 text-center">Stop</th>
+                                <th class="w-24 text-center">Cross-Check</th>
+                            </tr>
+                        </thead>
+                        <tbody id="verification-tbody" class="bg-white"></tbody>
+                    </table>
+                    <div id="verify-loader" class="hidden py-10 text-center"><span class="loading loading-spinner text-primary"></span></div>
+                    <div id="verify-empty" class="hidden py-10 text-center text-gray-300 text-xs">ไม่มีรายการแข่งขันในช่วงเวลานี้</div>
+                </div>
+            </div>
+
+            <div class="card bg-white shadow-sm border border-base-300 flex-[1] flex flex-col overflow-hidden rounded-2xl">
+                <div class="px-5 py-3 border-b border-base-100 bg-white flex flex-col md:flex-row justify-between items-start md:items-center shrink-0 gap-2">
+                    <h3 class="font-bold text-sm text-gray-700 flex items-center gap-2">
+                        <i class="fas fa-ticket-alt text-error"></i> Ticket (งานค้าง & งานวันนี้)
+                    </h3>
+                    <div class="flex flex-wrap gap-2 text-[10px] font-bold items-center">
+                        <span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">New: <span id="disp-ticket-new">0</span></span>
+                        <span class="text-error bg-error/10 px-2 py-0.5 rounded border border-error/10">Open: <span id="disp-ticket-open">0</span></span>
+                        <span class="text-warning bg-warning/10 px-2 py-0.5 rounded border border-warning/10">Pending: <span id="disp-ticket-pending">0</span></span>
+                        <span class="text-success bg-success/10 px-2 py-0.5 rounded border border-success/10">Resolved: <span id="disp-ticket-resolved">0</span></span>
+                        <span class="text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">Closed: <span id="disp-ticket-closed">0</span></span>
+                        <span class="text-gray-400 text-[9px] font-normal ml-1">(Total: <span id="disp-ticket-total">0</span>)</span>
                     </div>
-                    <div id="aisFileList" class="text-xs space-y-1 break-all"></div>
-                    <input type="file" id="fileAis" multiple accept="image/*" class="hidden" onchange="Report.handleFilesUpload('fileAis', 'aisFileList')">
-                  </div>
                 </div>
-              </div>
+                <div class="overflow-y-auto flex-1 p-0">
+                    <table class="table table-xs w-full table-pin-rows">
+                        <thead class="bg-gray-50 text-gray-500">
+                            <tr>
+                                <th class="w-24 text-center">ID</th>
+                                <th class="w-24 text-center">Status</th>
+                                <th>Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody id="disp-ticket-tbody"></tbody>
+                    </table>
+                    <div id="loader-ticket" class="hidden py-10 text-center"><span class="loading loading-spinner text-gray-400"></span></div>
+                    <div id="empty-ticket" class="hidden py-10 text-center text-gray-300 text-xs">ไม่มี Ticket ที่ต้องจัดการ</div>
+                </div>
             </div>
-          </div>
+        </div>
 
-          <div class="card bg-base-100 shadow-xl border border-base-200">
-            <div class="card-body p-4 md:p-5">
-              <div class="form-control mb-4">
-                <label class="label"><span class="label-text font-bold text-xs uppercase tracking-wider">Send To</span></label>
-                <select name="chatTarget" class="select select-bordered w-full">
-                  <option value="">-- ไม่ส่ง --</option>
-                  <option value="group_all">กลุ่ม Shift Reports</option>
-                  <option value="group_dev">กลุ่ม Dev</option>
-                </select>
-              </div>
-
-              <div class="flex flex-col gap-3">
-                <button type="button" onclick="Report.submitForm(null, 'preview')" class="btn btn-ghost border-base-300 w-full min-h-[3rem]">
-                  <i class="fas fa-eye"></i> Preview
-                </button>
-                <button type="button" onclick="Report.submitForm(null, 'send')" class="btn btn-primary w-full shadow-lg min-h-[3rem]">
-                  <i class="fas fa-paper-plane"></i> Send Report
-                </button>
-              </div>
+        <div class="lg:col-span-4 flex flex-col gap-3 h-full overflow-y-auto pb-20 lg:pb-0 scrollbar-hide">
+            
+            <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-3">
+                <div class="form-control">
+                    <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">ผู้รายงาน</span>
+                    <div class="relative">
+                        <select id="reporterSelect" onchange="ReportManager.handleReporterChange(this.value)" class="select select-bordered select-sm w-full text-xs bg-slate-50 focus:bg-white transition-colors">
+                            <option value="">-- เลือก --</option>
+                            <option value="เมฆินทร์">เมฆินทร์</option>
+                            <option value="อรรคพล">อรรคพล</option>
+                            <option value="วัชระพล">วัชระพล</option>
+                            <option value="นวพัตร์">นวพัตร์</option>
+                            <option value="OTHER">อื่นๆ</option>
+                        </select>
+                        <div id="wrapper-reporter-other" class="hidden absolute inset-0 bg-white flex gap-1">
+                             <input type="text" id="reporterOther" class="input input-bordered input-sm w-full text-xs" placeholder="ระบุชื่อ...">
+                             <button onclick="ReportManager.resetReporter()" class="btn btn-sm btn-square btn-ghost"><i class="fas fa-times"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="form-control">
+                        <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">กะ (Shift)</span>
+                        <select id="shiftSelect" class="select select-bordered select-sm w-full text-xs bg-slate-50">
+                            <option value="Night Shift">Night Shift</option>
+                            <option value="Day Shift">Day Shift</option>
+                        </select>
+                    </div>
+                    <div class="form-control">
+                        <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">ส่งเข้าแชท</span>
+                        <select id="chatTargetSelect" class="select select-bordered select-sm w-full text-xs bg-slate-50">
+                            <option value="">Save Only</option>
+                            <option value="group_all">Group All</option>
+                            <option value="group_dev">Group Dev</option>
+                        </select>
+                    </div>
+                </div>
             </div>
-          </div>
 
+            <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-2">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
+                        <i class="fas fa-play-circle text-yellow-500"></i> หลักฐาน Start Channel
+                    </span>
+                    <select id="statusStart" class="select select-xs select-bordered w-auto text-xs">
+                        <option value="เรียบร้อย">เรียบร้อย</option>
+                        <option value="ติดปัญหา">ติดปัญหา</option>
+                    </select>
+                </div>
+                
+                <div id="auto-start-images" class="hidden bg-slate-50 p-2 rounded-lg border border-slate-100">
+                    <div class="text-[9px] text-slate-400 mb-1 flex items-center gap-1">
+                        <i class="fas fa-magic text-yellow-500"></i> เลือกจาก Dashboard
+                    </div>
+                    <div id="auto-start-list" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <div class="flex gap-2 items-center">
+                    <button onclick="document.getElementById('fileStart').click()" class="btn btn-xs bg-white border-slate-200 hover:bg-slate-50 text-slate-600 shadow-sm flex-1"><i class="fas fa-upload"></i> Upload</button>
+                    <button onclick="ReportManager.triggerPaste('start')" class="btn btn-xs bg-white border-slate-200 hover:bg-slate-50 text-slate-600 shadow-sm flex-1"><i class="fas fa-paste"></i> Paste</button>
+                </div>
+                <div id="startFileList" class="flex flex-col gap-1"></div>
+                <input type="file" id="fileStart" class="hidden" multiple accept="image/*" onchange="ReportManager.handleFileUpload(this, 'start')">
+                <div id="paste-area-start" tabindex="0" class="absolute w-0 h-0 overflow-hidden"></div>
+            </div>
+
+            <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-3">
+                
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
+                            <span class="w-2 h-2 rounded-full bg-indigo-500"></span> หลักฐาน Mono <span class="text-red-500">*</span>
+                        </span>
+                        <div class="flex gap-1">
+                            <button onclick="document.getElementById('fileMono').click()" class="btn btn-xs btn-square btn-ghost text-slate-400 hover:text-indigo-500" title="Upload"><i class="fas fa-upload"></i></button>
+                            <button onclick="ReportManager.triggerPaste('mono')" class="btn btn-xs btn-square btn-ghost text-slate-400 hover:text-indigo-500" title="Paste"><i class="fas fa-paste"></i></button>
+                        </div>
+                    </div>
+                    <input type="file" id="fileMono" multiple accept="image/*" class="hidden" onchange="ReportManager.handleFileUpload(this, 'mono')">
+                    <div id="monoFileList" class="flex flex-col gap-1 mb-1"></div>
+                    <div id="mono-empty" class="text-[9px] text-center text-gray-300 border border-dashed rounded p-1.5 bg-slate-50">ยังไม่มีรูป</div>
+                    <div id="paste-area-mono" tabindex="0" class="absolute w-0 h-0 overflow-hidden"></div>
+                </div>
+                
+                <div class="divider my-0 h-px bg-slate-100"></div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
+                            <span class="w-2 h-2 rounded-full bg-green-500"></span> หลักฐาน AIS
+                        </span>
+                         <div class="flex items-center gap-1">
+                            <select id="statusAis" onchange="ReportManager.toggleAisActions(this.value)" class="select select-xs select-bordered w-auto text-xs">
+                                <option value="ไม่มี">ไม่มี</option>
+                                <option value="เรียบร้อย">มี (Ok)</option>
+                                <option value="ติดปัญหา">มี (Err)</option>
+                            </select>
+                            <div id="ais-actions" class="hidden flex gap-1">
+                                 <button onclick="document.getElementById('fileAis').click()" class="btn btn-xs btn-square btn-ghost text-slate-400 hover:text-green-600"><i class="fas fa-upload"></i></button>
+                                 <button onclick="ReportManager.triggerPaste('ais')" class="btn btn-xs btn-square btn-ghost text-slate-400 hover:text-green-600"><i class="fas fa-paste"></i></button>
+                            </div>
+                         </div>
+                    </div>
+                    <div id="proof-ais-box" class="hidden">
+                        <input type="file" id="fileAis" multiple accept="image/*" class="hidden" onchange="ReportManager.handleFileUpload(this, 'ais')">
+                        <div id="aisFileList" class="flex flex-col gap-1"></div>
+                        <div id="ais-empty-upload" class="text-[9px] text-center text-gray-300 border border-dashed rounded p-1.5 mt-1 bg-slate-50">แนบรูป</div>
+                        <div id="paste-area-ais" tabindex="0" class="absolute w-0 h-0 overflow-hidden"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card bg-white shadow-sm border border-base-300 flex-1 min-h-[80px] rounded-2xl overflow-hidden p-3 flex flex-col">
+                <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">Note / งานฝาก</span>
+                <textarea id="transferReport" class="textarea textarea-ghost w-full h-full text-xs resize-none p-0 focus:outline-none" placeholder="พิมพ์ข้อความ..."></textarea>
+            </div>
+
+            <textarea id="matchSummary" class="hidden"></textarea>
+            <textarea id="ticketSummary" class="hidden"></textarea>
+            <input type="hidden" id="matchTotalValue" value="0">
+            <input type="hidden" id="matchEndedValue" value="0">
+
+            <div class="grid grid-cols-2 gap-3 mt-auto">
+                <button onclick="ReportManager.submitForm('preview')" class="btn btn-sm btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 hover:border-slate-400"><i class="fas fa-eye"></i> ตัวอย่าง</button>
+                <button id="btn-submit-report" onclick="ReportManager.submitForm('send')" class="btn btn-sm btn-neutral text-white shadow-md hover:scale-[1.02] transition-transform">
+                    <span id="spin-btn-send" class="loading loading-spinner loading-xs hidden"></span> <i class="fas fa-paper-plane"></i> ส่งรายงาน
+                </button>
+            </div>
         </div>
-      </div>
     </div>
-  </form>
-
-  <dialog id="preview_modal" class="modal modal-bottom sm:modal-middle">
-    <div class="modal-box w-full max-w-5xl h-[90vh] md:h-auto flex flex-col p-0">
-      <div class="bg-base-200 px-6 py-4 flex justify-between items-center border-b border-base-300">
-        <h3 class="font-bold text-lg flex items-center gap-2"><i class="fas fa-eye text-primary"></i> Preview</h3>
-        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost">✕</button></form>
-      </div>
-
-      <div class="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col md:flex-row gap-6">
-        <div
-          class="md:w-1/2 flex flex-col justify-center items-center bg-base-100 border-2 border-dashed border-base-300 rounded-xl p-8 text-center gap-4 min-h-[200px]">
-          <i class="fas fa-file-pdf text-4xl text-error"></i>
-          <div>
-            <h4 class="font-bold">PDF Ready</h4>
-            <p class="text-xs opacity-60">คลิกเพื่อเปิดดูไฟล์ PDF</p>
-          </div>
-          <a id="previewLink" href="#" target="_blank" class="btn btn-error btn-wide text-white btn-sm md:btn-md">Open
-            PDF</a>
+    
+    <dialog id="preview_modal" class="modal modal-bottom sm:modal-middle">
+        <div class="modal-box p-0 rounded-2xl max-w-lg">
+            <div class="bg-neutral text-white px-5 py-4 font-bold flex justify-between items-center">
+                <span>Preview Report</span>
+                <button onclick="document.getElementById('preview_modal').close()" class="btn btn-xs btn-circle btn-ghost text-white opacity-70 hover:opacity-100"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 bg-gray-50 max-h-[60vh] overflow-y-auto">
+                <div id="chatPreviewText" class="bg-white p-4 rounded-xl border border-slate-200 text-xs font-mono whitespace-pre-wrap leading-relaxed text-slate-700 shadow-sm"></div>
+            </div>
+            <div class="p-4 flex justify-end gap-2 bg-white border-t border-slate-100">
+                <form method="dialog"><button class="btn btn-sm btn-ghost text-slate-500">แก้ไข</button></form>
+                <button class="btn btn-sm btn-success text-white shadow-sm gap-2" onclick="ReportManager.confirmSend()">
+                    <i class="fas fa-check"></i> ยืนยันส่ง
+                </button>
+            </div>
         </div>
-        <div class="md:w-1/2 flex flex-col h-full">
-          <span class="label-text font-bold mb-2">Chat Preview:</span>
-          <div
-            class="bg-base-300 p-4 rounded-xl font-mono text-xs whitespace-pre-wrap flex-1 overflow-y-auto max-h-[300px] min-h-[200px]"
-            id="chatPreviewText"></div>
-        </div>
-      </div>
-
-      <div class="p-4 border-t border-base-300 flex justify-end gap-3 bg-base-100">
-        <form method="dialog"><button class="btn">Cancel</button></form>
-        <button type="button" class="btn btn-success text-white px-6 min-w-[120px]" onclick="Report.confirmSend()">Confirm Send</button>
-      </div>
-    </div>
-  </dialog>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
 </div>
-
-<style>
-  @keyframes pulse-subtle {
-
-    0%,
-    100% {
-      opacity: 1;
-    }
-
-    50% {
-      opacity: 0.85;
-    }
-  }
-
-  .animate-pulse-subtle {
-    animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-</style>

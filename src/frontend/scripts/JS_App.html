@@ -1,41 +1,28 @@
 <script>
-  /**
-   * JS_App.html
-   * Application Entry Point
-   */
-
   document.addEventListener('DOMContentLoaded', async () => {
+    console.log("🚀 App Starting...");
 
-    UIManager.showLoading();
+    // 1. Sidebar Links
+    document.querySelectorAll('aside a[data-target]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        const target = el.dataset.target;
+        Router.navigateTo(target);
+        // Close drawer on mobile
+        const drawer = document.getElementById('my-drawer');
+        if (drawer) drawer.checked = false;
+      });
+    });
 
+    // 2. Initialize Data
     try {
-      // Initialize Store (user settings, theme, etc.)
       await Store.init();
 
-    } catch (err) {
-      console.error('Store Init Error:', err);
-      // Continue anyway - app can still work without user settings
+      // 3. Navigate to Default
+      Router.navigateTo('page-dashboard');
+
+    } catch (e) {
+      console.error("App Init Failed", e);
     }
-
-    try {
-      // ✅ Navigate to Dashboard using the central router
-      // This will trigger Dashboard.init() which sets date picker and loads data
-      if (typeof changePage === 'function') {
-        changePage('page-dashboard');
-      } else {
-        // Fallback: direct call if changePage not available
-        Router.navigateTo('page-dashboard');
-        if (typeof Dashboard !== 'undefined' && typeof Dashboard.init === 'function') {
-          Dashboard.init();
-        }
-      }
-
-    } catch (err) {
-      console.error('App Start Error:', err);
-      UIManager.showToast('Failed to load application', 'error');
-    } finally {
-      UIManager.hideLoading();
-    }
-
   });
 </script>

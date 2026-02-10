@@ -1,127 +1,230 @@
 <script>
   /**
    * JS_Settings.html
-   * Updated: Lazy Loading Support
+   * Manage System Settings & Configuration (Refactored to Alpine.js)
    */
 
-  // ✅ LAZY LOADING FLAG
-  var isSettingsLoaded = false;
+  document.addEventListener('alpine:init', () => {
+    Alpine.data('settingsModule', () => ({
+      config: {
+        types: [],
+        severities: [],
+        statuses: [],
+        categories: {}
+      },
+      isLoaded: false,
+      isLoading: false,
+      isSaving: false,
+      isSyncing: false,
 
-  // ✅ GLOBAL LOADER FUNCTION (called from changePage)
-  function loadSettings(forceRefresh) {
-    // ✅ LAZY LOADING CHECK
-    if (!forceRefresh && isSettingsLoaded) {
-      console.log("Settings: Using cached data");
-      return;
-    }
+      // Sync State
+      sync: {
+        progress: 0,
+        status: 'Waiting...',
+        logs: [],
+        percent: '0%'
+      },
 
-    SettingsPage.init();
-  }
+      // Temporary inputs
+      newType: '',
+      newSeverity: '',
+      newStatus: '',
+      newCategory: '',
+      newSubCategory: {}, // Map of catName -> inputValue
 
-  const SettingsPage = {
-
-    init() {
-      UIManager.showLoading();
-      Server.call('getUserSettings')
-        .then(settings => {
-          this.render(settings);
-          // ✅ SET LOADED FLAG
-          isSettingsLoaded = true;
-        })
-        .catch(err => UIManager.showToast(err.message, 'error'))
-        .finally(() => UIManager.hideLoading());
-    },
-
-    render(data) {
-      // Profile
-      if (data.profile) {
-        document.getElementById('set-name').value = data.profile.name || '';
-        document.getElementById('set-role').innerText = 'Role: ' + (data.profile.role || 'User');
-        const initials = (data.profile.name || 'JS').substring(0, 2).toUpperCase();
-        document.getElementById('set-avatar-txt').innerText = initials;
-      }
-
-      // Theme
-      const isDark = data.theme === 'dark';
-      document.getElementById('set-theme-toggle').checked = isDark;
-      this.updateThemeLabel(isDark);
-      // Apply theme immediately
-      document.documentElement.setAttribute('data-theme', data.theme);
-
-      // Notifications
-      if (data.notifications) {
-        document.getElementById('set-notif-email').checked = data.notifications.email;
-        document.getElementById('set-notif-line').checked = data.notifications.line;
-      }
-    },
-
-    toggleTheme(isDark) {
-      this.updateThemeLabel(isDark);
-      const theme = isDark ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', theme);
-    },
-
-    updateThemeLabel(isDark) {
-      document.getElementById('set-theme-label').innerText = isDark ? 'Dark Mode' : 'Light Mode';
-    },
-
-    save() {
-      const settings = {
-        theme: document.getElementById('set-theme-toggle').checked ? 'dark' : 'light',
-        notifications: {
-          email: document.getElementById('set-notif-email').checked,
-          line: document.getElementById('set-notif-line').checked
-        },
-        profile: {
-          name: document.getElementById('set-name').value,
-          role: 'Admin' // สมมติว่าแก้ไม่ได้
-        }
-      };
-
-      UIManager.showLoading();
-      Server.call('saveUserSettings', settings)
-        .then(res => {
-          if (res.success) {
-            UIManager.showToast('Settings saved successfully', 'success');
-            // อัปเดตชื่อใน Store (ถ้าจำเป็น)
-            if (typeof Store !== 'undefined' && Store.state) {
-              Store.state.settings = settings;
-              Store.state.currentUser.name = settings.profile.name;
-            }
-          } else {
-            UIManager.showToast('Save failed', 'error');
+      init() {
+        document.addEventListener('page-change', (e) => {
+          if (e.detail.pageId === 'page-settings') {
+            this.onPageShow();
           }
-        })
-        .catch(err => UIManager.showToast(err.message, 'error'))
-        .finally(() => UIManager.hideLoading());
-    }
-  };
+        });
+      },
 
-  /**
-   * ฟังก์ชันสำหรับปุ่ม Sync Calendar (System Management)
-   */
-  async function syncCalendarData() {
-    const btn = document.getElementById('btn-sync-cal');
-    const originalContent = btn.innerHTML;
+      onPageShow() {
+        const container = document.getElementById('page-settings');
+        if (container && container.classList.contains('hidden')) return;
 
-    // 1. เปลี่ยนสถานะปุ่มเป็น Loading
-    btn.disabled = true;
-    btn.innerHTML = `<span class="loading loading-spinner loading-xs"></span> Processing...`;
+        if (!this.isLoaded) {
+          this.loadSettings();
+        }
+      },
 
-    try {
-      // 2. เรียก Backend Function
-      await Server.call('runDailyAutoJob');
+      loadSettings(forceRefresh = false) {
+        // Standardized Loading Pattern
+        const useSilentMode = forceRefresh || Store.state.isAppLoaded;
+        this.isLoading = true;
 
-      // 3. แจ้งเตือนสำเร็จ
-      UIManager.showToast('✅ Sync ข้อมูลตารางแข่งเรียบร้อยแล้ว!', 'success');
+        const options = useSilentMode ? { func: 'getTicketConfig', silent: true } : 'getTicketConfig';
 
-    } catch (err) {
-      console.error(err);
-      UIManager.showToast('❌ เกิดข้อผิดพลาด: ' + err.message, 'error');
-    } finally {
-      // 4. คืนค่าปุ่ม
-      btn.disabled = false;
-      btn.innerHTML = originalContent;
-    }
-  }
+        Server.call(options)
+          .then(res => {
+            if (res && res.success && res.data) {
+              this.config = res.data;
+              // Ensure arrays exist
+              if (!this.config.types) this.config.types = [];
+              if (!this.config.severities) this.config.severities = [];
+              if (!this.config.statuses) this.config.statuses = [];
+              if (!this.config.categories) this.config.categories = {};
+
+              this.isLoaded = true;
+              // Set global app loaded flag
+              if (!Store.state.isAppLoaded) Store.state.isAppLoaded = true;
+              if (forceRefresh) UIManager.showToast("โหลดการตั้งค่าเรียบร้อย", "success");
+            } else {
+              UIManager.showToast("Failed to load settings: " + (res ? res.message : "Unknown"), "error");
+            }
+          })
+          .catch(err => {
+            UIManager.showToast("Error loading settings: " + err, "error");
+          })
+          .finally(() => {
+            this.isLoading = false;
+          });
+      },
+
+      // --- List Management ---
+
+      addItem(listName) {
+        let val = '';
+        if (listName === 'types') { val = this.newType; if (val) this.config.types.push(val); this.newType = ''; }
+        else if (listName === 'statuses') { val = this.newStatus; if (val) this.config.statuses.push(val); this.newStatus = ''; }
+        else if (listName === 'severities') { val = this.newSeverity; if (val) this.config.severities.push(val); this.newSeverity = ''; }
+      },
+
+      deleteItem(listName, index) {
+        if (listName === 'types') this.config.types.splice(index, 1);
+        else if (listName === 'statuses') this.config.statuses.splice(index, 1);
+        else if (listName === 'severities') this.config.severities.splice(index, 1);
+      },
+
+      // --- Category Management ---
+
+      addCategory() {
+        const val = this.newCategory.trim();
+        if (!val) return;
+
+        if (!this.config.categories[val]) {
+          this.config.categories[val] = [];
+          // Force reactivity? Alpine handles object additions if using x-for (value, key) usually.
+          // But adding a new key might require re-assigning or using internal reactivity helper?
+          // Alpine proxies object, so `this.config.categories[val] = []` triggers update.
+          // If not, we might need `this.config.categories = { ...this.config.categories, [val]: [] }`
+          this.config.categories = { ...this.config.categories, [val]: [] };
+        }
+        this.newCategory = '';
+      },
+
+      deleteCategory(cat) {
+        UIManager.showModal({
+          title: 'Delete Category?',
+          body: `Are you sure you want to delete category <b>'${cat}'</b> and all its sub-categories?`,
+          confirmText: 'Yes, Delete',
+          onConfirm: () => {
+            delete this.config.categories[cat];
+            this.config.categories = { ...this.config.categories }; // Trigger Reactivity
+            UIManager.showToast('Category removed.', 'success');
+          }
+        });
+      },
+
+      addSubCategory(cat) {
+        const val = (this.newSubCategory[cat] || '').trim();
+        if (!val) return;
+
+        if (!this.config.categories[cat].includes(val)) {
+          this.config.categories[cat].push(val);
+        }
+        this.newSubCategory[cat] = '';
+      },
+
+      deleteSubCategory(cat, idx) {
+        this.config.categories[cat].splice(idx, 1);
+      },
+
+      // --- Save & Sync ---
+
+      saveSettings() {
+        this.isSaving = true;
+        Server.call('saveTicketConfig', JSON.parse(JSON.stringify(this.config))) // Clone to avoid proxy issues if any
+          .then(res => {
+            if (res.success) {
+              UIManager.showToast('Settings saved successfully', 'success');
+            } else {
+              UIManager.showToast('Error: ' + res.message, 'error');
+            }
+          })
+          .finally(() => {
+            this.isSaving = false;
+          });
+      },
+
+      syncCalendar() {
+        UIManager.showModal({
+          title: "Confirm Sync",
+          body: "Are you sure you want to sync data from Google Calendar? This process may take a few seconds.",
+          confirmText: "Sync Now",
+          onConfirm: () => {
+            this.startSyncProcess();
+          }
+        });
+      },
+
+      startSyncProcess() {
+        this.isSyncing = true;
+        this.sync.progress = 0;
+        this.sync.logs = []; // Clear logs
+
+        const addLog = (msg) => {
+          this.sync.logs.push(`> ${msg}`);
+          // Auto-scroll logic handled in HTML via x-effect or custom logic? 
+          // We'll use x-init on the log container or just trust user scroll.
+        };
+
+        const updateProgress = (val, text) => {
+          this.sync.progress = val;
+          this.sync.percent = val + '%';
+          this.sync.status = text;
+        };
+
+        addLog("Initializing Sync Process...");
+        updateProgress(10, "Connecting...");
+
+        // Simulate UX
+        setTimeout(() => { updateProgress(30, "Fetching Calendar Data..."); addLog("Requesting data from Google Calendar..."); }, 800);
+        setTimeout(() => { updateProgress(50, "Processing Data..."); addLog("Analyzing match events..."); }, 2000);
+
+        Server.call('syncMatches')
+          .then(res => {
+            updateProgress(90, "Finalizing...");
+            addLog("Data received from server.");
+
+            if (res && res.success) {
+              updateProgress(100, "Completed");
+              addLog("SUCCESS: " + (res.message || "Sync Completed"));
+              if (res.log) {
+                res.log.forEach(l => addLog(l));
+              }
+              UIManager.showToast("Sync Completed Successfully", "success");
+            } else {
+              updateProgress(100, "Failed");
+              addLog("ERROR: " + (res ? res.message : "Unknown Error"));
+              UIManager.showToast("Sync Failed", "error");
+            }
+          })
+          .catch(err => {
+            updateProgress(100, "Error");
+            addLog("CRITICAL ERROR: " + err.message);
+            UIManager.showToast("Sync Error: " + err.message, "error");
+          })
+          .finally(() => {
+            setTimeout(() => {
+              this.isSyncing = false; // keep logs visible? 
+              // User can clear manually or just leave it. 
+              // Actually isSyncing just disables the button.
+            }, 1000);
+          });
+      }
+
+    }));
+  });
 </script>

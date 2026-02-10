@@ -5,14 +5,25 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GAS SPA Application</title>
+  <title>ระบบจัดการงาน GAS</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css">
+  <script src="https://cdn.jsdelivr.net/npm/pikaday/pikaday.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/locale/th.js"></script>
+  <script>
+    dayjs.locale('th');
+  </script>
 
   <script>
     tailwind.config = {
@@ -22,18 +33,69 @@
     }
   </script>
   <?!= include('frontend/styles/CSS_Custom'); ?>
+  
+  <style>
+    .pika-single {
+        background: #1f2937; /* สีพื้นหลังดำเทา (Gray-800) */
+        border: 1px solid #374151; /* ขอบสีเทา (Gray-700) */
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        color: #fff;
+        font-family: 'Sarabun', sans-serif;
+    }
+    
+    /* หัวปฏิทิน */
+    .pika-label {
+        background-color: #1f2937;
+        color: #f3f4f6; /* ขาวนวล */
+        font-weight: bold;
+    }
+    .pika-prev, .pika-next {
+        opacity: 0.7;
+    }
+    .pika-prev:hover, .pika-next:hover {
+        opacity: 1;
+        background-color: #374151;
+        border-radius: 4px;
+    }
+
+    /* ตารางวัน */
+    .pika-table th {
+        color: #9ca3af; /* เทาอ่อน */
+    }
+    .pika-button {
+        color: #e5e7eb; /* ตัวเลขวันสีขาว */
+        background: transparent;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .pika-button:hover {
+        background: #374151 !important; /* Hover สีเทาเข้ม */
+        color: #fff !important;
+    }
+
+    /* วันที่เลือก (Selected) */
+    .is-selected .pika-button {
+        background: #3b82f6 !important; /* สีน้ำเงิน (Blue-500) */
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        color: #fff;
+        font-weight: bold;
+    }
+
+    /* วันวันนี้ (Today) */
+    .is-today .pika-button {
+        color: #3b82f6;
+        font-weight: bold;
+    }
+  </style>
 </head>
 
 <body class="bg-base-200 text-base-content font-sans h-screen overflow-hidden">
 
   <div class="drawer lg:drawer-open h-full">
-
     <input id="my-drawer" type="checkbox" class="drawer-toggle" />
-
     <div class="drawer-content flex flex-col h-full overflow-hidden relative">
-
       <?!= include('frontend/components/Part_Navbar'); ?>
-
       <main class="flex-1 overflow-y-auto scroll-smooth relative w-full">
         <?!= include('frontend/pages/Page_Dashboard'); ?>
         <?!= include('frontend/pages/Page_Report'); ?>
@@ -42,14 +104,10 @@
         <?!= include('frontend/pages/Page_Email'); ?>
         <?!= include('frontend/pages/Page_Settings'); ?>
       </main>
-
     </div>
-
     <div class="drawer-side z-50">
       <label for="my-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
-
       <?!= include('frontend/components/Part_Sidebar'); ?>
-
     </div>
   </div>
 
@@ -65,5 +123,4 @@
   <?!= include('frontend/scripts/JS_App'); ?>
 
 </body>
-
 </html>
