@@ -229,7 +229,7 @@
                         return '<div onclick="Dashboard.viewImage(\'' + validUrl + '\')" class="tooltip cursor-pointer hover:scale-110 transition-transform bg-white rounded-lg shadow-sm border border-base-200 p-0.5 inline-block" data-tip="ดูรูป ' + label + '"><img src="' + validUrl + '" class="h-10 w-10 object-cover rounded-md" onerror="this.onerror=null;this.src=\'https://placehold.co/40x40?text=Err\'"></div>';
                     };
 
-                    html += '<tr class="hover:bg-base-50 transition-colors border-b border-base-100 last:border-none"><td class="text-center font-mono font-bold text-base-content/70">' + Dashboard.formatTime(item.time) + '</td><td class="py-3 pl-4"><div class="flex flex-col"><span class="text-[9px] font-bold text-base-content/40 uppercase tracking-widest mb-0.5">' + (item.league || '-') + '</span><div class="font-bold text-sm text-base-content/90 flex flex-wrap items-center gap-1">' + (hasStart ? '<span class="text-primary">' + item.home + '</span>' : item.home) + '<span class="text-[10px] text-base-content/30 px-1 font-normal">vs</span>' + (hasStart ? '<span class="text-primary">' + item.away + '</span>' : item.away) + '</div></div></td><td class="text-center"><span class="badge badge-ghost badge-sm font-mono text-[10px]">' + (item.channel || '-') + '</span></td><td class="text-center align-middle">' + btnProof(item.start_img, 'Start', item.id) + '</td><td class="text-center align-middle">' + btnProof(item.stop_img, 'Stop', item.id) + '</td><td class="text-center align-middle bg-base-50/50">' + statusWidget + '</td><td class="text-center align-middle">' + actionWidget + '</td></tr>';
+                    html += '<tr class="hover:bg-base-50 transition-colors border-b border-base-100 last:border-none h-16"><td class="text-center font-mono font-bold text-base-content/70">' + Dashboard.formatTime(item.time) + '</td><td class="pl-4 align-middle"><div class="flex flex-col justify-center h-full"><span class="text-[9px] font-bold text-base-content/40 uppercase tracking-widest mb-0.5 truncate max-w-[200px]">' + (item.league || '-') + '</span><div class="font-bold text-sm text-base-content/90 flex items-center gap-1 truncate"><div class="truncate max-w-[150px]">' + (hasStart ? '<span class="text-primary">' + item.home + '</span>' : item.home) + '</div><span class="text-[10px] text-base-content/30 px-1 font-normal">vs</span><div class="truncate max-w-[150px]">' + (hasStart ? '<span class="text-primary">' + item.away + '</span>' : item.away) + '</div></div></div></td><td class="text-center"><span class="badge badge-ghost badge-sm font-mono text-[10px]">' + (item.channel || '-') + '</span></td><td class="text-center align-middle">' + btnProof(item.start_img, 'Start', item.id) + '</td><td class="text-center align-middle">' + btnProof(item.stop_img, 'Stop', item.id) + '</td><td class="text-center align-middle bg-base-50/50 h-16">' + statusWidget + '</td><td class="text-center align-middle">' + actionWidget + '</td></tr>';
                 });
                 tbody.innerHTML = html;
             },
@@ -247,14 +247,19 @@
                 getEl('input-edit-id').value = "";
                 getEl('modal-title-work').innerText = "เริ่มงานใหม่ (New Work)";
 
+                // Ensure grid is 3 columns for new work
                 getEl('section-import').classList.remove('hidden');
+                getEl('form-add-work').classList.remove('lg:grid-cols-2');
+                getEl('form-add-work').classList.add('lg:grid-cols-3');
+
                 getEl('section-img-stop').classList.add('hidden');
                 getEl('btn-delete-work').classList.add('hidden');
 
                 getEl('btn-submit-start').innerHTML = '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกและเริ่มงาน</span>';
 
                 var now = new Date();
-                getEl('input-date').value = toInputDate(now);
+                var inputDate = toInputDate(now);
+                getEl('input-date').value = inputDate;
 
                 var HH = String(now.getHours()).padStart(2, '0');
                 var ii = String(now.getMinutes()).padStart(2, '0');
@@ -262,6 +267,11 @@
 
                 this.clearImage('start');
                 this.clearImage('stop');
+
+                // Auto fetch calendar
+                getEl('import-date-picker').value = inputDate;
+                this.fetchCalendarEvents();
+
                 getEl('modal-add-work').showModal();
 
                 this.checkUploadState();
@@ -279,7 +289,25 @@
                 getEl('input-channel').value = item.channel;
 
                 getEl('modal-title-work').innerText = "แก้ไขข้อมูล (Edit)";
+
+                // Hide or Disable Calendar column in Edit Mode? 
+                // Requirement says "Start Work" (New Work) needs it. For Edit, it might be distracting or useful.
+                // Usually Edit is focused on the item. Let's hide it for clarity or make it insensitive.
+                // Converting to 3 column makes hiding one column leave a gap if using grid-cols-3.
+                // If we hide section-import, we have 2 columns left.
+                // We should update the grid class on the form if we hide the column, OR just hide the content.
+                // Simpler: Add 'hidden' to the div, and the grid will auto-adjust if we change grid-cols.
+                // But grid-cols-3 assumes 3 children. If one is hidden, it leaves a gap.
+                // Tailwind grid: if child is hidden, it doesn't take space? No, it doesn't take space in flow, but grid-cols-3 enforces 3 columns?
+                // Actually if a child is hidden (display:none), it does not occupy a grid cell.
+                // However, we need to span the remaining columns or change the grid definition.
+                // Let's just hide it and let the other 2 columns take their place, but we might want them to expand.
+                // If we change class to 'grid-cols-1 lg:grid-cols-2' when in edit mode.
+
                 getEl('section-import').classList.add('hidden');
+                getEl('form-add-work').classList.remove('lg:grid-cols-3');
+                getEl('form-add-work').classList.add('lg:grid-cols-2');
+
                 // getEl('section-img-stop').classList.remove('hidden'); // Let checkUploadState handle this
                 getEl('btn-delete-work').classList.remove('hidden');
                 getEl('btn-submit-start').innerHTML = '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกการแก้ไข</span>';
@@ -503,18 +531,7 @@
             },
 
             toggleCalendar: function () {
-                var content = getEl('import-content');
-                var chevron = getEl('import-chevron');
-                if (content.classList.contains('hidden')) {
-                    content.classList.remove('hidden');
-                    chevron.classList.add('rotate-180');
-                    var currentVal = getEl('input-date').value;
-                    if (currentVal) getEl('import-date-picker').value = currentVal;
-                    this.fetchCalendarEvents();
-                } else {
-                    content.classList.add('hidden');
-                    chevron.classList.remove('rotate-180');
-                }
+                // Function removed as calendar is always visible
             },
 
             fetchCalendarEvents: function () {
@@ -567,10 +584,9 @@
                     getEl('input-away').value = evt.away;
                     getEl('input-channel').value = evt.channel || 'N/A';
 
-                    var importDate = getEl('import-date-picker').value;
                     if (importDate) getEl('input-date').value = importDate;
 
-                    this.toggleCalendar();
+                    // this.toggleCalendar(); // Removed
                     showToastInModal("นำเข้าข้อมูลเรียบร้อย", "success", "modal-add-work");
                     this.checkFormInput();
                 } catch (e) { console.error(e); }
