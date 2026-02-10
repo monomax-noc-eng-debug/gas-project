@@ -391,6 +391,7 @@ function getDailyProofImages(dateStr) {
     const colStart = findCol(["start image", "start", "image in"]);
     const colHome = findCol(["home"]);
     const colAway = findCol(["away"]);
+    const colStop = findCol(["stop image", "stop", "image out"]);
 
     let proofData = { start: [], stop: [] };
     const targetDateObj = dateStr ? new Date(dateStr) : new Date();
@@ -411,9 +412,15 @@ function getDailyProofImages(dateStr) {
       if (matchFound) {
         const home = row[headerMap[colHome]] || "?";
         const away = row[headerMap[colAway]] || "?";
+
         const sUrl = colStart ? row[headerMap[colStart]] : "";
         if (sUrl && String(sUrl).includes("http")) {
           proofData.start.push({ url: sUrl, label: `${home} vs ${away}` });
+        }
+
+        const eUrl = colStop ? row[headerMap[colStop]] : "";
+        if (eUrl && String(eUrl).includes("http")) {
+          proofData.stop.push({ url: eUrl, label: `${home} vs ${away}` });
         }
       }
     }

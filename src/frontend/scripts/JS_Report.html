@@ -3,17 +3,17 @@
      * JS_Report.html
      * Version: Final Stable (Correct Report Format & Logic)
      */
-    window.ReportManager = (function() {
+    window.ReportManager = (function () {
         var _files = { mono: [], ais: [], start: [] };
         var _autoStartUrls = [];
         var _isCustomReporter = false;
         var _picker = null;
         var _isLoading = false;
 
-        var el = function(id) { return document.getElementById(id); };
-        var show = function(id, visible) { var e = el(id); if (e) e.classList.toggle('hidden', !visible); };
-        
-        var formatDriveUrl = function(url) {
+        var el = function (id) { return document.getElementById(id); };
+        var show = function (id, visible) { var e = el(id); if (e) e.classList.toggle('hidden', !visible); };
+
+        var formatDriveUrl = function (url) {
             if (!url) return "";
             if (url.startsWith('data:')) return url;
             try {
@@ -25,13 +25,13 @@
         };
 
         return {
-            init: function() {
-                document.addEventListener('page-change', function(e) {
+            init: function () {
+                document.addEventListener('page-change', function (e) {
                     if (e.detail.pageId === 'page-report') ReportManager.onPageShow();
                 });
             },
 
-            onPageShow: function() {
+            onPageShow: function () {
                 if (!_picker) {
                     var input = el('inputDate');
                     if (input) {
@@ -45,19 +45,19 @@
                             field: input,
                             format: 'YYYY-MM-DD',
                             yearRange: [2020, 2030],
-                            onSelect: function() { if (!_isLoading) ReportManager.autoFetchAll(); }
+                            onSelect: function () { if (!_isLoading) ReportManager.autoFetchAll(); }
                         });
-                        setTimeout(function() { ReportManager.autoFetchAll(); }, 300);
+                        setTimeout(function () { ReportManager.autoFetchAll(); }, 300);
                     }
                 }
             },
 
-            openDatePicker: function() { 
-                if (_picker) { _picker.show(); } 
-                else { var input = el('inputDate'); if(input) input.focus(); }
+            openDatePicker: function () {
+                if (_picker) { _picker.show(); }
+                else { var input = el('inputDate'); if (input) input.focus(); }
             },
 
-            autoFetchAll: function() {
+            autoFetchAll: function () {
                 if (_isLoading) return;
                 var dateVal = el('inputDate').value;
                 if (!dateVal) return;
@@ -67,50 +67,50 @@
 
                 Promise.all([
                     self.fetchTickets(),
-                    self.fetchMatches(), 
+                    self.fetchMatches(),
                     self.fetchStartImages()
-                ]).then(function() {
-                    if(typeof UIManager !== 'undefined') UIManager.showToast("อัปเดตข้อมูลเรียบร้อย", "success");
-                }).catch(function(err){
+                ]).then(function () {
+                    if (typeof UIManager !== 'undefined') UIManager.showToast("อัปเดตข้อมูลเรียบร้อย", "success");
+                }).catch(function (err) {
                     console.error("Fetch Error:", err);
-                }).finally(function() {
+                }).finally(function () {
                     self._setLoading(false);
                 });
             },
 
-            _setLoading: function(loading) {
+            _setLoading: function (loading) {
                 _isLoading = loading;
                 var btn = el('btn-load-data');
                 var input = el('inputDate');
-                if(input) input.disabled = loading;
+                if (input) input.disabled = loading;
                 if (btn) {
                     btn.disabled = loading;
                     btn.innerHTML = loading ? '<span class="loading loading-spinner"></span>' : '<i class="fas fa-sync-alt"></i> โหลดข้อมูล';
                 }
             },
 
-            fetchTickets: function() {
+            fetchTickets: function () {
                 var dateVal = el('inputDate').value;
                 show('loader-ticket', true);
                 show('empty-ticket', false);
                 el('disp-ticket-tbody').innerHTML = '';
 
                 return Server.call({ func: 'getTicketDetails', silent: true }, dateVal)
-                    .then(function(res) {
+                    .then(function (res) {
                         if (res && res.success) {
-                            ['total','new','open','pending','resolved','closed'].forEach(k => {
-                                if(el('disp-ticket-'+k)) el('disp-ticket-'+k).innerText = res.stats[k] || 0;
+                            ['total', 'new', 'open', 'pending', 'resolved', 'closed'].forEach(k => {
+                                if (el('disp-ticket-' + k)) el('disp-ticket-' + k).innerText = res.stats[k] || 0;
                             });
                             el('ticketSummary').value = res.text;
 
                             if (res.list && res.list.length > 0) {
-                                var html = res.list.map(function(t) {
+                                var html = res.list.map(function (t) {
                                     var badgeClass = "badge-ghost";
                                     var s = t.status.toUpperCase();
-                                    if(s.includes('OPEN')) badgeClass = "badge-error text-white";
-                                    else if(s.includes('PENDING')) badgeClass = "badge-warning text-white";
-                                    else if(s.includes('RESOLVED')) badgeClass = "badge-success text-white";
-                                    else if(s.includes('CLOSE')) badgeClass = "badge-neutral text-white";
+                                    if (s.includes('OPEN')) badgeClass = "badge-error text-white";
+                                    else if (s.includes('PENDING')) badgeClass = "badge-warning text-white";
+                                    else if (s.includes('RESOLVED')) badgeClass = "badge-success text-white";
+                                    else if (s.includes('CLOSE')) badgeClass = "badge-neutral text-white";
 
                                     var newBadge = t.isNew ? '<span class="badge badge-primary badge-xs ml-1 font-bold">NEW</span>' : '';
 
@@ -134,21 +134,21 @@
                     .finally(() => show('loader-ticket', false));
             },
 
-            fetchMatches: function() {
+            fetchMatches: function () {
                 var dateVal = el('inputDate').value;
                 show('verify-loader', true);
                 el('verification-tbody').innerHTML = '';
-                
+
                 // 1. Get Stats breakdown (API return data: { "Premier League": 2, ... })
                 var p1 = Server.call({ func: 'getMatchesByDate', silent: true }, dateVal).then(res => {
-                    if(res.success) {
+                    if (res.success) {
                         // ✅ สร้าง Format สรุปสำหรับรายงาน (ตามตัวอย่างที่ขอ)
                         // SV League Volleyball: 11
                         // Premier League: 2
                         var summaryText = "";
                         var breakdownHtml = "";
-                        
-                        if(res.data) {
+
+                        if (res.data) {
                             for (var league in res.data) {
                                 // Text for Report/Preview
                                 summaryText += `${league}: ${res.data[league]}\n`;
@@ -158,35 +158,35 @@
                                 </div>`;
                             }
                         }
-                        
+
                         // Set value to hidden input for submission
                         el('matchSummary').value = summaryText || "ไม่มีรายการแข่งขัน";
-                        
+
                         // Render Badges
                         var bd = el('league-breakdown');
-                        if(bd) bd.innerHTML = breakdownHtml;
+                        if (bd) bd.innerHTML = breakdownHtml;
                     }
                 });
 
                 // 2. Get Verification Table
                 var p2 = Server.call({ func: 'getVerificationReport', silent: true }, dateVal).then(res => {
-                    if(res.success) {
+                    if (res.success) {
                         el('matchTotalValue').value = res.data.stats.totalMatches;
-                        if(el('disp-match-total')) el('disp-match-total').innerText = res.data.stats.totalMatches + " คู่";
-                        
+                        if (el('disp-match-total')) el('disp-match-total').innerText = res.data.stats.totalMatches + " คู่";
+
                         var list = res.data.list || [];
-                        if(list.length === 0) {
+                        if (list.length === 0) {
                             show('verify-empty', true);
                         } else {
                             show('verify-empty', false);
                             var html = list.map(item => {
                                 var db = item.dashboard;
-                                var badge = '';
-                                if (item.status === 'MATCHED') badge = '<span class="badge badge-success badge-xs text-white">Matched</span>';
-                                else if (item.status === 'MISSING') badge = '<span class="badge badge-error badge-xs text-white">Missing</span>';
-                                else badge = '<span class="badge badge-ghost badge-xs">Wait</span>';
+                                var hasEvidence = !!(db.startImg || db.stopImg);
+                                var badge = hasEvidence
+                                    ? '<div class="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center mx-auto"><i class="fas fa-check text-success text-[10px]"></i></div>'
+                                    : '<div class="w-5 h-5 rounded-full bg-base-200 flex items-center justify-center mx-auto"><i class="fas fa-times text-base-content/30 text-[10px]"></i></div>';
 
-                                var imgBtn = (url, icon, color) => url 
+                                var imgBtn = (url, icon, color) => url
                                     ? `<a href="${formatDriveUrl(url)}" target="_blank" class="btn btn-xs btn-square btn-ghost text-${color}"><i class="fas ${icon}"></i></a>`
                                     : `<span class="text-gray-300 text-[10px]">-</span>`;
 
@@ -209,46 +209,70 @@
                 return Promise.all([p1, p2]).finally(() => show('verify-loader', false));
             },
 
-            fetchStartImages: function() {
+            fetchStartImages: function () {
                 var dateVal = el('inputDate').value;
-                var autoList = el('auto-start-list');
-                if(autoList) autoList.innerHTML = '';
+
+                // Reset Start List
+                var autoStartList = el('auto-start-list');
+                if (autoStartList) autoStartList.innerHTML = '';
                 show('auto-start-images', false);
                 _autoStartUrls = [];
 
+                // Reset Mono (Stop) List
+                var autoMonoList = el('auto-mono-list');
+                if (autoMonoList) autoMonoList.innerHTML = '';
+                show('auto-mono-images', false);
+                ReportManager._autoMonoUrls = [];
+
                 return Server.call({ func: 'getDailyProofImages', silent: true }, dateVal).then(res => {
-                    if(res.success && res.data.start && res.data.start.length > 0) {
-                        show('auto-start-images', true);
-                        res.data.start.forEach(img => {
-                            var div = document.createElement('div');
-                            div.className = "relative group cursor-pointer border border-slate-200 rounded overflow-hidden w-12 h-12 flex-shrink-0 transition-all hover:shadow-md";
-                            div.innerHTML = `<img src="${formatDriveUrl(img.url)}" class="object-cover w-full h-full opacity-70 hover:opacity-100 transition-opacity">
-                                             <div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 text-white text-[10px] transition-opacity"><i class="fas fa-plus"></i></div>
-                                             <div class="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white truncate px-1 opacity-0 group-hover:opacity-100 transition-opacity">${img.label}</div>`;
-                            
-                            div.onclick = () => {
-                                if(div.classList.contains('ring-2')) {
-                                    div.classList.remove('ring-2', 'ring-primary');
-                                    _autoStartUrls = _autoStartUrls.filter(u => u !== img.url);
-                                } else {
-                                    div.classList.add('ring-2', 'ring-primary');
-                                    _autoStartUrls.push(img.url);
-                                }
-                            };
-                            autoList.appendChild(div);
-                        });
+                    if (res.success) {
+                        // Render Start Images
+                        if (res.data.start && res.data.start.length > 0) {
+                            show('auto-start-images', true);
+                            res.data.start.forEach(img => {
+                                ReportManager._renderAutoImage(img, autoStartList, _autoStartUrls);
+                            });
+                        }
+
+                        // Render Stop Images (for Mono)
+                        if (res.data.stop && res.data.stop.length > 0) {
+                            show('auto-mono-images', true);
+                            res.data.stop.forEach(img => {
+                                ReportManager._renderAutoImage(img, autoMonoList, ReportManager._autoMonoUrls);
+                            });
+                        }
                     }
                 });
             },
 
-            handleFileUpload: function(input, type) {
+            _renderAutoImage: function (img, container, urlArray) {
+                var div = document.createElement('div');
+                div.className = "relative group cursor-pointer border border-slate-200 rounded overflow-hidden w-12 h-12 flex-shrink-0 transition-all hover:shadow-md";
+                div.innerHTML = `<img src="${formatDriveUrl(img.url)}" class="object-cover w-full h-full opacity-70 hover:opacity-100 transition-opacity">
+                                 <div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 text-white text-[10px] transition-opacity"><i class="fas fa-plus"></i></div>
+                                 <div class="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white truncate px-1 opacity-0 group-hover:opacity-100 transition-opacity">${img.label}</div>`;
+
+                div.onclick = () => {
+                    if (div.classList.contains('ring-2')) {
+                        div.classList.remove('ring-2', 'ring-primary');
+                        const idx = urlArray.indexOf(img.url);
+                        if (idx > -1) urlArray.splice(idx, 1);
+                    } else {
+                        div.classList.add('ring-2', 'ring-primary');
+                        urlArray.push(img.url);
+                    }
+                };
+                container.appendChild(div);
+            },
+
+            handleFileUpload: function (input, type) {
                 if (input.files.length > 0) {
                     _files[type] = _files[type].concat(Array.from(input.files));
                     this.renderFileList(type);
                 }
             },
 
-            triggerPaste: async function(type) {
+            triggerPaste: async function (type) {
                 var areaId = 'paste-area-' + type;
                 var area = el(areaId);
                 try {
@@ -260,45 +284,45 @@
                             const file = new File([blob], `pasted_${type}_${Date.now()}.png`, { type: t });
                             _files[type].push(file);
                             this.renderFileList(type);
-                            if(typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย", "success");
-                            return; 
+                            if (typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย", "success");
+                            return;
                         }
                     }
-                    if(typeof UIManager !== 'undefined') UIManager.showToast("ไม่พบรูปภาพใน Clipboard", "warning");
-                } catch(e) {
+                    if (typeof UIManager !== 'undefined') UIManager.showToast("ไม่พบรูปภาพใน Clipboard", "warning");
+                } catch (e) {
                     console.warn("Clipboard API Error:", e);
-                    if(area) area.focus();
-                    if(typeof UIManager !== 'undefined') UIManager.showToast("กด Ctrl+V เพื่อวางรูป (Fallback)", "info");
+                    if (area) area.focus();
+                    if (typeof UIManager !== 'undefined') UIManager.showToast("กด Ctrl+V เพื่อวางรูป (Fallback)", "info");
                 }
             },
-            
-            setupPasteHandlers: function() {
-               ['mono', 'ais', 'start'].forEach(type => {
-                   var area = el('paste-area-' + type);
-                   if(area && !area.hasAttribute('data-listening')) {
-                       area.addEventListener('paste', (e) => {
-                           var items = (e.clipboardData || e.originalEvent.clipboardData).items;
-                           for (var i = 0; i < items.length; i++) {
-                               if (items[i].type.indexOf("image") !== -1) {
-                                   var blob = items[i].getAsFile();
-                                   _files[type].push(blob);
-                                   this.renderFileList(type);
-                                   if(typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย", "success");
-                                   e.preventDefault();
-                                   return;
-                               }
-                           }
-                       });
-                       area.setAttribute('data-listening', 'true');
-                   }
-               });
+
+            setupPasteHandlers: function () {
+                ['mono', 'ais', 'start'].forEach(type => {
+                    var area = el('paste-area-' + type);
+                    if (area && !area.hasAttribute('data-listening')) {
+                        area.addEventListener('paste', (e) => {
+                            var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                            for (var i = 0; i < items.length; i++) {
+                                if (items[i].type.indexOf("image") !== -1) {
+                                    var blob = items[i].getAsFile();
+                                    _files[type].push(blob);
+                                    this.renderFileList(type);
+                                    if (typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย", "success");
+                                    e.preventDefault();
+                                    return;
+                                }
+                            }
+                        });
+                        area.setAttribute('data-listening', 'true');
+                    }
+                });
             },
-            
-            renderFileList: function(type) {
+
+            renderFileList: function (type) {
                 var listId = type + 'FileList';
                 var container = el(listId);
-                if(!container) return;
-                
+                if (!container) return;
+
                 container.innerHTML = '';
                 _files[type].forEach((file, idx) => {
                     var div = document.createElement('div');
@@ -307,39 +331,41 @@
                                      <button onclick="ReportManager.removeFile('${type}',${idx})" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-0.5 rounded transition-colors"><i class="fas fa-times"></i></button>`;
                     container.appendChild(div);
                 });
-                
+
                 var emptyId = type === 'mono' ? 'mono-empty' : (type === 'ais' ? 'ais-empty-upload' : null);
-                if(emptyId) show(emptyId, _files[type].length === 0);
+                if (emptyId) show(emptyId, _files[type].length === 0);
             },
-            
-            removeFile: function(type, index) {
+
+            removeFile: function (type, index) {
                 _files[type].splice(index, 1);
                 this.renderFileList(type);
             },
 
-            handleReporterChange: function(val) {
+            handleReporterChange: function (val) {
                 var isOther = (val === 'OTHER');
                 _isCustomReporter = isOther;
                 show('wrapper-reporter-other', isOther);
-                if(isOther) setTimeout(() => el('reporterOther').focus(), 100);
+                if (isOther) setTimeout(() => el('reporterOther').focus(), 100);
             },
-            
-            resetReporter: function() {
+
+            resetReporter: function () {
                 el('reporterSelect').value = '';
                 el('reporterOther').value = '';
                 show('wrapper-reporter-other', false);
             },
 
-            toggleAisActions: function(val) {
+            toggleAisActions: function (val) {
                 var hasAis = (val !== 'ไม่มี');
                 show('proof-ais-box', hasAis);
                 show('ais-actions', hasAis);
             },
 
-            submitForm: function(mode) {
+            submitForm: function (mode) {
                 var reporter = _isCustomReporter ? el('reporterOther').value : el('reporterSelect').value;
                 if (!reporter) return UIManager.showToast("ระบุชื่อผู้รายงาน", "warning");
-                if (_files.mono.length === 0) return UIManager.showToast("กรุณาแนบรูป Mono", "error");
+
+                var hasMono = (_files.mono && _files.mono.length > 0) || (ReportManager._autoMonoUrls && ReportManager._autoMonoUrls.length > 0);
+                if (!hasMono) return UIManager.showToast("กรุณาแนบรูป Mono หรือเลือกจาก Dashboard", "error");
 
                 var btn = el('btn-submit-report');
                 if (mode === 'send') { btn.disabled = true; el('spin-btn-send').classList.remove('hidden'); }
@@ -367,6 +393,7 @@
                     },
                     proofImages: {},
                     autoStartUrls: _autoStartUrls,
+                    autoMonoUrls: ReportManager._autoMonoUrls,
                     isDraft: (mode === 'preview')
                 };
 
@@ -376,10 +403,10 @@
                         var i = new Image(); i.src = e.target.result;
                         i.onload = () => {
                             var c = document.createElement('canvas'); var ctx = c.getContext('2d');
-                            var m = 1000, w=i.width, h=i.height;
-                            if(w>h && w>m){h*=m/w;w=m} else if(h>m){w*=m/h;h=m}
-                            c.width=w; c.height=h; ctx.drawImage(i,0,0,w,h);
-                            res(c.toDataURL('image/jpeg',0.7).split(',')[1]);
+                            var m = 1000, w = i.width, h = i.height;
+                            if (w > h && w > m) { h *= m / w; w = m } else if (h > m) { w *= m / h; h = m }
+                            c.width = w; c.height = h; ctx.drawImage(i, 0, 0, w, h);
+                            res(c.toDataURL('image/jpeg', 0.7).split(',')[1]);
                         }
                     }
                 });
@@ -391,9 +418,13 @@
                             if (_files.ais.length) formData.proofImages.ais = await Promise.all(_files.ais.map(compress));
                             if (_files.start.length) formData.proofImages.start = await Promise.all(_files.start.map(compress));
                         }
-                        
+
+                        // Add auto-selected images to proofImages if manually uploaded proofs are empty?
+                        // Actually, the backend should handle autoStartUrls/autoMonoUrls separately or merge them.
+                        // I'm sending them as separate fields in formData.
+
                         var res = await Server.call({ func: 'processShiftReport' }, formData);
-                        
+
                         if (res && res.success) {
                             if (res.isPreview) {
                                 el('chatPreviewText').innerText = res.chatPreview;
@@ -402,10 +433,12 @@
                                 UIManager.showToast("ส่งรายงานสำเร็จ", "success");
                                 _files = { mono: [], ais: [], start: [] };
                                 _autoStartUrls = [];
+                                ReportManager._autoMonoUrls = [];
                                 this.renderFileList('mono');
                                 this.renderFileList('ais');
                                 this.renderFileList('start');
                                 el('auto-start-list').innerHTML = ''; show('auto-start-images', false);
+                                el('auto-mono-list').innerHTML = ''; show('auto-mono-images', false);
                                 el('transferReport').value = "";
                             }
                         } else UIManager.showToast(res ? res.error : "Unknown Error", "error");
@@ -413,12 +446,12 @@
                     finally { btn.disabled = false; el('spin-btn-send').classList.add('hidden'); }
                 })();
             },
-            
-            confirmSend: function() { el('preview_modal').close(); this.submitForm('send'); }
+
+            confirmSend: function () { el('preview_modal').close(); this.submitForm('send'); }
         };
     })();
 
-    if(window.ReportManager) {
+    if (window.ReportManager) {
         window.ReportManager.init();
         setTimeout(() => window.ReportManager.setupPasteHandlers(), 1000);
     }
