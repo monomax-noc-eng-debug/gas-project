@@ -1,70 +1,87 @@
-<div id="page-history" x-data="historyModule" x-init="init()"
-  class="page-section hidden p-6 fade-in h-full flex flex-col overflow-y-auto">
-  <div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-bold flex items-center gap-2">
-      <i class="fas fa-history text-base-content/50"></i> ประวัติย้อนหลัง (History)
-    </h2>
-    <button class="btn btn-sm btn-ghost" @click="loadData(true)" :disabled="isLoading">
-      <i class="fas fa-sync-alt" :class="{'fa-spin': isLoading}"></i>
-      <span x-text="isLoading ? 'กำลังโหลด...' : 'รีเฟรช'"></span>
+<div id="page-history" class="page-section hidden w-full h-full relative p-4 bg-base-200 flex flex-col gap-4">
+  <!-- Header -->
+  <div
+    class="flex justify-between items-center bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="bg-primary/10 p-2 rounded-xl text-primary"><i class="fas fa-history text-xl"></i></div>
+      <div>
+        <h2 class="text-base font-bold text-gray-800">ประวัติรายงาน (History)</h2>
+        <p class="text-[10px] text-gray-400">รายการส่งรายงานย้อนหลัง</p>
+      </div>
+    </div>
+    <button onclick="HistoryManager.loadHistory(true)"
+      class="btn btn-sm btn-ghost btn-circle text-base-content/60 hover:text-primary tooltip tooltip-bottom"
+      data-tip="รีเฟรช">
+      <i class="fas fa-sync-alt" id="hist-refresh-icon"></i>
     </button>
   </div>
 
-  <div class="card bg-base-100 shadow-sm border border-base-200 relative">
-    <!-- Loading Overlay -->
-    <div x-show="isLoading" x-transition.opacity.duration.200ms
-      class="absolute inset-0 flex items-center justify-center transition-all duration-200 z-10 rounded-xl"
-      :class="data.length === 0 ? 'bg-base-100' : 'bg-base-100/60 backdrop-blur-[1px]'">
-      <div class="flex flex-col items-center gap-2">
-        <span class="loading loading-spinner loading-lg text-primary"></span>
-        <span class="text-sm text-base-content/60 animate-pulse">กำลังโหลดข้อมูล...</span>
-      </div>
+  <!-- Content -->
+  <div class="card bg-white shadow-sm border border-base-300 flex-1 rounded-2xl overflow-hidden relative">
+    <div id="hist-loader"
+      class="absolute inset-0 bg-white/80 z-20 flex flex-col items-center justify-center hidden backdrop-blur-[1px]">
+      <span class="loading loading-spinner loading-lg text-primary"></span>
+      <p class="mt-2 text-sm font-medium text-base-content/60 animate-pulse">กำลังโหลดข้อมูล...</p>
     </div>
-    <div class="overflow-x-auto">
-      <table class="table table-sm">
-        <thead class="bg-base-200">
+
+    <div class="overflow-auto h-full w-full">
+      <table class="table table-sm w-full table-pin-rows">
+        <thead class="bg-gray-50 text-gray-500 font-medium z-10">
           <tr>
-            <th class="w-32">วันที่</th>
+            <th class="w-24 text-center">วันที่</th>
+            <th class="w-20 text-center">กะ (Shift)</th>
             <th>ผู้รายงาน</th>
-            <th class="w-24">สถานะ</th>
-            <th class="w-24">ลิงก์</th>
+            <th class="w-24 text-center">ส่งกลุ่ม</th>
+            <th class="w-20 text-center">รายละเอียด</th>
           </tr>
         </thead>
-        <tbody id="history-table-body">
-          <!-- Empty State -->
-          <template x-if="!isLoading && data.length === 0">
-            <tr>
-              <td colspan="4" class="text-center py-8 text-base-content/50">ไม่พบประวัติการส่งรายงาน</td>
-            </tr>
-          </template>
-
-          <!-- Data Loop -->
-          <template x-for="item in data" :key="item.date + item.name">
-            <tr class="hover border-b border-base-200">
-              <td class="font-mono text-xs text-base-content/70" x-text="item.date"></td>
-              <td class="font-medium" x-text="item.name"></td>
-              <td>
-                <div class="badge gap-2 font-bold" :class="getGroupLabel(item.group).class">
-                  <i x-show="getGroupLabel(item.group).icon" class="fas text-[10px]"
-                    :class="getGroupLabel(item.group).icon"></i>
-                  <span x-text="getGroupLabel(item.group).text"></span>
-                </div>
-              </td>
-              <td>
-                <template x-if="item.pdfUrl && item.pdfUrl !== '#'">
-                  <a :href="item.pdfUrl" target="_blank"
-                    class="btn btn-xs btn-ghost text-error hover:bg-error/10 transition-colors">
-                    <i class="fas fa-file-pdf"></i> PDF
-                  </a>
-                </template>
-                <template x-if="!item.pdfUrl || item.pdfUrl === '#'">
-                  <span class="text-base-content/20">-</span>
-                </template>
-              </td>
-            </tr>
-          </template>
-        </tbody>
+        <tbody id="hist-table-body" class="bg-white divide-y divide-gray-100"></tbody>
       </table>
+      <div id="hist-empty" class="hidden flex flex-col items-center justify-center h-40 text-gray-300 text-xs">
+        <i class="fas fa-history text-2xl mb-2 opacity-50"></i>
+        ยังไม่มีประวัติ
+      </div>
     </div>
   </div>
+
+  <!-- Modal Detail (Redesigned) -->
+  <dialog id="modal-hist-detail" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box p-0 rounded-2xl max-w-lg overflow-hidden shadow-2xl">
+      <!-- Gradient Header -->
+      <div class="bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 px-5 py-4 relative overflow-hidden">
+        <div
+          class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0yMCAyMGg0MHY0MEgyMFYyMHoiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iLjAyIi8+PC9nPjwvc3ZnPg==')] opacity-50">
+        </div>
+        <div class="flex justify-between items-start relative z-10">
+          <div>
+            <h3 class="font-bold text-lg text-white flex items-center gap-2">
+              <i class="fas fa-file-alt text-blue-300"></i> รายละเอียดรายงาน
+            </h3>
+            <p id="hist-detail-subtitle" class="text-xs text-slate-400 mt-0.5"></p>
+          </div>
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost text-white/50 hover:text-white hover:bg-white/10">✕</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Info Bar -->
+      <div id="hist-detail-info" class="bg-slate-50 border-b border-slate-100 px-5 py-2.5"></div>
+
+      <!-- Body Content -->
+      <div class="p-5 overflow-y-auto max-h-[55vh] space-y-3" id="hist-detail-content">
+        <!-- Dynamic Content -->
+      </div>
+
+      <!-- Footer -->
+      <div id="hist-detail-footer"
+        class="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div id="hist-pdf-area"></div>
+        <form method="dialog">
+          <button class="btn btn-sm btn-ghost text-slate-500">ปิด</button>
+        </form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop bg-black/50 backdrop-blur-[1px]"><button>close</button></form>
+  </dialog>
 </div>

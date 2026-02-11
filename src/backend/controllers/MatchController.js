@@ -262,12 +262,18 @@ const MatchController = (() => {
           const url = _uploadImage(data.startImageBase64, "image/jpeg", fileName, targetDate);
           updateMap["Start Image"] = url;
           updateMap["Image In"] = url;
+        } else if (data.clearStartImage) {
+          updateMap["Start Image"] = "";
+          updateMap["Image In"] = "";
         }
         if (data.stopImageBase64) {
           const fileName = `Match_${data.id}_STOP_Edit.jpg`;
           const url = _uploadImage(data.stopImageBase64, "image/jpeg", fileName, targetDate);
           updateMap["Stop Image"] = url;
           updateMap["Image Out"] = url;
+        } else if (data.clearStopImage) {
+          updateMap["Stop Image"] = "";
+          updateMap["Image Out"] = "";
         }
 
         const success = SheetService.update(getSheetName(), data.id, updateMap, "Match ID", getDbId());

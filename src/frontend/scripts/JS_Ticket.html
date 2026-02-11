@@ -14,16 +14,15 @@
 
         // --- Public Methods ---
         return {
+            // Called once on DOMContentLoaded
             init: function () {
                 console.log("🚀 Ticket Manager Initialized");
-                this.loadConfig(); // Load config first
+                this.loadConfig();
+            },
 
-                // Listen for page show to refresh data
-                document.addEventListener('page-change', (e) => {
-                    if (e.detail.pageId === 'page-ticket') {
-                        this.loadTickets();
-                    }
-                });
+            // ✅ Called automatically by Router when page-ticket is shown
+            onShow: function () {
+                this.loadTickets();
             },
 
             loadConfig: function () {
@@ -105,38 +104,69 @@
             },
 
             renderRow: function (row, index) {
-                // row structure: [timestamp, date, id, type, status, severity, cat, sub, subj, detail, action, res, resp, assign, remark]
                 const id = row[2];
                 const date = dayjs(row[1]).format('DD/MM/YY');
-                const type = row[3];
-                const status = row[4];
-                const severity = row[5];
+                const type = row[3] || '';
+                const status = row[4] || '';
+                const severity = row[5] || 'Normal';
                 const subject = row[8] || '(No Subject)';
 
-                // Badges
-                const statusClass = this.getStatusClass(status);
-                const sevClass = this.getSeverityClass(severity);
+                // Jira-style status lozenge class
+                const statusLower = status.toLowerCase();
+                let lozengeClass = 'default';
+                if (statusLower.includes('open')) lozengeClass = 'open';
+                else if (statusLower.includes('pending') || statusLower.includes('wait')) lozengeClass = 'pending';
+                else if (statusLower.includes('resolved') || statusLower.includes('fix')) lozengeClass = 'resolved';
+                else if (statusLower.includes('close')) lozengeClass = 'closed';
+
+                // Severity dot class
+                const sevLower = severity.toLowerCase();
+                let sevDotClass = 'normal';
+                if (sevLower.includes('critical')) sevDotClass = 'critical';
+                else if (sevLower.includes('high')) sevDotClass = 'high';
+                else if (sevLower.includes('medium')) sevDotClass = 'medium';
+                else if (sevLower.includes('low')) sevDotClass = 'low';
+
+                // Type badge
+                const typeLower = type.toLowerCase();
+                const typeIcon = typeLower.includes('incident') ? 'fas fa-bolt' : 'fas fa-arrow-up';
+                const typeColorClass = typeLower.includes('incident') ? 'incident' : 'request';
 
                 return `
-                <tr class="hover:bg-base-100 transition-colors border-b border-base-200/50">
-                    <td class="text-center opacity-50 font-mono">${index + 1}</td>
-                    <td class="text-center text-xs opacity-70">${date}</td>
-                    <td class="text-center font-mono font-bold text-xs">
-                        <span class="badge badge-ghost badge-sm text-[10px]">${id}</span>
+                <tr class="ticket-row border-b border-gray-100">
+                    <td class="text-center text-gray-300 font-mono text-[10px] px-3">${index + 1}</td>
+                    <td class="px-3">
+                        <span class="ticket-id-link text-[11px] cursor-pointer" onclick="TicketManager.openModal('EDIT', '${id}')">${id}</span>
                     </td>
-                    <td>
-                        <div class="font-medium truncate max-w-[250px]" title="${subject}">${subject}</div>
+                    <td class="px-3">
+                        <div class="font-medium text-xs text-gray-800 line-clamp-1 block" title="${subject}">${subject}</div>
                     </td>
-                    <td class="text-center text-xs">${type}</td>
-                    <td class="text-center"><span class="badge ${sevClass} badge-sm badge-outline">${severity}</span></td>
-                    <td class="text-center"><span class="badge ${statusClass} badge-sm">${status}</span></td>
-                    <td class="text-center">
-                        <div class="join">
-                            <button onclick="TicketManager.openModal('EDIT', '${id}')" class="btn btn-ghost btn-xs join-item text-warning hover:bg-warning/10">
-                                <i class="fas fa-edit"></i>
+                    <td class="text-center px-2">
+                        <span class="type-badge ${typeColorClass}">
+                            <i class="${typeIcon} text-[9px]"></i> ${type}
+                        </span>
+                    </td>
+                    <td class="text-center px-2">
+                        <div class="flex items-center justify-center gap-1.5">
+                            <span class="severity-dot ${sevDotClass}"></span>
+                            <span class="text-[10px] text-gray-500">${severity}</span>
+                        </div>
+                    </td>
+                    <td class="text-center px-2">
+                        <span class="status-lozenge ${lozengeClass}">${status}</span>
+                    </td>
+                    <td class="text-center text-[10px] text-gray-400 font-mono px-2">${date}</td>
+                    <td class="text-center px-2">
+                        <div class="flex items-center justify-center gap-0.5">
+                            <button onclick="event.stopPropagation(); TicketManager.openModal('EDIT', '${id}')"
+                                class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md"
+                                title="Edit">
+                                <i class="fas fa-pen text-[10px]"></i>
                             </button>
-                            <button onclick="TicketManager.deleteTicket('${id}')" class="btn btn-ghost btn-xs join-item text-error hover:bg-error/10">
-                                <i class="fas fa-trash-alt"></i>
+                            <button onclick="event.stopPropagation(); TicketManager.deleteTicket('${id}')"
+                                class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md"
+                                title="Delete">
+                                <i class="fas fa-trash text-[10px]"></i>
                             </button>
                         </div>
                     </td>
@@ -331,4 +361,10 @@
 
         };
     })();
+
+    // Register with Router for lifecycle hooks
+    document.addEventListener('DOMContentLoaded', () => {
+        Router.register('page-ticket', TicketManager);
+        TicketManager.init();
+    });
 </script>

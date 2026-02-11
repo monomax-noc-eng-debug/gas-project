@@ -1,67 +1,207 @@
 <script>
    /**
     * JS_History.html
-    * จัดการหน้าประวัติรายงาน (Refactored to Alpine.js)
+    * History Manager for Viewing Shift Reports
     */
+   const HistoryManager = (function () {
+      const getEl = (id) => document.getElementById(id);
 
-   document.addEventListener('alpine:init', () => {
-      Alpine.data('historyModule', () => ({
-         isLoading: false,
-         data: [],
-         isLoaded: false,
-
-         init() {
-            document.addEventListener('page-change', (e) => {
-               if (e.detail.pageId === 'page-history') {
-                  this.onPageShow();
-               }
-            });
+      return {
+         // ✅ Called automatically by Router when page-history is shown
+         onShow: function () {
+            this.loadHistory();
          },
 
-         onPageShow() {
-            const container = document.getElementById('page-history');
-            if (container && container.classList.contains('hidden')) return;
+         loadHistory: function (force) {
+            const loader = getEl('hist-loader');
+            const tbody = getEl('hist-table-body');
+            const icon = getEl('hist-refresh-icon');
 
-            if (!this.isLoaded) {
-               this.loadData();
-            }
-         },
+            // If already loaded and not force, skip unless empty?
+            // Actually, let's just create a simple "isLoaded" flag if we want to optimize later.
+            // For now, load every time page is shown to be safe, or check if table has rows.
+            if (!force && tbody && tbody.children.length > 0) return;
 
-         loadData(forceRefresh = false) {
-            if (!forceRefresh && this.isLoaded) return;
+            if (loader) loader.classList.remove('hidden');
+            if (icon) icon.classList.add('fa-spin');
 
-            this.isLoading = true;
-
-            // Use silent loading if app is already loaded to avoid global spinner covering everything
-            // BUT here we want to show local spinner, so we might not need global silent if we handle local state
-            const options = Store.state.isAppLoaded ? { func: 'getShiftHistory', silent: true } : 'getShiftHistory';
-
-            Server.call(options)
-               .then((data) => {
-                  this.data = data || [];
-                  this.isLoaded = true;
-                  // Set global app loaded flag
-                  if (!Store.state.isAppLoaded) Store.state.isAppLoaded = true;
-                  if (forceRefresh) UIManager.showToast("อัปเดตข้อมูลเรียบร้อย", "success");
-                  this.isLoading = false;
+            Server.call({ func: 'getShiftHistory', silent: true })
+               .then(res => {
+                  if (res.success) {
+                     this.renderTable(res.data);
+                     if (force && typeof UIManager !== 'undefined') UIManager.showToast("อัปเดตข้อมูลเรียบร้อย", "success");
+                  } else {
+                     if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="text-center text-error py-4">${res.error}</td></tr>`;
+                     if (typeof UIManager !== 'undefined') UIManager.showToast(res.error, "error");
+                  }
                })
-               .catch((err) => {
-                  console.error(err);
-                  this.isLoading = false;
-                  // UIManager.showToast(err.message, 'error'); // Optional
+               .catch(e => {
+                  console.error(e);
+                  if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="text-center text-error py-4">Network Error</td></tr>`;
+               })
+               .finally(() => {
+                  if (loader) loader.classList.add('hidden');
+                  if (icon) icon.classList.remove('fa-spin');
                });
          },
 
-         // Helper for group label class/icon
-         getGroupLabel(group) {
-            if (group === 'group_all') {
-               return { class: 'badge-success badge-outline border-2', icon: 'fa-file-alt', text: 'Report' };
-            } else if (group === 'group_dev') {
-               return { class: 'badge-primary badge-outline border-2', icon: 'fa-code', text: 'DEV' };
-            } else {
-               return { class: 'badge-ghost opacity-50', icon: '', text: group || '-' };
+         renderTable: function (data) {
+            const tbody = getEl('hist-table-body');
+            const empty = getEl('hist-empty');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            if (!data || data.length === 0) {
+               if (empty) empty.classList.remove('hidden');
+               return;
+            }
+            if (empty) empty.classList.add('hidden');
+
+            const html = data.map(item => {
+               const itemJson = encodeURIComponent(JSON.stringify(item));
+
+               let groupBadge = '<span class="badge badge-ghost badge-xs opacity-50">-</span>';
+               if (item.chatTarget === 'group_all') groupBadge = '<span class="badge badge-success badge-outline badge-xs gap-1"><i class="fas fa-users"></i> All</span>';
+               if (item.chatTarget === 'group_dev') groupBadge = '<span class="badge badge-primary badge-outline badge-xs gap-1"><i class="fas fa-code"></i> Dev</span>';
+
+               return `<tr class="hover:bg-base-50 transition-colors">
+                        <td class="text-center font-mono text-xs text-slate-500">${item.date}</td>
+                        <td class="text-center text-xs"><span class="badge badge-ghost badge-sm text-[10px] whitespace-nowrap">${item.shift}</span></td>
+                        <td class="text-xs font-bold text-slate-700">${item.reporter}</td>
+                        <td class="text-center">${groupBadge}</td>
+                        <td class="text-center">
+                            <button onclick="HistoryManager.viewDetail('${itemJson}')" class="btn btn-xs btn-square btn-ghost text-primary hover:bg-primary/10 transition-colors"><i class="fas fa-search"></i></button>
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            tbody.innerHTML = html;
+         },
+
+         viewDetail: function (json) {
+            try {
+               const item = JSON.parse(decodeURIComponent(json));
+               const container = getEl('hist-detail-content');
+               const infoBar = getEl('hist-detail-info');
+               const subtitle = getEl('hist-detail-subtitle');
+               const pdfArea = getEl('hist-pdf-area');
+               if (!container) return;
+
+               // --- Subtitle ---
+               if (subtitle) {
+                  subtitle.textContent = item.date + ' • ' + (item.shift || '-');
+               }
+
+               // --- Info Bar ---
+               if (infoBar) {
+                  let groupBadge = '<span class="badge badge-ghost badge-xs">-</span>';
+                  if (item.chatTarget === 'group_all') groupBadge = '<span class="badge badge-success badge-sm gap-1 text-[10px]"><i class="fas fa-users"></i> All</span>';
+                  if (item.chatTarget === 'group_dev') groupBadge = '<span class="badge badge-primary badge-sm gap-1 text-[10px]"><i class="fas fa-code"></i> Dev</span>';
+
+                  infoBar.innerHTML = `
+                     <div class="flex items-center justify-between text-xs">
+                        <div class="flex items-center gap-3">
+                           <div class="flex items-center gap-1.5 text-slate-600">
+                              <div class="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                                 <i class="fas fa-user text-[9px] text-primary"></i>
+                              </div>
+                              <span class="font-bold text-slate-800">${item.reporter}</span>
+                           </div>
+                           <span class="text-slate-300">|</span>
+                           <div class="flex items-center gap-1 text-slate-500">
+                              <i class="fas fa-calendar-alt text-[9px]"></i>
+                              <span class="font-mono">${item.date}</span>
+                           </div>
+                           <span class="text-slate-300">|</span>
+                           <div class="flex items-center gap-1 text-slate-500">
+                              <i class="fas fa-clock text-[9px]"></i>
+                              <span>${item.shift}</span>
+                           </div>
+                        </div>
+                        <div>ส่ง: ${groupBadge}</div>
+                     </div>
+                  `;
+               }
+
+               // --- Body Content ---
+               const sections = [];
+
+               // Ticket Section
+               sections.push(`
+                  <div class="bg-gradient-to-br from-blue-50 to-indigo-50/50 p-3.5 rounded-xl border border-blue-100/80 shadow-sm">
+                     <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] font-bold text-blue-500 uppercase flex items-center gap-1.5">
+                           <span class="w-5 h-5 rounded-lg bg-blue-500/10 flex items-center justify-center"><i class="fas fa-ticket-alt text-[9px] text-blue-500"></i></span>
+                           สรุป Ticket
+                        </span>
+                        <span class="badge badge-sm bg-blue-500/10 text-blue-600 border-blue-200 font-mono">${item.ticketTotal || 0} รายการ</span>
+                     </div>
+                     <div class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed font-mono bg-white/60 rounded-lg p-2.5 border border-blue-100/50">${item.ticketSummary || '<span class="text-slate-400 italic">ไม่มีข้อมูล</span>'}</div>
+                  </div>
+               `);
+
+               // Match Section
+               sections.push(`
+                  <div class="bg-gradient-to-br from-amber-50 to-orange-50/50 p-3.5 rounded-xl border border-amber-100/80 shadow-sm">
+                     <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] font-bold text-amber-600 uppercase flex items-center gap-1.5">
+                           <span class="w-5 h-5 rounded-lg bg-amber-500/10 flex items-center justify-center"><i class="fas fa-futbol text-[9px] text-amber-500"></i></span>
+                           สรุปการแข่งขัน
+                        </span>
+                     </div>
+                     <div class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed font-mono bg-white/60 rounded-lg p-2.5 border border-amber-100/50">${item.matchSummary || '<span class="text-slate-400 italic">ไม่มีข้อมูล</span>'}</div>
+                  </div>
+               `);
+
+               // Transfer Section (conditional)
+               if (item.transferReport) {
+                  sections.push(`
+                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 p-3.5 rounded-xl border border-gray-200/80 shadow-sm">
+                        <div class="flex items-center gap-1.5 mb-2">
+                           <span class="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5">
+                              <span class="w-5 h-5 rounded-lg bg-gray-500/10 flex items-center justify-center"><i class="fas fa-clipboard text-[9px] text-gray-400"></i></span>
+                              งานฝาก / รับส่ง
+                           </span>
+                        </div>
+                        <div class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed font-mono bg-white/60 rounded-lg p-2.5 border border-gray-100">${item.transferReport}</div>
+                     </div>
+                  `);
+               }
+
+               container.innerHTML = sections.join('');
+
+               // --- PDF Button ---
+               if (pdfArea) {
+                  if (item.pdfUrl) {
+                     pdfArea.innerHTML = `
+                        <a href="${item.pdfUrl}" target="_blank" rel="noopener noreferrer"
+                           class="btn btn-sm bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white border-0 shadow-md shadow-red-200 gap-2 transition-all hover:shadow-lg hover:shadow-red-300 hover:-translate-y-0.5">
+                           <i class="fas fa-file-pdf text-sm"></i>
+                           <span>เปิดรายงาน PDF</span>
+                           <i class="fas fa-external-link-alt text-[9px] opacity-70"></i>
+                        </a>
+                     `;
+                  } else {
+                     pdfArea.innerHTML = `
+                        <span class="text-[10px] text-slate-400 flex items-center gap-1">
+                           <i class="fas fa-file-pdf opacity-40"></i> ไม่มีไฟล์ PDF
+                        </span>
+                     `;
+                  }
+               }
+
+               const modal = getEl('modal-hist-detail');
+               if (modal) modal.showModal();
+            } catch (e) {
+               console.error("View Detail Error", e);
+               if (typeof UIManager !== 'undefined') UIManager.showToast("เกิดข้อผิดพลาดในการแสดงผล", "error");
             }
          }
-      }));
+      };
+   })();
+
+   // Register with Router for lifecycle hooks
+   document.addEventListener('DOMContentLoaded', () => {
+      Router.register('page-history', HistoryManager);
    });
 </script>

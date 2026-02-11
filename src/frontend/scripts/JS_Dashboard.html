@@ -11,6 +11,7 @@
         let _allWorkData = [];
         let _pickers = {};
         let _currentBlobs = { start: null, stop: null, 'stop-quick': null };
+        let _clearedDbImages = { start: false, stop: false };
         let _editMode = 'all'; // 'new', 'all', 'start', 'stop'
 
         // --- Date Helpers ---
@@ -314,6 +315,7 @@
 
                 this.clearImage('start');
                 this.clearImage('stop');
+                _clearedDbImages = { start: false, stop: false }; // Reset flags for new edit session
 
                 if (item.start_img) {
                     getEl('preview-start-img').src = formatDriveUrl(item.start_img);
@@ -410,6 +412,10 @@
                     const promises = [];
                     if (_currentBlobs['start']) promises.push(compressImage(_currentBlobs['start']).then(b64 => payload.startImageBase64 = b64));
                     if (_currentBlobs['stop']) promises.push(compressImage(_currentBlobs['stop']).then(b64 => payload.stopImageBase64 = b64));
+
+                    // ✅ Send clear flags if user removed existing DB images
+                    if (_clearedDbImages.start && !_currentBlobs['start']) payload.clearStartImage = true;
+                    if (_clearedDbImages.stop && !_currentBlobs['stop']) payload.clearStopImage = true;
 
                     Promise.all(promises).then(() => { sendData(payload, 'apiUpdateWorkItem'); });
                 } else {
@@ -548,7 +554,7 @@
                     .then(function (res) {
                         loader.classList.add('hidden');
                         if (res && res.success) Dashboard.renderImportList(res.data);
-                        else list.innerHTML = '<div class="text-error text-center text-xs p-4">' + (res ? res.message : "No Data") + '</div>';
+                        else list.innerHTML = '<div class="text-error text-center text-xs p-4">' + (res ? (res.error || res.message || "No Data") : "No Data") + '</div>';
                     })
                     .catch(function (err) {
                         loader.classList.add('hidden');
@@ -584,6 +590,7 @@
                     getEl('input-away').value = evt.away;
                     getEl('input-channel').value = evt.channel || 'N/A';
 
+                    var importDate = getEl('import-date-picker') ? getEl('import-date-picker').value : '';
                     if (importDate) getEl('input-date').value = importDate;
 
                     // this.toggleCalendar(); // Removed
@@ -678,14 +685,25 @@
             },
 
             clearImage: function (mode) {
+                // Track if user is removing an existing DB image (not just clearing a new upload)
+                if (mode === 'start' || mode === 'stop') {
+                    var wrapperId = 'wrapper-preview-' + mode;
+                    var w = getEl(wrapperId);
+                    var imgEl = getEl('preview-' + mode + '-img');
+                    // If preview was visible and had a real src (DB image), mark as cleared
+                    if (w && !w.classList.contains('hidden') && imgEl && imgEl.src && !imgEl.src.endsWith('undefined') && imgEl.src !== '' && imgEl.src !== window.location.href) {
+                        _clearedDbImages[mode] = true;
+                    }
+                }
+
                 _currentBlobs[mode] = null;
                 if (mode === 'start') getEl('input-start-img').value = '';
                 if (mode === 'stop') getEl('inp-file-stop').value = '';
                 if (mode === 'stop-quick') getEl('inp-file-stop-quick').value = '';
 
-                var wrapperId = mode === 'stop-quick' ? 'wrapper-preview-stop-quick' : 'wrapper-preview-' + mode;
-                var w = getEl(wrapperId);
-                if (w) w.classList.add('hidden');
+                var wrapperId2 = mode === 'stop-quick' ? 'wrapper-preview-stop-quick' : 'wrapper-preview-' + mode;
+                var w2 = getEl(wrapperId2);
+                if (w2) w2.classList.add('hidden');
 
                 var imgId = mode === 'stop-quick' ? 'preview-stop-quick-img' : 'preview-' + mode + '-img';
                 var img = getEl(imgId);

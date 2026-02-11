@@ -1,29 +1,59 @@
 <script>
   // ----------------------------------------------------------------------
-  // 1. ROUTER: จัดการการเปลี่ยนหน้า (Safe Object Version)
+  // 1. ROUTER: Page Switching with Lifecycle Hooks
   // ----------------------------------------------------------------------
   const Router = {
-    activePage: 'page-dashboard',
+    activePage: null,
+    _controllers: {},   // Registry: { 'page-dashboard': { onShow, onHide } }
+    _previousPage: null,
 
-    navigateTo: function(pageId) {
-      // Hide all pages
-      var sections = document.querySelectorAll('.page-section');
-      for (var i = 0; i < sections.length; i++) {
-        sections[i].classList.add('hidden');
-      }
+    /**
+     * Register a Page Controller
+     * @param {string} pageId - ID of the page element (e.g., 'page-history')
+     * @param {object} controller - Object with optional onShow() and onHide() methods
+     */
+    register: function (pageId, controller) {
+      this._controllers[pageId] = controller;
+      console.log('📌 Router: Registered controller for', pageId);
+    },
 
-      // Show Target Page
+    /**
+     * Navigate to a page
+     * @param {string} pageId - ID of the target page element
+     */
+    navigateTo: function (pageId) {
+      // 1. Validate target exists
       var target = document.getElementById(pageId);
-      if (target) {
-        target.classList.remove('hidden');
-        target.classList.add('fade-in');
-        this.activePage = pageId;
-      } else {
-        console.error("Router: Page not found", pageId);
+      if (!target) {
+        console.warn('⚠️ Router: Page not found -', pageId);
         return;
       }
 
-      // Update Sidebar
+      // 2. Skip if already on this page
+      if (this.activePage === pageId) return;
+
+      // 3. Call onHide() on the previous page controller
+      this._previousPage = this.activePage;
+      if (this._previousPage && this._controllers[this._previousPage]) {
+        var prevCtrl = this._controllers[this._previousPage];
+        if (typeof prevCtrl.onHide === 'function') {
+          try { prevCtrl.onHide(); } catch (e) { console.error('Router: onHide error for', this._previousPage, e); }
+        }
+      }
+
+      // 4. Hide all pages
+      var sections = document.querySelectorAll('.page-section');
+      for (var i = 0; i < sections.length; i++) {
+        sections[i].classList.add('hidden');
+        sections[i].classList.remove('fade-in');
+      }
+
+      // 5. Show target page with animation
+      target.classList.remove('hidden');
+      target.classList.add('fade-in');
+      this.activePage = pageId;
+
+      // 6. Update Sidebar active state
       var links = document.querySelectorAll('aside a[data-target]');
       for (var i = 0; i < links.length; i++) {
         var link = links[i];
@@ -36,23 +66,33 @@
         }
       }
 
-      setTimeout(function() {
+      // 7. Call onShow() on the new page controller
+      if (this._controllers[pageId]) {
+        var ctrl = this._controllers[pageId];
+        if (typeof ctrl.onShow === 'function') {
+          try { ctrl.onShow(); } catch (e) { console.error('Router: onShow error for', pageId, e); }
+        }
+      }
+
+      // 8. Dispatch event for backward compatibility (existing listeners)
+      setTimeout(function () {
         document.dispatchEvent(new CustomEvent('page-change', { detail: { pageId: pageId } }));
       }, 50);
     }
   };
 
+  /** Global helper function */
   function changePage(pageId) {
     Router.navigateTo(pageId);
   }
 
   // ----------------------------------------------------------------------
-  // 2. SERVER
+  // 2. SERVER (Routes { func } calls through apiHandler)
   // ----------------------------------------------------------------------
   const Server = {
-    call: function(target) {
+    call: function (target) {
       var args = Array.prototype.slice.call(arguments, 1);
-      return new Promise(function(resolve, reject) {
+      return new Promise(function (resolve, reject) {
         if (typeof google === 'undefined' || !google.script) {
           console.error("Local Dev Mode: Google Script not found");
           reject(new Error("Local Dev Mode"));
@@ -61,31 +101,44 @@
 
         var funcName = target;
         var options = { silent: false, loadingMsg: null };
+        var useApiHandler = false;
 
         if (typeof target === 'object' && target !== null) {
           funcName = target.func;
           if (target.silent) options.silent = true;
           if (target.loadingMsg) options.loadingMsg = target.loadingMsg;
+          useApiHandler = true; // Object-style → route through apiHandler
         }
 
         if (!options.silent) UIManager.showLoading(options.loadingMsg);
 
         var runner = google.script.run
-          .withSuccessHandler(function(res) {
+          .withSuccessHandler(function (res) {
             if (!options.silent) UIManager.hideLoading();
             try {
               var data = typeof res === 'string' ? JSON.parse(res) : res;
               resolve(data);
             } catch (e) { resolve(res); }
           })
-          .withFailureHandler(function(err) {
+          .withFailureHandler(function (err) {
             if (!options.silent) UIManager.hideLoading();
             console.error("Server Error:", err);
-            if(typeof UIManager !== 'undefined') UIManager.showToast(err.message, "error");
+            if (typeof UIManager !== 'undefined') UIManager.showToast(err.message, "error");
             reject(err);
           });
-          
-        runner[funcName].apply(runner, args);
+
+        if (useApiHandler) {
+          // ✅ Route through apiHandler (centralized backend router)
+          runner.apiHandler({ func: funcName, data: args[0] });
+        } else {
+          // Legacy: direct global function call (e.g., getUserSettings)
+          if (typeof runner[funcName] !== 'function') {
+            if (!options.silent) UIManager.hideLoading();
+            reject(new Error('Function not found: ' + funcName));
+            return;
+          }
+          runner[funcName].apply(runner, args);
+        }
       });
     }
   };
@@ -94,10 +147,10 @@
   // 3. UI MANAGER (Fixed: Bottom-Right & High Z-Index)
   // ----------------------------------------------------------------------
   const UIManager = {
-    showToast: function(msg, type) {
+    showToast: function (msg, type) {
       type = type || 'info';
       var container = document.getElementById('toast-container');
-      
+
       if (!container) {
         container = document.createElement('div');
         container.id = 'toast-container';
@@ -105,13 +158,13 @@
       }
 
       // 🔥 FIX: ใช้ DaisyUI Class 'toast-bottom' และบังคับ z-index สูงสุด
-      container.className = 'toast toast-bottom toast-end'; 
+      container.className = 'toast toast-bottom toast-end';
       container.style.zIndex = '2147483647'; // ค่าสูงสุดของ Integer (เหนือทุก Modal)
       container.style.position = 'fixed';
       container.style.bottom = '20px';
       container.style.right = '20px';
       container.style.pointerEvents = 'none'; // ให้คลิกทะลุพื้นที่ว่างได้
-      
+
       var alert = document.createElement('div');
       var extraClass = type === 'error' ? 'alert-error' : type === 'success' ? 'alert-success' : 'alert-info';
 
@@ -120,32 +173,32 @@
       alert.innerHTML = '<span>' + msg + '</span>';
       container.appendChild(alert);
 
-      setTimeout(function() { alert.remove(); }, 3000);
+      setTimeout(function () { alert.remove(); }, 3000);
     },
 
-    showLoading: function(msg) {
+    showLoading: function (msg) {
       if (document.getElementById('global-loading')) return;
       var d = document.createElement('dialog');
       d.id = 'global-loading';
       d.className = 'modal';
       // ให้ Loading อยู่รองลงมาจาก Toast เล็กน้อย
-      d.style.zIndex = '2147483646'; 
-      d.innerHTML = 
+      d.style.zIndex = '2147483646';
+      d.innerHTML =
         '<div class="modal-box bg-transparent shadow-none flex flex-col items-center justify-center overflow-hidden">' +
-             '<span class="loading loading-spinner loading-lg text-primary"></span>' +
-             (msg ? '<p class="mt-2 text-white font-bold drop-shadow-md text-sm">' + msg + '</p>' : '') +
+        '<span class="loading loading-spinner loading-lg text-primary"></span>' +
+        (msg ? '<p class="mt-2 text-white font-bold drop-shadow-md text-sm">' + msg + '</p>' : '') +
         '</div>';
       document.body.appendChild(d);
       d.showModal();
     },
 
-    hideLoading: function() {
+    hideLoading: function () {
       var d = document.getElementById('global-loading');
       if (d) { d.close(); d.remove(); }
     },
 
-    confirm: function(msg) {
-      return new Promise(function(resolve) {
+    confirm: function (msg) {
+      return new Promise(function (resolve) {
         if (typeof Swal !== 'undefined') {
           Swal.fire({
             title: 'Are you sure?',
@@ -155,12 +208,12 @@
             confirmButtonColor: '#d33',
             cancelButtonColor: '#3085d6',
             confirmButtonText: 'Yes',
-            didOpen: function() {
+            didOpen: function () {
               // บังคับ SweetAlert ให้อยู่เหนือ Modal ปกติ
               var container = Swal.getContainer();
               if (container) container.style.zIndex = '100000';
             }
-          }).then(function(result) {
+          }).then(function (result) {
             resolve(result.isConfirmed);
           });
         } else {
@@ -176,9 +229,9 @@
   // ----------------------------------------------------------------------
   const Store = {
     state: { currentUser: null, settings: {}, isAppLoaded: false },
-    init: function() {
+    init: function () {
       var self = this;
-      return Server.call('getUserSettings').then(function(res) {
+      return Server.call('getUserSettings').then(function (res) {
         self.state.currentUser = res.profile;
         self.state.settings = res;
       });

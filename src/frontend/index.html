@@ -33,59 +33,78 @@
     }
   </script>
   <?!= include('frontend/styles/CSS_Custom'); ?>
-  
+
   <style>
     .pika-single {
-        background: #1f2937; /* สีพื้นหลังดำเทา (Gray-800) */
-        border: 1px solid #374151; /* ขอบสีเทา (Gray-700) */
-        border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-        color: #fff;
-        font-family: 'Sarabun', sans-serif;
+      background: #1f2937;
+      /* สีพื้นหลังดำเทา (Gray-800) */
+      border: 1px solid #374151;
+      /* ขอบสีเทา (Gray-700) */
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      color: #fff;
+      font-family: 'Sarabun', sans-serif;
     }
-    
+
     /* หัวปฏิทิน */
     .pika-label {
-        background-color: #1f2937;
-        color: #f3f4f6; /* ขาวนวล */
-        font-weight: bold;
+      background-color: #1f2937;
+      color: #f3f4f6;
+      /* ขาวนวล */
+      font-weight: bold;
     }
-    .pika-prev, .pika-next {
-        opacity: 0.7;
+
+    .pika-prev,
+    .pika-next {
+      opacity: 0.7;
     }
-    .pika-prev:hover, .pika-next:hover {
-        opacity: 1;
-        background-color: #374151;
-        border-radius: 4px;
+
+    .pika-prev:hover,
+    .pika-next:hover {
+      opacity: 1;
+      background-color: #374151;
+      border-radius: 4px;
     }
 
     /* ตารางวัน */
     .pika-table th {
-        color: #9ca3af; /* เทาอ่อน */
+      color: #9ca3af;
+      /* เทาอ่อน */
     }
+
     .pika-button {
-        color: #e5e7eb; /* ตัวเลขวันสีขาว */
-        background: transparent;
-        border-radius: 8px;
-        text-align: center;
+      color: #e5e7eb;
+      /* ตัวเลขวันสีขาว */
+      background: transparent;
+      border-radius: 8px;
+      text-align: center;
     }
+
     .pika-button:hover {
-        background: #374151 !important; /* Hover สีเทาเข้ม */
-        color: #fff !important;
+      background: #374151 !important;
+      /* Hover สีเทาเข้ม */
+      color: #fff !important;
     }
 
     /* วันที่เลือก (Selected) */
     .is-selected .pika-button {
-        background: #3b82f6 !important; /* สีน้ำเงิน (Blue-500) */
-        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
-        color: #fff;
-        font-weight: bold;
+      background: #3b82f6 !important;
+      /* สีน้ำเงิน (Blue-500) */
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+      color: #fff;
+      font-weight: bold;
     }
 
     /* วันวันนี้ (Today) */
     .is-today .pika-button {
-        color: #3b82f6;
-        font-weight: bold;
+      color: #3b82f6;
+      font-weight: bold;
+    }
+
+    /* 🔧 Fix: Prevent Layout Shift from SweetAlert2 */
+    body.swal2-shown:not(.swal2-no-backdrop):not(.swal2-toast-shown) {
+      padding-right: 0 !important;
+      overflow-y: hidden !important;
     }
   </style>
 </head>
@@ -123,4 +142,5 @@
   <?!= include('frontend/scripts/JS_App'); ?>
 
 </body>
+
 </html>
