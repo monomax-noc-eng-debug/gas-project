@@ -194,7 +194,10 @@
 
     hideLoading: function () {
       var d = document.getElementById('global-loading');
-      if (d) { d.close(); d.remove(); }
+      if (d) { 
+        if (typeof d.close === 'function') d.close(); 
+        d.remove(); 
+      }
     },
 
     confirm: function (msg) {

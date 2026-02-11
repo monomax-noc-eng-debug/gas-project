@@ -98,6 +98,7 @@ function createTicket(d) { return TicketController.createTicket(d); }
 function updateTicket(d) { return TicketController.updateTicket(d); }
 function deleteTicket(id) { return TicketController.deleteTicket(id); }
 function getTicketConfig() { return TicketController.getTicketConfig(); }
+function saveTicketConfig(d) { return TicketController.saveTicketConfig(d); }
 function apiGetWorkList() { return MatchController.apiGetWorkList(); }
 function apiCreateWorkItem(d) { return MatchController.apiCreateWorkItem(d); }
 function apiUpdateWorkItem(d) { return MatchController.apiUpdateWorkItem(d); }

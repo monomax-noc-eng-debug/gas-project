@@ -1,230 +1,238 @@
 <script>
-  /**
-   * JS_Settings.html
-   * Manage System Settings & Configuration (Refactored to Alpine.js)
-   */
+const SettingsManager = (() => {
+  let _config = { types: [], statuses: [], severities: [], categories: {} };
+  let _isLoaded = false;
+  
+  // เก็บสถานะว่ากำลังแก้อะไรอยู่
+  let _editContext = null; // { type: 'list'|'cat'|'sub', key: '...', index: 0, oldVal: '...' }
 
-  document.addEventListener('alpine:init', () => {
-    Alpine.data('settingsModule', () => ({
-      config: {
-        types: [],
-        severities: [],
-        statuses: [],
-        categories: {}
-      },
-      isLoaded: false,
-      isLoading: false,
-      isSaving: false,
-      isSyncing: false,
+  const el = id => document.getElementById(id);
 
-      // Sync State
-      sync: {
-        progress: 0,
-        status: 'Waiting...',
-        logs: [],
-        percent: '0%'
-      },
+  return {
+    init: function() {},
 
-      // Temporary inputs
-      newType: '',
-      newSeverity: '',
-      newStatus: '',
-      newCategory: '',
-      newSubCategory: {}, // Map of catName -> inputValue
+    onShow: function() {
+      if (!_isLoaded) this.loadSettings();
+    },
 
-      init() {
-        document.addEventListener('page-change', (e) => {
-          if (e.detail.pageId === 'page-settings') {
-            this.onPageShow();
+    loadSettings: function(force = false) {
+      UIManager.showLoading();
+      Server.call('getTicketConfig')
+        .then(res => {
+          if (res.success) {
+            _config = res.data || { types: [], statuses: [], severities: [], categories: {} };
+            this.renderAll();
+            _isLoaded = true;
+            if (force) UIManager.showToast("รีเฟรชข้อมูลเรียบร้อย", "success");
+          } else {
+             UIManager.showToast(res.message, "error");
           }
-        });
-      },
+        })
+        .finally(() => UIManager.hideLoading());
+    },
 
-      onPageShow() {
-        const container = document.getElementById('page-settings');
-        if (container && container.classList.contains('hidden')) return;
+    saveSettings: function() {
+      UIManager.showLoading();
+      const payload = JSON.parse(JSON.stringify(_config));
+      Server.call('saveTicketConfig', payload)
+        .then(res => {
+          if (res.success) UIManager.showToast("บันทึกสำเร็จ", "success");
+          else UIManager.showToast(res.message, "error");
+        })
+        .catch(err => UIManager.showToast("Error: " + err, "error"))
+        .finally(() => UIManager.hideLoading());
+    },
 
-        if (!this.isLoaded) {
-          this.loadSettings();
-        }
-      },
+    renderAll: function() {
+      this.renderChips('statuses', 'badge-info');
+      this.renderChips('types', 'badge-secondary');
+      this.renderChips('severities', 'badge-error');
+      this.renderCategories();
+    },
 
-      loadSettings(forceRefresh = false) {
-        // Standardized Loading Pattern
-        const useSilentMode = forceRefresh || Store.state.isAppLoaded;
-        this.isLoading = true;
+    renderChips: function(key, colorClass) {
+      const container = el(`list-${key}`);
+      const list = _config[key] || [];
+      const counter = el(`count-${key}`);
+      if(counter) counter.innerText = list.length;
+      container.innerHTML = '';
 
-        const options = useSilentMode ? { func: 'getTicketConfig', silent: true } : 'getTicketConfig';
+      list.forEach((item, index) => {
+        const chip = document.createElement('div');
+        chip.className = `badge ${colorClass} badge-outline gap-2 p-3 hover:bg-opacity-10 cursor-pointer group transition-all`;
+        chip.innerHTML = `
+          <span class="font-medium text-xs hover:underline" onclick="SettingsManager.editItem('${key}', ${index})" title="Click to edit">${item}</span>
+          <button onclick="event.stopPropagation(); SettingsManager.deleteItem('${key}', ${index})" class="w-4 h-4 rounded-full hover:bg-black/10 flex items-center justify-center opacity-60 group-hover:opacity-100">
+            <i class="fas fa-times text-[10px]"></i>
+          </button>
+        `;
+        container.appendChild(chip);
+      });
+    },
 
-        Server.call(options)
-          .then(res => {
-            if (res && res.success && res.data) {
-              this.config = res.data;
-              // Ensure arrays exist
-              if (!this.config.types) this.config.types = [];
-              if (!this.config.severities) this.config.severities = [];
-              if (!this.config.statuses) this.config.statuses = [];
-              if (!this.config.categories) this.config.categories = {};
-
-              this.isLoaded = true;
-              // Set global app loaded flag
-              if (!Store.state.isAppLoaded) Store.state.isAppLoaded = true;
-              if (forceRefresh) UIManager.showToast("โหลดการตั้งค่าเรียบร้อย", "success");
-            } else {
-              UIManager.showToast("Failed to load settings: " + (res ? res.message : "Unknown"), "error");
-            }
-          })
-          .catch(err => {
-            UIManager.showToast("Error loading settings: " + err, "error");
-          })
-          .finally(() => {
-            this.isLoading = false;
-          });
-      },
-
-      // --- List Management ---
-
-      addItem(listName) {
-        let val = '';
-        if (listName === 'types') { val = this.newType; if (val) this.config.types.push(val); this.newType = ''; }
-        else if (listName === 'statuses') { val = this.newStatus; if (val) this.config.statuses.push(val); this.newStatus = ''; }
-        else if (listName === 'severities') { val = this.newSeverity; if (val) this.config.severities.push(val); this.newSeverity = ''; }
-      },
-
-      deleteItem(listName, index) {
-        if (listName === 'types') this.config.types.splice(index, 1);
-        else if (listName === 'statuses') this.config.statuses.splice(index, 1);
-        else if (listName === 'severities') this.config.severities.splice(index, 1);
-      },
-
-      // --- Category Management ---
-
-      addCategory() {
-        const val = this.newCategory.trim();
-        if (!val) return;
-
-        if (!this.config.categories[val]) {
-          this.config.categories[val] = [];
-          // Force reactivity? Alpine handles object additions if using x-for (value, key) usually.
-          // But adding a new key might require re-assigning or using internal reactivity helper?
-          // Alpine proxies object, so `this.config.categories[val] = []` triggers update.
-          // If not, we might need `this.config.categories = { ...this.config.categories, [val]: [] }`
-          this.config.categories = { ...this.config.categories, [val]: [] };
-        }
-        this.newCategory = '';
-      },
-
-      deleteCategory(cat) {
-        UIManager.showModal({
-          title: 'Delete Category?',
-          body: `Are you sure you want to delete category <b>'${cat}'</b> and all its sub-categories?`,
-          confirmText: 'Yes, Delete',
-          onConfirm: () => {
-            delete this.config.categories[cat];
-            this.config.categories = { ...this.config.categories }; // Trigger Reactivity
-            UIManager.showToast('Category removed.', 'success');
-          }
-        });
-      },
-
-      addSubCategory(cat) {
-        const val = (this.newSubCategory[cat] || '').trim();
-        if (!val) return;
-
-        if (!this.config.categories[cat].includes(val)) {
-          this.config.categories[cat].push(val);
-        }
-        this.newSubCategory[cat] = '';
-      },
-
-      deleteSubCategory(cat, idx) {
-        this.config.categories[cat].splice(idx, 1);
-      },
-
-      // --- Save & Sync ---
-
-      saveSettings() {
-        this.isSaving = true;
-        Server.call('saveTicketConfig', JSON.parse(JSON.stringify(this.config))) // Clone to avoid proxy issues if any
-          .then(res => {
-            if (res.success) {
-              UIManager.showToast('Settings saved successfully', 'success');
-            } else {
-              UIManager.showToast('Error: ' + res.message, 'error');
-            }
-          })
-          .finally(() => {
-            this.isSaving = false;
-          });
-      },
-
-      syncCalendar() {
-        UIManager.showModal({
-          title: "Confirm Sync",
-          body: "Are you sure you want to sync data from Google Calendar? This process may take a few seconds.",
-          confirmText: "Sync Now",
-          onConfirm: () => {
-            this.startSyncProcess();
-          }
-        });
-      },
-
-      startSyncProcess() {
-        this.isSyncing = true;
-        this.sync.progress = 0;
-        this.sync.logs = []; // Clear logs
-
-        const addLog = (msg) => {
-          this.sync.logs.push(`> ${msg}`);
-          // Auto-scroll logic handled in HTML via x-effect or custom logic? 
-          // We'll use x-init on the log container or just trust user scroll.
-        };
-
-        const updateProgress = (val, text) => {
-          this.sync.progress = val;
-          this.sync.percent = val + '%';
-          this.sync.status = text;
-        };
-
-        addLog("Initializing Sync Process...");
-        updateProgress(10, "Connecting...");
-
-        // Simulate UX
-        setTimeout(() => { updateProgress(30, "Fetching Calendar Data..."); addLog("Requesting data from Google Calendar..."); }, 800);
-        setTimeout(() => { updateProgress(50, "Processing Data..."); addLog("Analyzing match events..."); }, 2000);
-
-        Server.call('syncMatches')
-          .then(res => {
-            updateProgress(90, "Finalizing...");
-            addLog("Data received from server.");
-
-            if (res && res.success) {
-              updateProgress(100, "Completed");
-              addLog("SUCCESS: " + (res.message || "Sync Completed"));
-              if (res.log) {
-                res.log.forEach(l => addLog(l));
-              }
-              UIManager.showToast("Sync Completed Successfully", "success");
-            } else {
-              updateProgress(100, "Failed");
-              addLog("ERROR: " + (res ? res.message : "Unknown Error"));
-              UIManager.showToast("Sync Failed", "error");
-            }
-          })
-          .catch(err => {
-            updateProgress(100, "Error");
-            addLog("CRITICAL ERROR: " + err.message);
-            UIManager.showToast("Sync Error: " + err.message, "error");
-          })
-          .finally(() => {
-            setTimeout(() => {
-              this.isSyncing = false; // keep logs visible? 
-              // User can clear manually or just leave it. 
-              // Actually isSyncing just disables the button.
-            }, 1000);
-          });
+    renderCategories: function() {
+      const container = el('container-categories');
+      container.innerHTML = '';
+      const cats = Object.keys(_config.categories);
+      
+      if (cats.length === 0) {
+        container.innerHTML = `<div class="text-center py-10 text-gray-300">No Categories</div>`; return;
       }
 
-    }));
-  });
+      cats.forEach(cat => {
+        const subs = _config.categories[cat];
+        const div = document.createElement('div');
+        div.className = "collapse collapse-arrow bg-base-100 border border-base-200 shadow-sm rounded-lg mb-2";
+        
+        div.innerHTML = `
+          <input type="checkbox" /> 
+          <div class="collapse-title text-sm font-bold flex items-center justify-between pr-12 min-h-0 py-3">
+             <div class="flex items-center gap-2 text-gray-700 w-full z-10">
+               <i class="fas fa-folder text-warning/70"></i>
+               <span class="hover:text-primary cursor-pointer hover:underline" onclick="event.preventDefault(); SettingsManager.editCategory('${cat}')" title="Rename Category">${cat}</span>
+               <span class="badge badge-sm badge-ghost font-normal text-xs text-gray-400">${subs.length}</span>
+             </div>
+             <button onclick="event.preventDefault(); SettingsManager.deleteCategory('${cat}')" class="btn btn-xs btn-ghost text-gray-300 hover:text-error z-20">
+               <i class="fas fa-trash"></i>
+             </button>
+          </div>
+          <div class="collapse-content">
+             <div class="pt-2 pl-6 pr-2 space-y-1">
+               ${subs.map((sub, idx) => `
+                 <div class="flex justify-between items-center group/sub px-3 py-1.5 rounded-md hover:bg-gray-50 text-xs text-gray-600">
+                   <div class="flex items-center gap-2">
+                     <div class="w-1.5 h-1.5 rounded-full bg-gray-300 group-hover/sub:bg-primary"></div>
+                     <span class="cursor-pointer hover:text-primary hover:underline" onclick="SettingsManager.editSub('${cat}', ${idx})" title="Rename Subcategory">${sub}</span>
+                   </div>
+                   <button onclick="SettingsManager.deleteSub('${cat}', ${idx})" class="text-gray-300 hover:text-error opacity-0 group-hover/sub:opacity-100">
+                     <i class="fas fa-times"></i>
+                   </button>
+                 </div>
+               `).join('')}
+               <div class="mt-3 pl-3 pr-1 flex gap-2">
+                 <input type="text" id="in-sub-${cat}" class="input input-xs input-bordered w-full" placeholder="+ Subcategory..." onkeypress="if(event.key==='Enter') SettingsManager.addSub('${cat}')">
+                 <button onclick="SettingsManager.addSub('${cat}')" class="btn btn-xs btn-ghost btn-square text-primary"><i class="fas fa-plus"></i></button>
+               </div>
+             </div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    },
+
+    handleEnter: function(e, key) { if (e.key === 'Enter') { e.preventDefault(); this.addItem(key); } },
+
+    addItem: function(key) {
+      const input = el(`in-${key}`);
+      const val = input.value.trim();
+      if (val && !_config[key].includes(val)) {
+        _config[key].push(val);
+        this.renderAll();
+        input.value = '';
+      }
+    },
+    
+    deleteItem: function(key, idx) {
+      if(confirm('Delete item?')) { _config[key].splice(idx, 1); this.renderAll(); }
+    },
+
+    addCategory: function() {
+      const val = el('in-new-cat').value.trim();
+      if (val && !_config.categories[val]) {
+        _config.categories[val] = [];
+        this.renderCategories();
+        el('in-new-cat').value = '';
+      }
+    },
+
+    deleteCategory: function(cat) {
+      if(confirm(`Delete category '${cat}'?`)) { delete _config.categories[cat]; this.renderCategories(); }
+    },
+
+    addSub: function(cat) {
+      const input = el(`in-sub-${cat}`);
+      const val = input.value.trim();
+      if (val && !_config.categories[cat].includes(val)) {
+        _config.categories[cat].push(val);
+        this.renderCategories();
+      }
+    },
+
+    deleteSub: function(cat, idx) {
+      _config.categories[cat].splice(idx, 1);
+      this.renderCategories();
+    },
+
+    // --- Modal Edit Logic ---
+
+    openModal: function(title, value) {
+      el('modal-edit-title').innerText = title;
+      const input = el('modal-edit-input');
+      input.value = value;
+      el('modal-edit-error').classList.add('hidden');
+      el('modal_edit_setting').showModal();
+      // Focus input after delay
+      setTimeout(() => input.focus(), 100);
+    },
+
+    editItem: function(key, idx) {
+      _editContext = { type: 'list', key: key, index: idx, oldVal: _config[key][idx] };
+      this.openModal(`แก้ไขข้อมูล ${key}`, _config[key][idx]);
+    },
+
+    editCategory: function(catName) {
+      _editContext = { type: 'cat', key: 'categories', oldVal: catName };
+      this.openModal('แก้ไขชื่อหมวดหมู่', catName);
+    },
+
+    editSub: function(catName, idx) {
+      _editContext = { type: 'sub', key: catName, index: idx, oldVal: _config.categories[catName][idx] };
+      this.openModal('แก้ไขหมวดหมู่ย่อย', _config.categories[catName][idx]);
+    },
+
+    saveEditFromModal: function() {
+      const newVal = el('modal-edit-input').value.trim();
+      if (!newVal) {
+        el('modal-edit-error').innerText = "กรุณากรอกข้อมูล";
+        el('modal-edit-error').classList.remove('hidden');
+        return;
+      }
+
+      if (newVal === _editContext.oldVal) {
+        el('modal_edit_setting').close();
+        return;
+      }
+
+      // Logic ตามประเภทที่แก้
+      if (_editContext.type === 'list') {
+        _config[_editContext.key][_editContext.index] = newVal;
+        this.renderAll();
+      } 
+      else if (_editContext.type === 'cat') {
+        if (_config.categories[newVal]) {
+          alert('ชื่อหมวดหมู่นี้มีอยู่แล้ว');
+          return;
+        }
+        // Rename key: copy data to new key, delete old key
+        const data = _config.categories[_editContext.oldVal];
+        delete _config.categories[_editContext.oldVal];
+        _config.categories[newVal] = data;
+        this.renderCategories();
+      } 
+      else if (_editContext.type === 'sub') {
+        _config.categories[_editContext.key][_editContext.index] = newVal;
+        this.renderCategories();
+      }
+
+      el('modal_edit_setting').close();
+      _editContext = null;
+    }
+
+  };
+})();
+
+document.addEventListener('DOMContentLoaded', () => {
+  Router.register('page-settings', SettingsManager);
+  SettingsManager.init();
+});
 </script>

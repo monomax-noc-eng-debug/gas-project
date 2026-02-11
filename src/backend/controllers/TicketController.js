@@ -1,6 +1,6 @@
 /**
  * src/backend/controllers/TicketController.js
- * Version: Full Field Support & Logic Fixes
+ * Version: Fixed getTicketConfig Logic
  */
 const TicketController = (() => {
   const TABLE_NAME = "Ticket";
@@ -30,7 +30,7 @@ const TicketController = (() => {
     return sheet;
   }
 
-  // Helper to find column index (case-insensitive)
+  // Helper to find column index (case-insensitive & flexible)
   function _findColIndex(headers, keys) {
     if (!Array.isArray(keys)) keys = [keys];
     return headers.findIndex(h => keys.some(k => String(h).toLowerCase().trim() === String(k).toLowerCase().trim()));
@@ -206,16 +206,11 @@ const TicketController = (() => {
           const tz = (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok";
           const nowStr = Utilities.formatDate(new Date(), tz, "dd/MM/yyyy HH:mm:ss");
 
-          // Update Fields if they exist in form
-          // Note: form contains all fields from modal, so we update them all to be safe
-          // checking 'undefined' allows empty string updates (clearing values)
-
           if (form.type !== undefined) setVal(["Ticket Type", "Type"], form.type);
           if (form.status !== undefined) setVal(["Ticket Status", "Status"], form.status);
           if (form.severity !== undefined) setVal(["Severity"], form.severity);
           if (form.category !== undefined) setVal(["Category"], form.category);
           if (form.subCategory !== undefined) setVal(["Sub Category"], form.subCategory);
-          // Subject (Important!)
           if (form.subject !== undefined) setVal(["Short Description & Subject", "Subject", "หัวข้อ"], form.subject);
           if (form.detail !== undefined) setVal(["Detail", "รายละเอียด"], form.detail);
           if (form.action !== undefined) setVal(["Action", "การดำเนินการ"], form.action);
@@ -224,23 +219,15 @@ const TicketController = (() => {
           if (form.assignee !== undefined) setVal(["Assign"], form.assignee);
           if (form.remark !== undefined) setVal(["Remark"], form.remark);
 
-          // Date/Time update (Optional)
           if (form.date) {
             const userDate = `${form.date} ${form.time || ''}`;
             setVal(["Date", "วันที่แจ้ง"], userDate);
           }
 
-          // Auto Resolved Date Logic
           if (form.status) {
             const s = String(form.status).toUpperCase();
             if (s.includes("RESOLVED") || s.includes("CLOSE") || s.includes("FIX")) {
-              // Only set if not already set? Or update? Usually update is better to reflect actual finish time.
               setVal(["Resolved Date"], nowStr);
-            } else if (s.includes("OPEN") || s.includes("PENDING")) {
-              // If reopened, maybe clear resolved date? Or keep history?
-              // User requirement: "Verified" or "Closed" means done.
-              // If back to Open, usually we allow clearing or just leave it. 
-              // Let's leave it for now unless requested.
             }
           }
 
@@ -263,7 +250,6 @@ const TicketController = (() => {
           const targetId = String(id).trim();
           let rowIdx = -1;
 
-          // Search from bottom to top
           for (let i = data.length - 1; i >= 1; i--) {
             if (String(data[i][idCol]).trim() === targetId) {
               rowIdx = i + 1;
@@ -278,6 +264,147 @@ const TicketController = (() => {
         }
       } catch (e) { return Response.error("Delete failed: " + e.toString()); } finally { lock.releaseLock(); }
     },
-    getTicketConfig: () => Response.success({})
+
+    // ------------------------------------------------------------------------
+    // FIXED LOGIC HERE: Using _findColIndex for robust header detection
+    // ------------------------------------------------------------------------
+    getTicketConfig: function () {
+      console.log("TicketController.getTicketConfig Called");
+      try {
+        if (typeof CONFIG === 'undefined' || !CONFIG.DB_ID) {
+          console.error("CONFIG or DB_ID missing");
+          return Response.error("System Config Error");
+        }
+
+        const TAB_NAME = "Setting_Ticket";
+        const ss = SpreadsheetApp.openById(CONFIG.DB_ID);
+        let sheet = ss.getSheetByName(TAB_NAME);
+
+        // Auto Create if not exists
+        if (!sheet) {
+          sheet = ss.insertSheet(TAB_NAME);
+          sheet.appendRow(["Type", "Status", "Severity", "Category", "SubCategory"]);
+          const defaults = [
+            ["Incident", "Open", "Low", "Hardware", "Monitor"],
+            ["Request", "Pending", "Medium", "Hardware", "Keyboard"],
+            ["", "Resolved", "High", "Software", "Windows"],
+            ["", "Closed", "Critical", "Software", "Office"],
+            ["", "Cancelled", "Normal", "Network", "Internet"]
+          ];
+          defaults.forEach(r => sheet.appendRow(r));
+        }
+
+        const data = sheet.getDataRange().getValues();
+        if (!data || data.length < 1) return Response.success({ types: [], statuses: [], severities: [], categories: {} });
+
+        const headers = data[0];
+
+        // Use helper to find columns (Robust check for Thai/English/Spaces)
+        const idx = {
+          type: _findColIndex(headers, ["Type", "Ticket Type", "ประเภท"]),
+          status: _findColIndex(headers, ["Status", "Ticket Status", "สถานะ"]),
+          severity: _findColIndex(headers, ["Severity", "Level", "ความรุนแรง"]),
+          cat: _findColIndex(headers, ["Category", "Main Category", "หมวดหมู่"]),
+          sub: _findColIndex(headers, ["SubCategory", "Sub Category", "Sub-Category", "หมวดหมู่ย่อย"])
+        };
+
+        const config = { types: [], statuses: [], severities: [], categories: {} };
+        const addUnique = (arr, val) => {
+          if (val && String(val).trim() !== "" && !arr.includes(val)) arr.push(String(val).trim());
+        };
+
+        // Iterate Rows
+        for (let i = 1; i < data.length; i++) {
+          const row = data[i];
+
+          if (idx.type > -1) addUnique(config.types, row[idx.type]);
+          if (idx.status > -1) addUnique(config.statuses, row[idx.status]);
+          if (idx.severity > -1) addUnique(config.severities, row[idx.severity]);
+
+          // Category & SubCategory
+          if (idx.cat > -1) {
+            const cat = row[idx.cat];
+            if (cat && String(cat).trim() !== "") {
+              const catName = String(cat).trim();
+              if (!config.categories[catName]) config.categories[catName] = [];
+              
+              if (idx.sub > -1) {
+                const sub = row[idx.sub];
+                if (sub && String(sub).trim() !== "") {
+                  const subName = String(sub).trim();
+                  if (!config.categories[catName].includes(subName)) {
+                    config.categories[catName].push(subName);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        return Response.success(config);
+
+      } catch (e) {
+        console.error("getTicketConfig Error: " + e.toString());
+        return Response.error("getTicketConfig Failed: " + e.toString());
+      }
+    },
+
+    saveTicketConfig: function (config) {
+      const lock = LockService.getScriptLock();
+      if (lock.tryLock(5000)) {
+        try {
+          const TAB_NAME = "Setting_Ticket";
+          const ss = SpreadsheetApp.openById(CONFIG.DB_ID);
+          let sheet = ss.getSheetByName(TAB_NAME);
+          if (!sheet) sheet = ss.insertSheet(TAB_NAME);
+
+          sheet.clear();
+          // Write standard headers
+          sheet.appendRow(["Type", "Status", "Severity", "Category", "SubCategory"]);
+
+          // Flatten Categories
+          const catRows = [];
+          if (config.categories) {
+            for (const cat in config.categories) {
+              const subs = config.categories[cat];
+              if (!subs || subs.length === 0) {
+                catRows.push({ c: cat, s: "" });
+              } else {
+                subs.forEach(s => catRows.push({ c: cat, s: s }));
+              }
+            }
+          }
+
+          const maxLen = Math.max(
+            (config.types || []).length,
+            (config.statuses || []).length,
+            (config.severities || []).length,
+            catRows.length
+          );
+
+          const data = [];
+          for (let i = 0; i < maxLen; i++) {
+            data.push([
+              (config.types && config.types[i]) ? config.types[i] : "",
+              (config.statuses && config.statuses[i]) ? config.statuses[i] : "",
+              (config.severities && config.severities[i]) ? config.severities[i] : "",
+              (i < catRows.length) ? catRows[i].c : "",
+              (i < catRows.length) ? catRows[i].s : ""
+            ]);
+          }
+
+          if (data.length > 0) {
+            sheet.getRange(2, 1, data.length, 5).setValues(data);
+          }
+
+          return Response.success({ message: "Settings Saved" });
+        } catch (e) {
+          return Response.error("Save Failed: " + e.message);
+        } finally {
+          lock.releaseLock();
+        }
+      }
+      return Response.error("System Busy");
+    }
   };
 })();
