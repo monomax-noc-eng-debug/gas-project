@@ -1,7 +1,7 @@
 <script>
     /**
-     * Ticket Module (Vanilla JS Refactor)
-     * Handles Ticket CRUD and Dynamic Config without Alpine.js
+     * Ticket Module (Full Optimized)
+     * Features: CRUD, Config Loading, Stats, Expanded Table UI
      */
     const TicketManager = (() => {
         // --- State ---
@@ -12,15 +12,12 @@
         // --- HTML Elements ---
         const getEl = (id) => document.getElementById(id);
 
-        // --- Public Methods ---
         return {
-            // Called once on DOMContentLoaded
             init: function () {
                 console.log("🚀 Ticket Manager Initialized");
                 this.loadConfig();
             },
 
-            // ✅ Called automatically by Router when page-ticket is shown
             onShow: function () {
                 this.loadTickets();
             },
@@ -30,7 +27,6 @@
                     .then(res => {
                         if (res.success) {
                             _config = res.data || _config;
-                            // Normalize
                             _config.types = _config.types || [];
                             _config.severities = _config.severities || [];
                             _config.statuses = _config.statuses || [];
@@ -47,7 +43,6 @@
 
                 if (!loader || !tbody) return;
 
-                // UI: Loading
                 loader.classList.remove('hidden');
                 empty.classList.add('hidden');
                 tbody.innerHTML = '';
@@ -75,16 +70,13 @@
 
             filterData: function () {
                 const search = getEl('ticket-search').value.toLowerCase();
-
                 const filtered = _tickets.filter(t => {
-                    const id = String(t[2] || '').toLowerCase(); // ID at index 2
-                    const subj = String(t[8] || '').toLowerCase(); // Subject at index 8
-                    const type = String(t[3] || '').toLowerCase(); // Type at index 3
-                    const status = String(t[4] || '').toLowerCase(); // Status at index 4
-
+                    const id = String(t[2] || '').toLowerCase(); 
+                    const subj = String(t[8] || '').toLowerCase(); 
+                    const type = String(t[3] || '').toLowerCase(); 
+                    const status = String(t[4] || '').toLowerCase(); 
                     return !search || id.includes(search) || subj.includes(search) || type.includes(search) || status.includes(search);
                 });
-
                 this.renderTable(filtered);
             },
 
@@ -105,70 +97,88 @@
 
             renderRow: function (row, index) {
                 const id = row[2];
-                const date = dayjs(row[1]).format('DD/MM/YY');
+                const date = dayjs(row[1]).format('DD/MM/YYYY');
                 const type = row[3] || '';
                 const status = row[4] || '';
                 const severity = row[5] || 'Normal';
                 const subject = row[8] || '(No Subject)';
+                const category = row[6] || '-';
+                const assignee = row[13] || 'Unassigned';
 
-                // Jira-style status lozenge class
+                // Status Badge Logic
                 const statusLower = status.toLowerCase();
-                let lozengeClass = 'default';
-                if (statusLower.includes('open')) lozengeClass = 'open';
-                else if (statusLower.includes('pending') || statusLower.includes('wait')) lozengeClass = 'pending';
-                else if (statusLower.includes('resolved') || statusLower.includes('fix')) lozengeClass = 'resolved';
-                else if (statusLower.includes('close')) lozengeClass = 'closed';
+                let badgeClass = 'badge-ghost';
+                if (statusLower.includes('open')) badgeClass = 'badge-error badge-outline';
+                else if (statusLower.includes('pending') || statusLower.includes('wait')) badgeClass = 'badge-warning badge-outline';
+                else if (statusLower.includes('resolved') || statusLower.includes('fix')) badgeClass = 'badge-success text-white border-none';
+                else if (statusLower.includes('close')) badgeClass = 'badge-neutral text-white';
 
-                // Severity dot class
+                // Severity Dot Logic
                 const sevLower = severity.toLowerCase();
-                let sevDotClass = 'normal';
-                if (sevLower.includes('critical')) sevDotClass = 'critical';
-                else if (sevLower.includes('high')) sevDotClass = 'high';
-                else if (sevLower.includes('medium')) sevDotClass = 'medium';
-                else if (sevLower.includes('low')) sevDotClass = 'low';
+                let sevColor = 'bg-gray-300';
+                if (sevLower.includes('critical')) sevColor = 'bg-red-500 animate-pulse';
+                else if (sevLower.includes('high')) sevColor = 'bg-orange-500';
+                else if (sevLower.includes('medium')) sevColor = 'bg-blue-500';
 
-                // Type badge
-                const typeLower = type.toLowerCase();
-                const typeIcon = typeLower.includes('incident') ? 'fas fa-bolt' : 'fas fa-arrow-up';
-                const typeColorClass = typeLower.includes('incident') ? 'incident' : 'request';
+                // Assignee Avatar Initial
+                const assignInitial = assignee.charAt(0).toUpperCase();
 
+                // ✅ Expanded Row + Single Line (whitespace-nowrap) + Padding (py-4)
                 return `
-                <tr class="ticket-row border-b border-gray-100">
-                    <td class="text-center text-gray-300 font-mono text-[10px] px-3">${index + 1}</td>
-                    <td class="px-3">
-                        <span class="ticket-id-link text-[11px] cursor-pointer" onclick="TicketManager.openModal('EDIT', '${id}')">${id}</span>
+                <tr class="hover:bg-base-50 transition-colors group cursor-pointer border-b border-gray-100 last:border-none" 
+                    onclick="TicketManager.openModal('EDIT', '${id}')">
+                    
+                    <td class="text-center font-medium text-gray-400 whitespace-nowrap py-4">${index + 1}</td>
+                    
+                    <td class="whitespace-nowrap py-4">
+                        <span class="font-mono font-bold text-primary group-hover:underline">${id}</span>
                     </td>
-                    <td class="px-3">
-                        <div class="font-medium text-xs text-gray-800 line-clamp-1 block" title="${subject}">${subject}</div>
+
+                    <td class="whitespace-nowrap py-4 text-gray-500 font-mono text-xs">
+                        ${date}
                     </td>
-                    <td class="text-center px-2">
-                        <span class="type-badge ${typeColorClass}">
-                            <i class="${typeIcon} text-[9px]"></i> ${type}
+                    
+                    <td class="whitespace-nowrap py-4">
+                        <div class="font-bold text-gray-700 max-w-xs truncate" title="${subject}">${subject}</div>
+                    </td>
+                    
+                    <td class="text-center whitespace-nowrap py-4 text-xs text-gray-600">
+                        ${type}
+                    </td>
+
+                    <td class="text-center whitespace-nowrap py-4">
+                        <div class="flex items-center justify-center gap-2">
+                            <div class="w-2 h-2 rounded-full ${sevColor}"></div>
+                            <span class="text-xs text-gray-500">${severity}</span>
+                        </div>
+                    </td>
+                    
+                    <td class="text-center whitespace-nowrap py-4">
+                        <span class="badge ${badgeClass} badge-sm font-bold uppercase tracking-wider h-6 px-3">
+                            ${status}
                         </span>
                     </td>
-                    <td class="text-center px-2">
-                        <div class="flex items-center justify-center gap-1.5">
-                            <span class="severity-dot ${sevDotClass}"></span>
-                            <span class="text-[10px] text-gray-500">${severity}</span>
+
+                    <td class="whitespace-nowrap py-4 text-gray-500 text-xs">
+                        ${category}
+                    </td>
+
+                    <td class="whitespace-nowrap py-4">
+                        <div class="flex items-center gap-2">
+                            <div class="avatar placeholder">
+                                <div class="bg-neutral-focus text-neutral-content rounded-full w-6 h-6 bg-gray-200 text-gray-600">
+                                    <span class="text-[10px] font-bold">${assignInitial}</span>
+                                </div>
+                            </div>
+                            <span class="text-xs text-gray-600 truncate max-w-[100px]">${assignee}</span>
                         </div>
                     </td>
-                    <td class="text-center px-2">
-                        <span class="status-lozenge ${lozengeClass}">${status}</span>
-                    </td>
-                    <td class="text-center text-[10px] text-gray-400 font-mono px-2">${date}</td>
-                    <td class="text-center px-2">
-                        <div class="flex items-center justify-center gap-0.5">
-                            <button onclick="event.stopPropagation(); TicketManager.openModal('EDIT', '${id}')"
-                                class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md"
-                                title="Edit">
-                                <i class="fas fa-pen text-[10px]"></i>
-                            </button>
-                            <button onclick="event.stopPropagation(); TicketManager.deleteTicket('${id}')"
-                                class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md"
-                                title="Delete">
-                                <i class="fas fa-trash text-[10px]"></i>
-                            </button>
-                        </div>
+                    
+                    <td class="text-center whitespace-nowrap py-4 pr-4">
+                        <button onclick="event.stopPropagation(); TicketManager.deleteTicket('${id}')"
+                            class="btn btn-ghost btn-xs btn-square text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
                     </td>
                 </tr>
             `;
@@ -190,13 +200,14 @@
                     else if (ty.includes('request')) s.request++;
                 });
 
-                getEl('stat-total').innerText = s.total;
-                getEl('stat-open').innerText = s.open;
-                getEl('stat-pending').innerText = s.pending;
-                getEl('stat-resolved').innerText = s.resolved;
-                getEl('stat-closed').innerText = s.closed;
-                getEl('stat-incident').innerText = s.incident;
-                getEl('stat-request').innerText = s.request;
+                const setTxt = (id, val) => { const el = getEl(id); if (el) el.innerText = val; };
+                setTxt('stat-total', s.total);
+                setTxt('stat-open', s.open);
+                setTxt('stat-pending', s.pending);
+                setTxt('stat-resolved', s.resolved);
+                setTxt('stat-closed', s.closed);
+                setTxt('stat-incident', s.incident);
+                setTxt('stat-request', s.request);
             },
 
             // --- Modal & Form ---
@@ -206,46 +217,34 @@
                 const title = getEl('ticket-modal-title');
                 const form = getEl('form-ticket');
 
-                // Populate Dropdowns first
                 this.populateDropdowns();
 
                 if (mode === 'CREATE') {
                     title.innerText = 'สร้าง Ticket ใหม่';
                     form.reset();
                     getEl('inp-ticket-id').value = '';
-
-                    // Defaults
-                    const today = new Date();
                     getEl('inp-ticket-date').value = dayjs().format('YYYY-MM-DD');
                     getEl('inp-ticket-time').value = dayjs().format('HH:mm');
                     getEl('sel-ticket-status').value = 'Open';
-
                 } else {
                     title.innerText = 'แก้ไข Ticket: ' + id;
                     const row = _tickets.find(r => r[2] == id);
                     if (row) this.fillForm(row);
                 }
-
                 modal.showModal();
             },
 
             fillForm: function (row) {
-                // row: [timestamp, dateFull, id, type, status, severity, cat, sub, subj, detail, action, res, resp, assign, remark]
                 getEl('inp-ticket-id').value = row[2];
-
-                // Split Date/Time
                 const dt = row[1].split(' ');
                 getEl('inp-ticket-date').value = dt[0] || '';
                 getEl('inp-ticket-time').value = dt[1] || '';
-
                 getEl('sel-ticket-type').value = row[3];
                 getEl('sel-ticket-status').value = row[4];
                 getEl('sel-ticket-severity').value = row[5];
-
                 getEl('sel-ticket-category').value = row[6];
-                this.updateSubCategories(); // Refresh subs based on cat
+                this.updateSubCategories();
                 getEl('sel-ticket-subcategory').value = row[7];
-
                 getEl('inp-ticket-subject').value = row[8];
                 getEl('txt-ticket-detail').value = row[9];
                 getEl('txt-ticket-action').value = row[10];
@@ -262,16 +261,14 @@
                     el.innerHTML = items.map(i => `<option value="${i}">${i}</option>`).join('');
                     if (cur && items.includes(cur)) el.value = cur;
                 };
-
                 fill('sel-ticket-type', _config.types);
                 fill('sel-ticket-status', _config.statuses);
                 fill('sel-ticket-severity', _config.severities);
-
-                // Categories
+                
                 const cats = Object.keys(_config.categories);
                 const catEl = getEl('sel-ticket-category');
                 const curCat = catEl.value;
-                catEl.innerHTML = '<option value="">Select Category...</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+                catEl.innerHTML = '<option value="">Select...</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
                 if (curCat && cats.includes(curCat)) catEl.value = curCat;
             },
 
@@ -279,10 +276,8 @@
                 const cat = getEl('sel-ticket-category').value;
                 const subEl = getEl('sel-ticket-subcategory');
                 subEl.innerHTML = '';
-
                 if (cat && _config.categories[cat]) {
-                    const subs = _config.categories[cat];
-                    subEl.innerHTML = subs.map(s => `<option value="${s}">${s}</option>`).join('');
+                    subEl.innerHTML = _config.categories[cat].map(s => `<option value="${s}">${s}</option>`).join('');
                 }
             },
 
@@ -298,20 +293,19 @@
                 const formData = new FormData(form);
                 const id = formData.get('id');
                 const data = Object.fromEntries(formData.entries());
-
                 const func = id ? 'updateTicket' : 'createTicket';
 
                 Server.call(func, data)
                     .then(res => {
                         if (res.success) {
-                            UIManager.showToast("บันทึกข้อมูลสำเร็จ", "success");
+                            UIManager.showToast("บันทึกสำเร็จ", "success");
                             getEl('modal-ticket-form').close();
-                            this.loadTickets(true); // Refund
+                            this.loadTickets(true);
                         } else {
-                            Swal.fire('Error', res.message, 'error');
+                            UIManager.showToast(res.message, "error");
                         }
                     })
-                    .catch(err => Swal.fire('Error', err.message, 'error'))
+                    .catch(err => UIManager.showToast(err.message, "error"))
                     .finally(() => {
                         btn.disabled = false;
                         spinner.classList.add('hidden');
@@ -319,50 +313,20 @@
             },
 
             deleteTicket: function (id) {
-                Swal.fire({
-                    title: 'ยืนยันการลบ?',
-                    text: `คุณต้องการลบ Ticket ${id} หรือไม่?`,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    confirmButtonText: 'ลบรายการ'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        Server.call('deleteTicket', id)
-                            .then(res => {
-                                if (res.success) {
-                                    Swal.fire('Deleted!', 'ลบรายการสำเร็จ', 'success');
-                                    this.loadTickets(true);
-                                } else {
-                                    Swal.fire('Error', res.message, 'error');
-                                }
-                            });
-                    }
-                });
-            },
-
-            // --- Helpers ---
-            getStatusClass: function (s) {
-                s = (s || '').toLowerCase();
-                if (s.includes('open')) return 'badge-error';
-                if (s.includes('pending')) return 'badge-warning';
-                if (s.includes('resolved')) return 'badge-success';
-                if (s.includes('closed')) return 'badge-neutral';
-                return 'badge-ghost';
-            },
-
-            getSeverityClass: function (s) {
-                s = (s || '').toLowerCase();
-                if (s.includes('critical')) return 'badge-error';
-                if (s.includes('high')) return 'badge-warning';
-                if (s.includes('medium')) return 'badge-info';
-                return 'badge-ghost';
+                if(confirm(`ต้องการลบ Ticket ${id} หรือไม่?`)) {
+                    Server.call('deleteTicket', id).then(res => {
+                        if (res.success) {
+                            UIManager.showToast("ลบรายการสำเร็จ", "success");
+                            this.loadTickets(true);
+                        } else {
+                            UIManager.showToast(res.message, "error");
+                        }
+                    });
+                }
             }
-
         };
     })();
 
-    // Register with Router for lifecycle hooks
     document.addEventListener('DOMContentLoaded', () => {
         Router.register('page-ticket', TicketManager);
         TicketManager.init();

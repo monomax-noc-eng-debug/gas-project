@@ -15,11 +15,18 @@
     });
 
     // 2. Initialize Data
-    try {
+  try {
       await Store.init();
 
-      // 3. Navigate to Default
-      Router.navigateTo('page-dashboard');
+      // ✅ [แก้ไขใหม่] 3. Navigate to Last Page or Default
+      const lastPage = localStorage.getItem('gas_last_page');
+      
+      // ตรวจสอบว่าหน้าที่มีในความทรงจำนั้นมีอยู่จริงหรือไม่ (กัน Error กรณีเปลี่ยนชื่อหน้า)
+      if (lastPage && document.getElementById(lastPage)) {
+        Router.navigateTo(lastPage);
+      } else {
+        Router.navigateTo('page-dashboard');
+      }
 
     } catch (e) {
       console.error("App Init Failed", e);

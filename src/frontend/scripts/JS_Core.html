@@ -53,6 +53,9 @@
       target.classList.add('fade-in');
       this.activePage = pageId;
 
+      // ✅ [เพิ่มใหม่] บันทึกหน้าปัจจุบันลง LocalStorage
+      localStorage.setItem('gas_last_page', pageId);
+
       // 6. Update Sidebar active state
       var links = document.querySelectorAll('aside a[data-target]');
       for (var i = 0; i < links.length; i++) {

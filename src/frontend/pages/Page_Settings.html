@@ -1,113 +1,156 @@
-<div id="page-settings" class="w-full h-full bg-base-200 hidden flex flex-col">
+<div id="page-settings" class="page-section hidden w-full h-full relative bg-base-200/50 overflow-hidden flex flex-col p-4 md:p-6 gap-6">
 
-  <div class="px-6 py-4 bg-base-100 shadow-sm border-b border-base-200 flex justify-between items-center shrink-0 z-10">
-    <div>
-      <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
-        <i class="fas fa-sliders-h text-primary"></i> ตั้งค่าระบบ (Configuration)
-      </h1>
-      <p class="text-xs text-gray-500 mt-1">คลิกที่ข้อความเพื่อแก้ไข (Click text to edit)</p>
+  <div class="flex flex-col md:flex-row justify-between items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
+    
+    <div class="flex items-center gap-3 w-full md:w-auto">
+      <div class="bg-primary/10 p-2 rounded-xl text-primary">
+        <i class="fas fa-cogs text-xl"></i>
+      </div>
+      <div>
+        <h2 class="text-base font-bold text-gray-800">ตั้งค่า (Settings)</h2>
+        <p class="text-[10px] text-gray-400">จัดการ Configuration และข้อมูลระบบ</p>
+      </div>
     </div>
-    <div class="flex gap-3">
-      <button onclick="SettingsManager.loadSettings(true)" class="btn btn-ghost btn-sm text-gray-500" title="รีเฟรชข้อมูล">
-        <i class="fas fa-sync-alt"></i>
+
+    <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+      
+      <button onclick="SettingsManager.loadSettings(true)" id="btn-sett-refresh"
+        class="btn btn-sm btn-ghost btn-circle text-base-content/60 hover:text-primary tooltip tooltip-bottom" data-tip="รีเฟรช">
+        <i class="fas fa-sync-alt" id="icon-sett-refresh"></i>
       </button>
-      <button onclick="SettingsManager.saveSettings()" class="btn btn-primary btn-sm px-6 shadow-md gap-2">
-        <i class="fas fa-save"></i> บันทึกการแก้ไข
+
+      <button onclick="SettingsManager.saveSettings()" id="btn-sett-save"
+        class="btn btn-sm btn-primary text-white shadow-sm gap-2 px-4 font-medium">
+        <span id="loader-sett-save" class="loading loading-spinner loading-xs hidden"></span>
+        <i class="fas fa-save" id="icon-sett-save"></i> 
+        <span>บันทึกข้อมูล</span>
       </button>
     </div>
   </div>
 
-  <div class="flex-1 overflow-y-auto p-6">
-    <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 max-w-[1600px] mx-auto">
+  <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-hidden">
 
-      <div class="xl:col-span-4 flex flex-col gap-6">
+    <div id="sett-loader" class="absolute inset-0 z-20 bg-white/80 backdrop-blur-[1px] flex flex-col items-center justify-center rounded-2xl hidden">
+      <span class="loading loading-spinner loading-lg text-primary"></span>
+      <p class="mt-2 text-sm text-gray-500 animate-pulse">กำลังโหลดข้อมูล...</p>
+    </div>
 
-        <div class="card bg-base-100 shadow-sm border border-base-200">
-          <div class="card-body p-5">
-            <h3 class="text-sm font-bold uppercase text-gray-400 tracking-wider flex justify-between">
-              <span><i class="fas fa-info-circle mr-2"></i> Statuses</span>
-              <span class="text-[10px] bg-base-200 px-2 rounded text-gray-500" id="count-statuses">0</span>
-            </h3>
-            <div class="divider my-1"></div>
-            <div class="relative">
-              <input type="text" id="in-statuses" class="input input-bordered input-sm w-full pr-8 focus:outline-none focus:border-primary" placeholder="เพิ่มสถานะ (Enter)..." onkeypress="SettingsManager.handleEnter(event, 'statuses')">
-              <i class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
-            </div>
-            <div id="list-statuses" class="flex flex-wrap gap-2 mt-3 min-h-[50px]"></div>
+    <div class="flex flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar">
+
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col h-1/3 min-h-[200px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50">
+          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+            <i class="fas fa-info-circle text-info"></i> Statuses
+          </span>
+          <span id="count-statuses" class="badge badge-ghost badge-xs font-mono">0</span>
+        </div>
+        <div class="divider my-0 h-px bg-base-100"></div>
+        
+        <div class="p-3 bg-white">
+          <div class="relative">
+            <input type="text" id="in-new-status" onkeypress="SettingsManager.handleEnter(event, 'statuses')"
+              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-info text-xs"
+              placeholder="เพิ่มสถานะ (Enter)...">
+            <i class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
           </div>
         </div>
 
-        <div class="card bg-base-100 shadow-sm border border-base-200">
-          <div class="card-body p-5">
-            <h3 class="text-sm font-bold uppercase text-gray-400 tracking-wider flex justify-between">
-              <span><i class="fas fa-tag mr-2"></i> Ticket Types</span>
-              <span class="text-[10px] bg-base-200 px-2 rounded text-gray-500" id="count-types">0</span>
-            </h3>
-            <div class="divider my-1"></div>
-            <div class="relative">
-              <input type="text" id="in-types" class="input input-bordered input-sm w-full pr-8 focus:outline-none focus:border-secondary" placeholder="เพิ่มประเภท (Enter)..." onkeypress="SettingsManager.handleEnter(event, 'types')">
-              <i class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
-            </div>
-            <div id="list-types" class="flex flex-wrap gap-2 mt-3 min-h-[50px]"></div>
-          </div>
-        </div>
-
-        <div class="card bg-base-100 shadow-sm border border-base-200">
-          <div class="card-body p-5">
-            <h3 class="text-sm font-bold uppercase text-gray-400 tracking-wider flex justify-between">
-              <span><i class="fas fa-fire mr-2"></i> Severities</span>
-              <span class="text-[10px] bg-base-200 px-2 rounded text-gray-500" id="count-severities">0</span>
-            </h3>
-            <div class="divider my-1"></div>
-            <div class="relative">
-              <input type="text" id="in-severities" class="input input-bordered input-sm w-full pr-8 focus:outline-none focus:border-error" placeholder="เพิ่มระดับ (Enter)..." onkeypress="SettingsManager.handleEnter(event, 'severities')">
-              <i class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
-            </div>
-            <div id="list-severities" class="flex flex-wrap gap-2 mt-3 min-h-[50px]"></div>
-          </div>
-        </div>
-
+        <div id="list-statuses" class="flex-1 overflow-y-auto p-3 pt-0 space-y-1 custom-scrollbar"></div>
       </div>
 
-      <div class="xl:col-span-8">
-        <div class="card bg-base-100 shadow-sm border border-base-200 h-full min-h-[500px]">
-          <div class="card-body p-0 flex flex-col">
-
-            <div class="p-5 border-b border-base-200 flex justify-between items-center bg-gray-50/50 rounded-t-xl">
-              <div>
-                <h3 class="text-sm font-bold uppercase text-gray-500 tracking-wider">
-                  <i class="fas fa-folder-tree mr-2"></i> Categories
-                </h3>
-              </div>
-              <div class="join">
-                <input type="text" id="in-new-cat" class="input input-sm input-bordered join-item w-48 focus:outline-none" placeholder="หมวดหมู่ใหม่..." onkeypress="if(event.key==='Enter') SettingsManager.addCategory()">
-                <button onclick="SettingsManager.addCategory()" class="btn btn-sm btn-primary join-item px-4">เพิ่ม</button>
-              </div>
-            </div>
-
-            <div id="container-categories" class="flex-1 overflow-y-auto p-5 space-y-3 bg-white"></div>
-
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col h-1/3 min-h-[200px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50">
+          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+            <i class="fas fa-tag text-secondary"></i> Ticket Types
+          </span>
+          <span id="count-types" class="badge badge-ghost badge-xs font-mono">0</span>
+        </div>
+        <div class="divider my-0 h-px bg-base-100"></div>
+        <div class="p-3 bg-white">
+          <div class="relative">
+            <input type="text" id="in-new-type" onkeypress="SettingsManager.handleEnter(event, 'types')"
+              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-secondary text-xs"
+              placeholder="เพิ่มประเภท (Enter)...">
+            <i class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
           </div>
         </div>
+        <div id="list-types" class="flex-1 overflow-y-auto p-3 pt-0 space-y-1 custom-scrollbar"></div>
+      </div>
+
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col h-1/3 min-h-[200px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50">
+          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+            <i class="fas fa-fire text-error"></i> Severities
+          </span>
+          <span id="count-severities" class="badge badge-ghost badge-xs font-mono">0</span>
+        </div>
+        <div class="divider my-0 h-px bg-base-100"></div>
+        <div class="p-3 bg-white">
+          <div class="relative">
+            <input type="text" id="in-new-severity" onkeypress="SettingsManager.handleEnter(event, 'severities')"
+              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-error text-xs"
+              placeholder="เพิ่มระดับ (Enter)...">
+            <i class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
+          </div>
+        </div>
+        <div id="list-severities" class="flex-1 overflow-y-auto p-3 pt-0 space-y-1 custom-scrollbar"></div>
       </div>
 
     </div>
+
+    <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col overflow-hidden h-full min-h-[600px]">
+      
+      <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50 shrink-0">
+        <div>
+          <h3 class="text-xs font-bold uppercase text-gray-500 tracking-wider flex items-center gap-2">
+            <i class="fas fa-folder-tree text-success"></i> Categories
+          </h3>
+          <p class="text-[10px] text-gray-400 mt-1">จัดการหมวดหมู่หลักและย่อย</p>
+        </div>
+        <div class="join shadow-sm">
+          <input type="text" id="in-new-cat" onkeypress="if(event.key==='Enter') SettingsManager.addCategory()"
+            class="input input-sm input-bordered join-item w-36 focus:outline-none focus:border-success text-xs" placeholder="หมวดหมู่ใหม่...">
+          <button onclick="SettingsManager.addCategory()" class="btn btn-sm btn-primary join-item px-3">
+            <i class="fas fa-plus text-xs"></i>
+          </button>
+        </div>
+      </div>
+
+      <div id="container-categories" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-white"></div>
+    </div>
+
   </div>
 
   <dialog id="modal_edit_setting" class="modal">
-    <div class="modal-box">
-      <h3 class="font-bold text-lg mb-4" id="modal-edit-title">แก้ไขข้อมูล</h3>
-      <input type="text" id="modal-edit-input" class="input input-bordered w-full" placeholder="ใส่ข้อมูลใหม่..." onkeypress="if(event.key==='Enter') SettingsManager.saveEditFromModal()" />
-      <p class="text-xs text-error mt-2 hidden" id="modal-edit-error"></p>
-      <div class="modal-action">
-        <form method="dialog">
-          <button class="btn btn-ghost">ยกเลิก</button>
-        </form>
-        <button class="btn btn-primary" onclick="SettingsManager.saveEditFromModal()">บันทึก</button>
+    <div class="modal-box rounded-2xl p-0 overflow-hidden">
+      <div class="bg-gray-50 px-6 py-4 border-b border-base-200">
+        <h3 class="font-bold text-lg flex items-center gap-2 text-gray-800">
+          <span class="w-1.5 h-5 bg-primary rounded-full"></span>
+          <span id="modal-edit-title">แก้ไขข้อมูล</span>
+        </h3>
+      </div>
+      
+      <div class="p-6">
+        <div class="form-control w-full">
+          <input type="text" id="modal-edit-input" 
+                 class="input input-bordered w-full focus:outline-none focus:border-primary text-sm" 
+                 placeholder="ใส่ข้อมูลใหม่..." 
+                 onkeypress="if(event.key==='Enter') SettingsManager.saveEditFromModal()" />
+          <label class="label pb-0">
+            <span class="label-text-alt text-error hidden font-medium flex items-center gap-1 mt-1" id="modal-edit-error">
+              <i class="fas fa-exclamation-circle"></i> กรุณากรอกข้อมูล
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="px-6 py-4 bg-gray-50 flex justify-end gap-2 border-t border-base-200">
+        <button class="btn btn-sm btn-ghost text-gray-500" onclick="SettingsManager.closeModal()">ยกเลิก</button>
+        <button class="btn btn-sm btn-primary px-6" onclick="SettingsManager.saveEditFromModal()">บันทึก</button>
       </div>
     </div>
-    <form method="dialog" class="modal-backdrop">
-      <button>close</button>
+    <form method="dialog" class="modal-backdrop bg-black/30 backdrop-blur-[1px]">
+      <button onclick="SettingsManager.closeModal()">close</button>
     </form>
   </dialog>
 

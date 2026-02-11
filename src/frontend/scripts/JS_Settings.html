@@ -1,95 +1,157 @@
 <script>
+/**
+ * Settings Manager (Vanilla JS - No Clock)
+ * Features: Clean UI, Modal Edit, CRUD
+ */
 const SettingsManager = (() => {
+  // --- State ---
   let _config = { types: [], statuses: [], severities: [], categories: {} };
   let _isLoaded = false;
   
-  // เก็บสถานะว่ากำลังแก้อะไรอยู่
-  let _editContext = null; // { type: 'list'|'cat'|'sub', key: '...', index: 0, oldVal: '...' }
+  // Edit Context
+  let _editContext = null; 
 
   const el = id => document.getElementById(id);
 
   return {
-    init: function() {},
+    init: function() {
+      console.log("SettingsManager Initialized");
+    },
 
     onShow: function() {
       if (!_isLoaded) this.loadSettings();
     },
 
+    // --- Loading & Saving ---
+
     loadSettings: function(force = false) {
-      UIManager.showLoading();
-      Server.call('getTicketConfig')
+      const loader = el('sett-loader');
+      const btnRefresh = el('btn-sett-refresh');
+      const iconRefresh = el('icon-sett-refresh');
+
+      if(loader) loader.classList.remove('hidden');
+      if(btnRefresh) btnRefresh.disabled = true;
+      if(iconRefresh) iconRefresh.classList.add('fa-spin');
+
+      Server.call({ func: 'getTicketConfig', silent: true })
         .then(res => {
           if (res.success) {
             _config = res.data || { types: [], statuses: [], severities: [], categories: {} };
+            
+            // Normalize
+            ['types', 'statuses', 'severities'].forEach(k => { if(!Array.isArray(_config[k])) _config[k] = []; });
+            if(typeof _config.categories !== 'object' || Array.isArray(_config.categories)) _config.categories = {};
+
             this.renderAll();
             _isLoaded = true;
-            if (force) UIManager.showToast("รีเฟรชข้อมูลเรียบร้อย", "success");
+            if (force) UIManager.showToast("โหลดข้อมูลเรียบร้อย", "success");
           } else {
-             UIManager.showToast(res.message, "error");
+             UIManager.showToast(res.message || "โหลดข้อมูลไม่สำเร็จ", "error");
           }
         })
-        .finally(() => UIManager.hideLoading());
+        .catch(err => {
+          console.error(err);
+          UIManager.showToast("Error: " + err.message, "error");
+        })
+        .finally(() => {
+          if(loader) loader.classList.add('hidden');
+          if(btnRefresh) btnRefresh.disabled = false;
+          if(iconRefresh) iconRefresh.classList.remove('fa-spin');
+        });
     },
 
     saveSettings: function() {
-      UIManager.showLoading();
+      const btn = el('btn-sett-save');
+      const loader = el('loader-sett-save');
+      const icon = el('icon-sett-save');
+
+      if(btn) btn.disabled = true;
+      if(loader) loader.classList.remove('hidden');
+      if(icon) icon.classList.add('hidden');
+
       const payload = JSON.parse(JSON.stringify(_config));
+      
       Server.call('saveTicketConfig', payload)
         .then(res => {
           if (res.success) UIManager.showToast("บันทึกสำเร็จ", "success");
           else UIManager.showToast(res.message, "error");
         })
-        .catch(err => UIManager.showToast("Error: " + err, "error"))
-        .finally(() => UIManager.hideLoading());
+        .catch(err => UIManager.showToast("Error saving: " + err, "error"))
+        .finally(() => {
+          if(btn) btn.disabled = false;
+          if(loader) loader.classList.add('hidden');
+          if(icon) icon.classList.remove('hidden');
+        });
     },
 
+    // --- Rendering ---
+
     renderAll: function() {
-      this.renderChips('statuses', 'badge-info');
-      this.renderChips('types', 'badge-secondary');
-      this.renderChips('severities', 'badge-error');
+      this.renderList('statuses', 'badge-info');
+      this.renderList('types', 'badge-secondary');
+      this.renderList('severities', 'badge-error');
       this.renderCategories();
     },
 
-    renderChips: function(key, colorClass) {
+    renderList: function(key, colorClass) {
       const container = el(`list-${key}`);
       const list = _config[key] || [];
       const counter = el(`count-${key}`);
+      
       if(counter) counter.innerText = list.length;
+      if(!container) return;
+      
       container.innerHTML = '';
 
+      if (list.length === 0) {
+        container.innerHTML = `<span class="text-xs text-gray-300 italic pl-1">ไม่มีข้อมูล</span>`;
+        return;
+      }
+
       list.forEach((item, index) => {
-        const chip = document.createElement('div');
-        chip.className = `badge ${colorClass} badge-outline gap-2 p-3 hover:bg-opacity-10 cursor-pointer group transition-all`;
-        chip.innerHTML = `
-          <span class="font-medium text-xs hover:underline" onclick="SettingsManager.editItem('${key}', ${index})" title="Click to edit">${item}</span>
-          <button onclick="event.stopPropagation(); SettingsManager.deleteItem('${key}', ${index})" class="w-4 h-4 rounded-full hover:bg-black/10 flex items-center justify-center opacity-60 group-hover:opacity-100">
+        const div = document.createElement('div');
+        // DaisyUI Badge Style (Outline with color)
+        div.className = `badge ${colorClass} badge-outline gap-2 p-3 hover:bg-opacity-10 cursor-pointer group transition-all select-none m-1`;
+        div.onclick = () => this.editItem(key, index);
+        
+        div.innerHTML = `
+          <span class="font-medium text-xs hover:underline" title="คลิกเพื่อแก้ไข">${item}</span>
+          <button onclick="event.stopPropagation(); SettingsManager.deleteItem('${key}', ${index})" 
+            class="w-4 h-4 rounded-full hover:bg-black/10 flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity">
             <i class="fas fa-times text-[10px]"></i>
           </button>
         `;
-        container.appendChild(chip);
+        container.appendChild(div);
       });
     },
 
     renderCategories: function() {
       const container = el('container-categories');
+      if(!container) return;
       container.innerHTML = '';
       const cats = Object.keys(_config.categories);
       
       if (cats.length === 0) {
-        container.innerHTML = `<div class="text-center py-10 text-gray-300">No Categories</div>`; return;
+        container.innerHTML = `
+          <div class="flex flex-col items-center justify-center py-10 text-gray-300 gap-2">
+            <i class="fas fa-folder-open text-3xl opacity-20"></i>
+            <span class="text-xs">ยังไม่มีหมวดหมู่</span>
+          </div>`; 
+        return;
       }
 
       cats.forEach(cat => {
-        const subs = _config.categories[cat];
+        const subs = _config.categories[cat] || [];
         const div = document.createElement('div');
-        div.className = "collapse collapse-arrow bg-base-100 border border-base-200 shadow-sm rounded-lg mb-2";
+        // Collapse Style
+        div.className = "collapse collapse-arrow bg-white border border-base-200 shadow-sm rounded-lg mb-2 group hover:border-primary/30 transition-colors";
         
         div.innerHTML = `
           <input type="checkbox" /> 
           <div class="collapse-title text-sm font-bold flex items-center justify-between pr-12 min-h-0 py-3">
              <div class="flex items-center gap-2 text-gray-700 w-full z-10">
                <i class="fas fa-folder text-warning/70"></i>
-               <span class="hover:text-primary cursor-pointer hover:underline" onclick="event.preventDefault(); SettingsManager.editCategory('${cat}')" title="Rename Category">${cat}</span>
+               <span class="hover:text-primary cursor-pointer hover:underline" onclick="event.preventDefault(); SettingsManager.editCategory('${cat}')" title="คลิกเพื่อแก้ชื่อ">${cat}</span>
                <span class="badge badge-sm badge-ghost font-normal text-xs text-gray-400">${subs.length}</span>
              </div>
              <button onclick="event.preventDefault(); SettingsManager.deleteCategory('${cat}')" class="btn btn-xs btn-ghost text-gray-300 hover:text-error z-20">
@@ -99,18 +161,21 @@ const SettingsManager = (() => {
           <div class="collapse-content">
              <div class="pt-2 pl-6 pr-2 space-y-1">
                ${subs.map((sub, idx) => `
-                 <div class="flex justify-between items-center group/sub px-3 py-1.5 rounded-md hover:bg-gray-50 text-xs text-gray-600">
+                 <div class="flex justify-between items-center group/sub px-3 py-1.5 rounded-md hover:bg-gray-50 text-xs text-gray-600 transition-colors cursor-pointer" onclick="SettingsManager.editSub('${cat}', ${idx})">
                    <div class="flex items-center gap-2">
-                     <div class="w-1.5 h-1.5 rounded-full bg-gray-300 group-hover/sub:bg-primary"></div>
-                     <span class="cursor-pointer hover:text-primary hover:underline" onclick="SettingsManager.editSub('${cat}', ${idx})" title="Rename Subcategory">${sub}</span>
+                     <div class="w-1.5 h-1.5 rounded-full bg-gray-300 group-hover/sub:bg-primary transition-colors"></div>
+                     <span class="group-hover/sub:text-primary group-hover/sub:underline">${sub}</span>
                    </div>
-                   <button onclick="SettingsManager.deleteSub('${cat}', ${idx})" class="text-gray-300 hover:text-error opacity-0 group-hover/sub:opacity-100">
+                   <button onclick="event.stopPropagation(); SettingsManager.deleteSub('${cat}', ${idx})" class="text-gray-300 hover:text-error opacity-0 group-hover/sub:opacity-100 transition-opacity">
                      <i class="fas fa-times"></i>
                    </button>
                  </div>
                `).join('')}
+               
                <div class="mt-3 pl-3 pr-1 flex gap-2">
-                 <input type="text" id="in-sub-${cat}" class="input input-xs input-bordered w-full" placeholder="+ Subcategory..." onkeypress="if(event.key==='Enter') SettingsManager.addSub('${cat}')">
+                 <input type="text" id="in-sub-${cat}" class="input input-xs input-bordered w-full focus:outline-none" 
+                        placeholder="+ เพิ่มย่อย..." 
+                        onkeypress="if(event.key==='Enter') SettingsManager.addSub('${cat}')">
                  <button onclick="SettingsManager.addSub('${cat}')" class="btn btn-xs btn-ghost btn-square text-primary"><i class="fas fa-plus"></i></button>
                </div>
              </div>
@@ -120,41 +185,74 @@ const SettingsManager = (() => {
       });
     },
 
-    handleEnter: function(e, key) { if (e.key === 'Enter') { e.preventDefault(); this.addItem(key); } },
+    // --- Actions ---
+
+    handleEnter: function(e, key) { 
+      if (e.key === 'Enter') { 
+        e.preventDefault(); 
+        this.addItem(key); 
+      } 
+    },
 
     addItem: function(key) {
-      const input = el(`in-${key}`);
+      const inputMap = { 'types': 'in-new-type', 'statuses': 'in-new-status', 'severities': 'in-new-severity' };
+      const input = el(inputMap[key]);
+      if (!input) return;
+      
       const val = input.value.trim();
-      if (val && !_config[key].includes(val)) {
-        _config[key].push(val);
-        this.renderAll();
-        input.value = '';
+      const colorMap = { 'types': 'badge-secondary', 'statuses': 'badge-info', 'severities': 'badge-error' };
+
+      if (val) {
+        if (!_config[key].includes(val)) {
+          _config[key].push(val);
+          this.renderList(key, colorMap[key]);
+          input.value = '';
+          input.focus();
+        } else {
+          UIManager.showToast("ข้อมูลซ้ำ", "warning");
+        }
       }
     },
     
     deleteItem: function(key, idx) {
-      if(confirm('Delete item?')) { _config[key].splice(idx, 1); this.renderAll(); }
+      if(confirm('ต้องการลบข้อมูลนี้หรือไม่?')) { 
+        _config[key].splice(idx, 1); 
+        const colorMap = { 'types': 'badge-secondary', 'statuses': 'badge-info', 'severities': 'badge-error' };
+        this.renderList(key, colorMap[key]);
+      }
     },
 
     addCategory: function() {
-      const val = el('in-new-cat').value.trim();
-      if (val && !_config.categories[val]) {
-        _config.categories[val] = [];
-        this.renderCategories();
-        el('in-new-cat').value = '';
+      const input = el('in-new-cat');
+      const val = input.value.trim();
+      if (val) {
+        if (!_config.categories[val]) {
+          _config.categories[val] = [];
+          this.renderCategories();
+          input.value = '';
+        } else {
+          UIManager.showToast("ชื่อหมวดหมู่ซ้ำ", "warning");
+        }
       }
     },
 
     deleteCategory: function(cat) {
-      if(confirm(`Delete category '${cat}'?`)) { delete _config.categories[cat]; this.renderCategories(); }
+      if(confirm(`ลบหมวดหมู่ '${cat}' และข้อมูลย่อยทั้งหมด?`)) { 
+        delete _config.categories[cat]; 
+        this.renderCategories(); 
+      }
     },
 
     addSub: function(cat) {
       const input = el(`in-sub-${cat}`);
+      if(!input) return;
       const val = input.value.trim();
-      if (val && !_config.categories[cat].includes(val)) {
-        _config.categories[cat].push(val);
-        this.renderCategories();
+      if (val) {
+        if (!_config.categories[cat].includes(val)) {
+          _config.categories[cat].push(val);
+          this.renderCategories();
+          setTimeout(() => { const i = el(`in-sub-${cat}`); if(i) i.focus(); }, 50);
+        }
       }
     },
 
@@ -166,18 +264,27 @@ const SettingsManager = (() => {
     // --- Modal Edit Logic ---
 
     openModal: function(title, value) {
+      const modal = el('modal_edit_setting');
       el('modal-edit-title').innerText = title;
       const input = el('modal-edit-input');
       input.value = value;
       el('modal-edit-error').classList.add('hidden');
-      el('modal_edit_setting').showModal();
-      // Focus input after delay
-      setTimeout(() => input.focus(), 100);
+      
+      if(modal) {
+        modal.showModal();
+        setTimeout(() => input.focus(), 100);
+      }
+    },
+
+    closeModal: function() {
+      const modal = el('modal_edit_setting');
+      if(modal) modal.close();
+      _editContext = null;
     },
 
     editItem: function(key, idx) {
       _editContext = { type: 'list', key: key, index: idx, oldVal: _config[key][idx] };
-      this.openModal(`แก้ไขข้อมูล ${key}`, _config[key][idx]);
+      this.openModal(`แก้ไขข้อมูล (${idx+1})`, _config[key][idx]);
     },
 
     editCategory: function(catName) {
@@ -191,46 +298,59 @@ const SettingsManager = (() => {
     },
 
     saveEditFromModal: function() {
-      const newVal = el('modal-edit-input').value.trim();
+      const input = el('modal-edit-input');
+      const errEl = el('modal-edit-error');
+      const newVal = input.value.trim();
+      
+      // Validation
       if (!newVal) {
-        el('modal-edit-error').innerText = "กรุณากรอกข้อมูล";
-        el('modal-edit-error').classList.remove('hidden');
+        errEl.classList.remove('hidden');
         return;
       }
 
       if (newVal === _editContext.oldVal) {
-        el('modal_edit_setting').close();
+        this.closeModal();
         return;
       }
 
-      // Logic ตามประเภทที่แก้
+      // Logic
       if (_editContext.type === 'list') {
+        if (_config[_editContext.key].includes(newVal)) {
+           errEl.innerText = "ชื่อนี้มีอยู่แล้ว";
+           errEl.classList.remove('hidden');
+           return;
+        }
         _config[_editContext.key][_editContext.index] = newVal;
-        this.renderAll();
+        const colorMap = { 'types': 'badge-secondary', 'statuses': 'badge-info', 'severities': 'badge-error' };
+        this.renderList(_editContext.key, colorMap[_editContext.key]);
       } 
       else if (_editContext.type === 'cat') {
         if (_config.categories[newVal]) {
-          alert('ชื่อหมวดหมู่นี้มีอยู่แล้ว');
-          return;
+           errEl.innerText = "ชื่อนี้มีอยู่แล้ว";
+           errEl.classList.remove('hidden');
+           return;
         }
-        // Rename key: copy data to new key, delete old key
         const data = _config.categories[_editContext.oldVal];
         delete _config.categories[_editContext.oldVal];
         _config.categories[newVal] = data;
         this.renderCategories();
       } 
       else if (_editContext.type === 'sub') {
+        if (_config.categories[_editContext.key].includes(newVal)) {
+           errEl.innerText = "ชื่อนี้มีอยู่แล้ว";
+           errEl.classList.remove('hidden');
+           return;
+        }
         _config.categories[_editContext.key][_editContext.index] = newVal;
         this.renderCategories();
       }
 
-      el('modal_edit_setting').close();
-      _editContext = null;
+      this.closeModal();
     }
-
   };
 })();
 
+// Lifecycle
 document.addEventListener('DOMContentLoaded', () => {
   Router.register('page-settings', SettingsManager);
   SettingsManager.init();

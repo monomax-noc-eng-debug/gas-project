@@ -1,502 +1,215 @@
-<!-- Page_Ticket.html - Jira-Style Ticket System -->
-<div id="page-ticket" class="page-section hidden w-full h-full relative bg-base-200">
+<div id="page-ticket" class="page-section hidden w-full h-full bg-base-200/50 flex flex-col p-4 md:p-6 gap-6 overflow-hidden">
 
-    <style>
-        /* Jira-inspired custom styles */
-        .jira-stat-card {
-            position: relative;
-            overflow: hidden;
-            transition: all 0.2s ease;
-        }
-
-        .jira-stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 4px;
-            height: 100%;
-            border-radius: 4px 0 0 4px;
-        }
-
-        .jira-stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
-
-        .jira-stat-card.stat-total::before {
-            background: #6366f1;
-        }
-
-        .jira-stat-card.stat-open::before {
-            background: #ef4444;
-        }
-
-        .jira-stat-card.stat-pending::before {
-            background: #f59e0b;
-        }
-
-        .jira-stat-card.stat-resolved::before {
-            background: #22c55e;
-        }
-
-        .jira-stat-card.stat-closed::before {
-            background: #6b7280;
-        }
-
-        .jira-stat-card.stat-request::before {
-            background: #3b82f6;
-        }
-
-        .jira-stat-card.stat-incident::before {
-            background: #ec4899;
-        }
-
-        .ticket-row {
-            transition: background 0.15s ease;
-            cursor: pointer;
-        }
-
-        .ticket-row:hover {
-            background: #f1f5f9 !important;
-        }
-
-        .ticket-id-link {
-            color: #2563eb;
-            font-weight: 700;
-            text-decoration: none;
-            transition: color 0.15s;
-        }
-
-        .ticket-id-link:hover {
-            color: #1d4ed8;
-            text-decoration: underline;
-        }
-
-        .severity-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-            flex-shrink: 0;
-        }
-
-        .severity-dot.critical {
-            background: #ef4444;
-            box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
-        }
-
-        .severity-dot.high {
-            background: #f97316;
-        }
-
-        .severity-dot.medium {
-            background: #3b82f6;
-        }
-
-        .severity-dot.low {
-            background: #6b7280;
-        }
-
-        .severity-dot.normal {
-            background: #a3a3a3;
-        }
-
-        .status-lozenge {
-            display: inline-flex;
-            align-items: center;
-            padding: 2px 8px;
-            border-radius: 3px;
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.02em;
-            white-space: nowrap;
-        }
-
-        .status-lozenge.open {
-            background: #fee2e2;
-            color: #dc2626;
-        }
-
-        .status-lozenge.pending {
-            background: #fef3c7;
-            color: #d97706;
-        }
-
-        .status-lozenge.resolved {
-            background: #dcfce7;
-            color: #16a34a;
-        }
-
-        .status-lozenge.closed {
-            background: #f3f4f6;
-            color: #6b7280;
-        }
-
-        .status-lozenge.default {
-            background: #e0e7ff;
-            color: #4f46e5;
-        }
-
-        .type-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 10px;
-            font-weight: 600;
-        }
-
-        .type-badge.incident {
-            color: #ec4899;
-        }
-
-        .type-badge.request {
-            color: #3b82f6;
-        }
-
-        .ticket-table-header th {
-            background: #f8fafc;
-            color: #64748b;
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            border-bottom: 2px solid #e2e8f0;
-            padding: 10px 12px;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        .breadcrumb-bar {
-            font-size: 11px;
-            color: #94a3b8;
-        }
-
-        .breadcrumb-bar span {
-            color: #1e293b;
-            font-weight: 600;
-        }
-    </style>
-
-    <div class="absolute inset-0 flex flex-col p-4 gap-3 overflow-hidden">
-
-        <!-- Header Bar -->
-        <div
-            class="flex justify-between items-center bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
-            <div class="flex items-center gap-3">
-                <div class="bg-indigo-500/10 p-2.5 rounded-xl">
-                    <i class="fas fa-clipboard-list text-xl text-indigo-500"></i>
-                </div>
-                <div>
-                    <h2 class="text-base font-bold text-gray-800">ทิคเก็ต (Ticket)</h2>
-                    <p class="text-[10px] text-gray-400">จัดการรายการ Ticket ทั้งหมด</p>
-                </div>
+    <div class="flex justify-between items-center bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="bg-primary/10 p-2 rounded-xl text-primary">
+                <i class="fas fa-ticket-alt text-xl"></i>
             </div>
-            <div class="flex items-center gap-2">
-                <button onclick="TicketManager.loadTickets(true)"
-                    class="btn btn-sm btn-ghost btn-circle text-base-content/60 hover:text-indigo-600 tooltip tooltip-bottom"
-                    data-tip="รีเฟรช">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
-                <button onclick="TicketManager.openModal('CREATE')"
-                    class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0 gap-1.5 shadow-md shadow-indigo-200 hover:shadow-lg hover:shadow-indigo-300 transition-all">
-                    <i class="fas fa-plus text-xs"></i> Create
-                </button>
+            <div>
+                <h2 class="text-base font-bold text-gray-800">ทิคเก็ต (Ticket)</h2>
+                <p class="text-[10px] text-gray-400">รายการแจ้งปัญหาและงานทั้งหมด</p>
             </div>
         </div>
-
-        <!-- Stats Cards - Jira Board Style -->
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 shrink-0">
-            <!-- Total -->
-            <div class="jira-stat-card stat-total bg-white rounded-xl border border-gray-100 p-3 pl-5">
-                <div class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Total</div>
-                <div class="text-xl font-black text-indigo-600 mt-0.5" id="stat-total">0</div>
-            </div>
-            <!-- Open -->
-            <div class="jira-stat-card stat-open bg-white rounded-xl border border-gray-100 p-3 pl-5">
-                <div class="text-[9px] font-bold uppercase tracking-wider text-red-400">Open</div>
-                <div class="text-xl font-black text-red-500 mt-0.5" id="stat-open">0</div>
-            </div>
-            <!-- Pending -->
-            <div class="jira-stat-card stat-pending bg-white rounded-xl border border-gray-100 p-3 pl-5">
-                <div class="text-[9px] font-bold uppercase tracking-wider text-amber-400">Pending</div>
-                <div class="text-xl font-black text-amber-500 mt-0.5" id="stat-pending">0</div>
-            </div>
-            <!-- Resolved -->
-            <div class="jira-stat-card stat-resolved bg-white rounded-xl border border-gray-100 p-3 pl-5">
-                <div class="text-[9px] font-bold uppercase tracking-wider text-green-400">Resolved</div>
-                <div class="text-xl font-black text-green-500 mt-0.5" id="stat-resolved">0</div>
-            </div>
-            <!-- Closed -->
-            <div class="jira-stat-card stat-closed bg-white rounded-xl border border-gray-100 p-3 pl-5">
-                <div class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Closed</div>
-                <div class="text-xl font-black text-gray-500 mt-0.5" id="stat-closed">0</div>
-            </div>
-            <!-- Request -->
-            <div class="jira-stat-card stat-request bg-white rounded-xl border border-gray-100 p-3 pl-5">
-                <div class="text-[9px] font-bold uppercase tracking-wider text-blue-400">Request</div>
-                <div class="text-xl font-black text-blue-500 mt-0.5" id="stat-request">0</div>
-            </div>
-            <!-- Incident -->
-            <div class="jira-stat-card stat-incident bg-white rounded-xl border border-gray-100 p-3 pl-5">
-                <div class="text-[9px] font-bold uppercase tracking-wider text-pink-400">Incident</div>
-                <div class="text-xl font-black text-pink-500 mt-0.5" id="stat-incident">0</div>
-            </div>
-        </div>
-
-        <!-- Search & Filter Bar -->
-        <div
-            class="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-2.5 flex flex-col md:flex-row items-center gap-3 shrink-0">
-            <div class="relative flex-1 w-full md:max-w-sm">
-                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
-                <input type="text" id="ticket-search" onkeyup="TicketManager.filterData()"
-                    placeholder="ค้นหา Ticket ID, Subject, Status..."
-                    class="input input-sm w-full pl-9 bg-gray-50 border-gray-200 rounded-lg focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 text-xs">
-            </div>
-            <div class="flex items-center gap-2 text-[10px] text-gray-400">
-                <i class="fas fa-info-circle"></i>
-                <span>ค้นหาด้วย ID, หัวข้อ, ประเภท, หรือสถานะ</span>
-            </div>
-        </div>
-
-        <!-- Table Container -->
-        <div
-            class="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col relative">
-
-            <!-- Loading Overlay (Consistent with other pages) -->
-            <div id="ticket-loader"
-                class="absolute inset-0 bg-white/80 z-20 flex flex-col items-center justify-center hidden backdrop-blur-[1px]">
-                <span class="loading loading-spinner loading-lg text-indigo-500"></span>
-                <p class="mt-2 text-sm font-medium text-base-content/60 animate-pulse">กำลังโหลดข้อมูล...</p>
-            </div>
-
-            <!-- Empty State -->
-            <div id="ticket-empty"
-                class="absolute inset-0 flex flex-col items-center justify-center text-gray-300 hidden z-10">
-                <div class="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center mb-3">
-                    <i class="fas fa-clipboard-list text-3xl text-gray-200"></i>
-                </div>
-                <p class="text-sm font-semibold text-gray-400">ไม่พบรายการ Ticket</p>
-                <p class="text-[10px] text-gray-300 mt-1">ลองปรับเงื่อนไขค้นหา หรือสร้าง Ticket ใหม่</p>
-                <button onclick="TicketManager.openModal('CREATE')"
-                    class="btn btn-sm btn-ghost text-indigo-500 mt-3 gap-1">
-                    <i class="fas fa-plus text-xs"></i> Create Ticket
-                </button>
-            </div>
-
-            <!-- Table -->
-            <div class="overflow-auto flex-1 h-full">
-                <table class="table table-xs w-full table-fixed">
-                    <thead>
-                        <tr class="ticket-table-header">
-                            <th class="w-10 text-center">#</th>
-                            <th class="w-28">Key</th>
-                            <th>Summary</th>
-                            <th class="w-20 text-center">Type</th>
-                            <th class="w-20 text-center">Severity</th>
-                            <th class="w-24 text-center">Status</th>
-                            <th class="w-24 text-center">Date</th>
-                            <th class="w-20 text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ticket-table-body">
-                        <!-- Rows generated by JS -->
-                    </tbody>
-                </table>
-            </div>
+        
+        <div class="flex items-center gap-2">
+            <button onclick="TicketManager.loadTickets(true)"
+                class="btn btn-sm btn-ghost btn-circle text-base-content/60 hover:text-primary tooltip tooltip-bottom"
+                data-tip="รีเฟรช">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            <button onclick="TicketManager.openModal('CREATE')"
+                class="btn btn-sm btn-primary text-white shadow-sm gap-2 font-medium px-4">
+                <i class="fas fa-plus text-xs"></i> <span class="hidden sm:inline">สร้าง Ticket</span>
+            </button>
         </div>
     </div>
 
-    <!-- Create/Edit Modal - Jira Drawer Style -->
-    <dialog id="modal-ticket-form" class="modal modal-bottom sm:modal-middle">
-        <div class="modal-box w-11/12 max-w-4xl p-0 rounded-2xl overflow-hidden shadow-2xl bg-white">
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 shrink-0">
+        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
+            <div class="stat-figure text-primary/20"><i class="fas fa-layer-group text-xl"></i></div>
+            <div class="stat-title text-[10px] uppercase font-bold text-gray-400">Total</div>
+            <div class="stat-value text-2xl text-primary" id="stat-total">0</div>
+        </div>
+        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
+            <div class="stat-title text-[10px] uppercase font-bold text-red-400">Open</div>
+            <div class="stat-value text-2xl text-red-500" id="stat-open">0</div>
+        </div>
+        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
+            <div class="stat-title text-[10px] uppercase font-bold text-amber-400">Pending</div>
+            <div class="stat-value text-2xl text-amber-500" id="stat-pending">0</div>
+        </div>
+        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
+            <div class="stat-title text-[10px] uppercase font-bold text-green-400">Resolved</div>
+            <div class="stat-value text-2xl text-green-500" id="stat-resolved">0</div>
+        </div>
+        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
+            <div class="stat-title text-[10px] uppercase font-bold text-gray-400">Closed</div>
+            <div class="stat-value text-2xl text-gray-500" id="stat-closed">0</div>
+        </div>
+        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
+            <div class="stat-title text-[10px] uppercase font-bold text-blue-400">Request</div>
+            <div class="stat-value text-xl text-blue-500" id="stat-request">0</div>
+        </div>
+        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
+            <div class="stat-title text-[10px] uppercase font-bold text-pink-400">Incident</div>
+            <div class="stat-value text-xl text-pink-500" id="stat-incident">0</div>
+        </div>
+    </div>
 
-            <!-- Header -->
-            <div
-                class="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4 flex justify-between items-center relative overflow-hidden">
-                <div
-                    class="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMwLTkuOTQtOC4wNi0xOC0xOC0xOHY2YzYuNjMgMCAxMiA1LjM3IDEyIDEycy01LjM3IDEyLTEyIDEydjZjOS45NCAwIDE4LTguMDYgMTgtMTh6IiBmaWxsPSIjZmZmIi8+PC9nPjwvc3ZnPg==')]">
-                </div>
-                <div class="relative z-10">
-                    <h3 class="font-bold text-lg text-white flex items-center gap-2">
-                        <i class="fas fa-ticket-alt"></i>
-                        <span id="ticket-modal-title">จัดการ Ticket</span>
-                    </h3>
-                    <p class="text-indigo-200 text-[10px] mt-0.5">กรอกข้อมูลให้ครบถ้วน แล้วกด Save</p>
-                </div>
+    <div class="card bg-white shadow-sm border border-base-200 flex-1 min-h-0 flex flex-col overflow-hidden">
+        
+        <div class="p-4 border-b border-base-100 flex items-center gap-3 bg-white z-20">
+            <div class="relative flex-1 max-w-md">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
+                <input type="text" id="ticket-search" onkeyup="TicketManager.filterData()" 
+                    placeholder="ค้นหา ID, หัวข้อ, สถานะ..." 
+                    class="input input-sm input-bordered w-full pl-9 focus:input-primary rounded-lg text-xs">
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-x-auto overflow-y-auto relative custom-scrollbar bg-white">
+            
+            <div id="ticket-loader" class="absolute inset-0 bg-white/80 z-30 flex flex-col items-center justify-center hidden backdrop-blur-[1px]">
+                <span class="loading loading-dots loading-lg text-primary"></span>
+            </div>
+
+            <div id="ticket-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-300 hidden z-10 pointer-events-none">
+                <i class="fas fa-inbox text-4xl mb-2 opacity-30"></i>
+                <p class="text-sm">ไม่พบข้อมูล Ticket</p>
+            </div>
+
+            <table class="table table-md w-full text-left">
+                <thead class="bg-gray-50 text-gray-600 font-bold text-sm uppercase sticky top-0 z-20 shadow-sm">
+                    <tr>
+                        <th class="whitespace-nowrap py-4 pl-4 w-16 text-center">No.</th>
+                        <th class="whitespace-nowrap py-4 w-32">Ticket ID</th>
+                        <th class="whitespace-nowrap py-4 w-32">Date</th>
+                        <th class="whitespace-nowrap py-4 min-w-[250px]">Subject</th>
+                        <th class="whitespace-nowrap py-4 w-28 text-center">Type</th>
+                        <th class="whitespace-nowrap py-4 w-28 text-center">Severity</th>
+                        <th class="whitespace-nowrap py-4 w-32 text-center">Status</th>
+                        <th class="whitespace-nowrap py-4 w-40">Category</th>
+                        <th class="whitespace-nowrap py-4 w-40">Assign To</th>
+                        <th class="whitespace-nowrap py-4 pr-4 w-20 text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="ticket-table-body" class="text-sm divide-y divide-gray-100">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <dialog id="modal-ticket-form" class="modal modal-bottom sm:modal-middle">
+        <div class="modal-box w-11/12 max-w-3xl p-0 rounded-2xl bg-white shadow-2xl overflow-hidden">
+            
+            <div class="px-6 py-4 border-b border-base-200 flex justify-between items-center bg-base-50">
+                <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
+                    <span class="w-2 h-6 bg-primary rounded-full"></span>
+                    <span id="ticket-modal-title">Ticket Detail</span>
+                </h3>
                 <form method="dialog">
-                    <button
-                        class="btn btn-sm btn-circle btn-ghost text-white/60 hover:text-white hover:bg-white/10">✕</button>
+                    <button class="btn btn-sm btn-circle btn-ghost text-gray-400 hover:text-gray-600">✕</button>
                 </form>
             </div>
 
-            <!-- Body -->
-            <form id="form-ticket" onsubmit="TicketManager.handleSubmit(event)"
-                class="overflow-y-auto max-h-[calc(100vh-14rem)]">
+            <form id="form-ticket" onsubmit="TicketManager.handleSubmit(event)" class="overflow-y-auto max-h-[calc(100vh-12rem)]">
                 <input type="hidden" name="id" id="inp-ticket-id">
 
-                <!-- Section 1: Core Info -->
-                <div class="p-6 pb-4 border-b border-gray-100">
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="w-5 h-5 rounded bg-indigo-100 flex items-center justify-center">
-                            <i class="fas fa-info-circle text-[10px] text-indigo-500"></i>
-                        </span>
-                        <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">ข้อมูลหลัก</span>
-                    </div>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="p-6 space-y-6">
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div class="form-control">
-                            <label class="label py-1"><span
-                                    class="label-text text-[10px] font-bold text-gray-500">Date</span></label>
-                            <input type="date" name="date" required
-                                class="input input-bordered input-sm rounded-lg text-xs" id="inp-ticket-date">
+                            <span class="label-text text-xs font-bold text-gray-400 mb-1">Date</span>
+                            <input type="date" name="date" id="inp-ticket-date" required class="input input-sm input-bordered w-full">
                         </div>
                         <div class="form-control">
-                            <label class="label py-1"><span
-                                    class="label-text text-[10px] font-bold text-gray-500">Time</span></label>
-                            <input type="time" name="time" required
-                                class="input input-bordered input-sm rounded-lg text-xs" id="inp-ticket-time">
+                            <span class="label-text text-xs font-bold text-gray-400 mb-1">Time</span>
+                            <input type="time" name="time" id="inp-ticket-time" required class="input input-sm input-bordered w-full">
                         </div>
                         <div class="form-control">
-                            <label class="label py-1"><span
-                                    class="label-text text-[10px] font-bold text-gray-500">Type</span></label>
-                            <select name="type" class="select select-bordered select-sm rounded-lg text-xs"
-                                id="sel-ticket-type"></select>
+                            <span class="label-text text-xs font-bold text-gray-400 mb-1">Type</span>
+                            <select name="type" id="sel-ticket-type" class="select select-sm select-bordered w-full"></select>
                         </div>
                         <div class="form-control">
-                            <label class="label py-1"><span
-                                    class="label-text text-[10px] font-bold text-gray-500">Status</span></label>
-                            <select name="status" class="select select-bordered select-sm rounded-lg text-xs"
-                                id="sel-ticket-status"></select>
+                            <span class="label-text text-xs font-bold text-gray-400 mb-1">Status</span>
+                            <select name="status" id="sel-ticket-status" class="select select-sm select-bordered w-full font-bold"></select>
                         </div>
                     </div>
-                </div>
 
-                <!-- Section 2: Classification -->
-                <div class="p-6 pb-4 border-b border-gray-100 bg-gray-50/30">
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="w-5 h-5 rounded bg-amber-100 flex items-center justify-center">
-                            <i class="fas fa-tags text-[10px] text-amber-500"></i>
-                        </span>
-                        <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">การจำแนก</span>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div class="form-control">
-                            <label class="label py-1"><span
-                                    class="label-text text-[10px] font-bold text-gray-500">Category</span></label>
-                            <select name="category" class="select select-bordered select-sm rounded-lg text-xs"
-                                id="sel-ticket-category" onchange="TicketManager.updateSubCategories()"></select>
-                        </div>
-                        <div class="form-control">
-                            <label class="label py-1"><span class="label-text text-[10px] font-bold text-gray-500">Sub
-                                    Category</span></label>
-                            <select name="subCategory" class="select select-bordered select-sm rounded-lg text-xs"
-                                id="sel-ticket-subcategory"></select>
-                        </div>
-                        <div class="form-control">
-                            <label class="label py-1"><span
-                                    class="label-text text-[10px] font-bold text-gray-500">Severity</span></label>
-                            <select name="severity" class="select select-bordered select-sm rounded-lg text-xs"
-                                id="sel-ticket-severity"></select>
-                        </div>
-                    </div>
-                </div>
+                    <div class="divider my-0"></div>
 
-                <!-- Section 3: Description -->
-                <div class="p-6 pb-4 border-b border-gray-100">
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="w-5 h-5 rounded bg-blue-100 flex items-center justify-center">
-                            <i class="fas fa-align-left text-[10px] text-blue-500"></i>
-                        </span>
-                        <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">รายละเอียด</span>
-                    </div>
-                    <div class="form-control mb-3">
-                        <label class="label py-1"><span
-                                class="label-text text-[10px] font-bold text-gray-500">Subject</span></label>
-                        <input type="text" name="subject" required
-                            class="input input-bordered input-sm rounded-lg font-bold text-sm"
-                            placeholder="หัวข้อปัญหา..." id="inp-ticket-subject">
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="space-y-4">
                         <div class="form-control">
-                            <label class="label py-1"><span
-                                    class="label-text text-[10px] font-bold text-gray-500">Detail</span></label>
-                            <textarea name="detail"
-                                class="textarea textarea-bordered rounded-lg h-28 text-xs leading-relaxed"
-                                placeholder="อธิบายรายละเอียดปัญหา..." id="txt-ticket-detail"></textarea>
+                            <span class="label-text text-xs font-bold text-gray-400 mb-1">Subject / หัวข้อ</span>
+                            <input type="text" name="subject" id="inp-ticket-subject" required class="input input-bordered w-full font-bold text-gray-700 placeholder:font-normal" placeholder="ระบุหัวข้อปัญหา...">
                         </div>
-                        <div class="form-control">
-                            <label class="label py-1"><span
-                                    class="label-text text-[10px] font-bold text-gray-500">Action Taken</span></label>
-                            <textarea name="action"
-                                class="textarea textarea-bordered rounded-lg h-28 text-xs leading-relaxed"
-                                placeholder="การดำเนินการ..." id="txt-ticket-action"></textarea>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Section 4: Resolution -->
-                <div class="p-6 pb-4 border-b border-gray-100 bg-green-50/30">
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="w-5 h-5 rounded bg-green-100 flex items-center justify-center">
-                            <i class="fas fa-check-circle text-[10px] text-green-500"></i>
-                        </span>
-                        <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">Resolution &
-                            Assignment</span>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div class="form-control">
-                            <label class="label py-1"><span
-                                    class="label-text text-[10px] font-bold text-green-600">Resolution
-                                    Detail</span></label>
-                            <textarea name="resolvedDetail"
-                                class="textarea textarea-bordered rounded-lg h-24 text-xs leading-relaxed border-green-200 focus:border-green-400"
-                                placeholder="สิ่งที่แก้ไข..." id="txt-ticket-resolved"></textarea>
-                        </div>
-                        <div class="space-y-2">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="form-control">
-                                <label class="label py-1"><span
-                                        class="label-text text-[10px] font-bold text-gray-500">Responsibility</span></label>
-                                <input type="text" name="responsibility"
-                                    class="input input-bordered input-sm rounded-lg text-xs" placeholder="ผู้รับผิดชอบ"
-                                    id="inp-ticket-resp">
+                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Category</span>
+                                <select name="category" id="sel-ticket-category" onchange="TicketManager.updateSubCategories()" class="select select-sm select-bordered w-full"></select>
                             </div>
                             <div class="form-control">
-                                <label class="label py-1"><span
-                                        class="label-text text-[10px] font-bold text-gray-500">Assignee</span></label>
-                                <input type="text" name="assignee"
-                                    class="input input-bordered input-sm rounded-lg text-xs"
-                                    placeholder="ผู้ได้รับมอบหมาย" id="inp-ticket-assign">
+                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Sub Category</span>
+                                <select name="subCategory" id="sel-ticket-subcategory" class="select select-sm select-bordered w-full"></select>
+                            </div>
+                            <div class="form-control">
+                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Severity</span>
+                                <select name="severity" id="sel-ticket-severity" class="select select-sm select-bordered w-full"></select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="form-control">
+                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Description</span>
+                                <textarea name="detail" id="txt-ticket-detail" class="textarea textarea-bordered h-24 text-xs" placeholder="รายละเอียด..."></textarea>
+                            </div>
+                            <div class="form-control">
+                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Action Taken</span>
+                                <textarea name="action" id="txt-ticket-action" class="textarea textarea-bordered h-24 text-xs" placeholder="การแก้ไขเบื้องต้น..."></textarea>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Section 5: Remark -->
-                <div class="p-6 pb-4">
-                    <div class="form-control">
-                        <label class="label py-1"><span
-                                class="label-text text-[10px] font-bold text-gray-500">Remark</span></label>
-                        <textarea name="remark"
-                            class="textarea textarea-bordered rounded-lg h-16 text-xs leading-relaxed"
-                            placeholder="หมายเหตุเพิ่มเติม..." id="txt-ticket-remark"></textarea>
+                    <div class="collapse collapse-arrow border border-base-200 bg-base-50 rounded-xl">
+                        <input type="checkbox" /> 
+                        <div class="collapse-title text-sm font-bold text-gray-600 flex items-center gap-2">
+                            <i class="fas fa-check-double text-green-500"></i> Resolution & Assign
+                        </div>
+                        <div class="collapse-content space-y-4 pt-2">
+                            <div class="form-control">
+                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Resolution Detail</span>
+                                <textarea name="resolvedDetail" id="txt-ticket-resolved" class="textarea textarea-bordered h-20 text-xs" placeholder="รายละเอียดการแก้ไข..."></textarea>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="form-control">
+                                    <span class="label-text text-xs font-bold text-gray-400 mb-1">Responsibility</span>
+                                    <input type="text" name="responsibility" id="inp-ticket-resp" class="input input-sm input-bordered w-full">
+                                </div>
+                                <div class="form-control">
+                                    <span class="label-text text-xs font-bold text-gray-400 mb-1">Assignee</span>
+                                    <input type="text" name="assignee" id="inp-ticket-assign" class="input input-sm input-bordered w-full">
+                                </div>
+                            </div>
+                            <div class="form-control">
+                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Remark</span>
+                                <textarea name="remark" id="txt-ticket-remark" class="textarea textarea-bordered h-16 text-xs"></textarea>
+                            </div>
+                        </div>
                     </div>
+
                 </div>
 
-                <!-- Footer Actions -->
-                <div class="px-6 py-4 flex justify-end gap-2 border-t border-gray-100 bg-gray-50/50 sticky bottom-0">
-                    <button type="button" class="btn btn-sm btn-ghost text-gray-500"
-                        onclick="document.getElementById('modal-ticket-form').close()">Cancel</button>
-                    <button type="submit"
-                        class="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-0 min-w-[120px] shadow-md"
-                        id="btn-save-ticket">
+                <div class="px-6 py-4 border-t border-base-200 bg-gray-50 flex justify-end gap-2 sticky bottom-0 z-10">
+                    <button type="button" class="btn btn-sm btn-ghost text-gray-500" onclick="document.getElementById('modal-ticket-form').close()">Cancel</button>
+                    <button type="submit" id="btn-save-ticket" class="btn btn-sm btn-primary min-w-[100px]">
                         <span class="loading loading-spinner loading-xs hidden" id="spinner-save-ticket"></span>
-                        <i class="fas fa-save text-xs"></i> Save Ticket
+                        Save
                     </button>
                 </div>
             </form>
         </div>
-        <form method="dialog" class="modal-backdrop bg-black/50 backdrop-blur-[1px]"><button>close</button></form>
+        <form method="dialog" class="modal-backdrop bg-black/40 backdrop-blur-[1px]"><button>close</button></form>
     </dialog>
+
 </div>
