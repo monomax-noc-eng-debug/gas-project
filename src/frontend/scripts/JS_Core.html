@@ -152,31 +152,33 @@
   const UIManager = {
     showToast: function (msg, type) {
       type = type || 'info';
-      var container = document.getElementById('toast-container');
 
-      if (!container) {
-        container = document.createElement('div');
-        container.id = 'toast-container';
-        document.body.appendChild(container);
+      // Use SweetAlert2 for robust, high-z-index toasts
+      if (typeof Swal !== 'undefined') {
+        const Toast = Swal.mixin({
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 3000,
+          timerProgressBar: true,
+          didOpen: (toast) => {
+            toast.onmouseenter = Swal.stopTimer;
+            toast.onmouseleave = Swal.resumeTimer;
+            // Force container z-index again just in case
+            const container = Swal.getContainer();
+            if (container) container.style.zIndex = '2147483647';
+          }
+        });
+
+        Toast.fire({
+          icon: type,
+          title: msg
+        });
+      } else {
+        // Fallback (Rare case)
+        console.warn('Swal not found, simple alert:', msg);
+        alert(msg);
       }
-
-      // 🔥 FIX: ใช้ DaisyUI Class 'toast-bottom' และบังคับ z-index สูงสุด
-      container.className = 'toast toast-bottom toast-end';
-      container.style.zIndex = '2147483647'; // ค่าสูงสุดของ Integer (เหนือทุก Modal)
-      container.style.position = 'fixed';
-      container.style.bottom = '20px';
-      container.style.right = '20px';
-      container.style.pointerEvents = 'none'; // ให้คลิกทะลุพื้นที่ว่างได้
-
-      var alert = document.createElement('div');
-      var extraClass = type === 'error' ? 'alert-error' : type === 'success' ? 'alert-success' : 'alert-info';
-
-      // เพิ่ม pointer-events-auto เพื่อให้ตัว Toast เองรับคลิกได้
-      alert.className = 'alert ' + extraClass + ' text-white shadow-lg mb-2 min-w-[300px] pointer-events-auto animate-bounce';
-      alert.innerHTML = '<span>' + msg + '</span>';
-      container.appendChild(alert);
-
-      setTimeout(function () { alert.remove(); }, 3000);
     },
 
     showLoading: function (msg) {
@@ -197,9 +199,9 @@
 
     hideLoading: function () {
       var d = document.getElementById('global-loading');
-      if (d) { 
-        if (typeof d.close === 'function') d.close(); 
-        d.remove(); 
+      if (d) {
+        if (typeof d.close === 'function') d.close();
+        d.remove();
       }
     },
 

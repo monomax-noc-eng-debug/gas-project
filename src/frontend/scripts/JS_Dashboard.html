@@ -13,6 +13,8 @@
         let _currentBlobs = { start: null, stop: null, 'stop-quick': null };
         let _clearedDbImages = { start: false, stop: false };
         let _editMode = 'all'; // 'new', 'all', 'start', 'stop'
+        let _isLoaded = false; // Cache Flag
+        let _lastCalendarFetchDate = null; // Calendar Fetch Cache
 
         // --- Date Helpers ---
         const toDisplayDate = (date) => {
@@ -91,7 +93,7 @@
                 document.addEventListener('page-change', function (e) {
                     if (e.detail.pageId === 'page-dashboard') {
                         if (_pickers.main) _pickers.main.setDate(_currentDate);
-                        Dashboard.loadWorkList();
+                        Dashboard.loadWorkList(false);
                     }
                 });
             },
@@ -100,7 +102,7 @@
                 _pickers.main = createPicker('dash-date-input', (date) => {
                     _currentDate = date;
                     Dashboard.updateDateDisplay();
-                    Dashboard.renderFilteredList();
+                    Dashboard.loadWorkList(true); // Date changed, must reload
                 });
                 this.updateDateDisplay();
             },
@@ -108,7 +110,7 @@
             changeDate: function (days) {
                 _currentDate.setDate(_currentDate.getDate() + days);
                 if (_pickers.main) { _pickers.main.setDate(_currentDate); }
-                else { this.updateDateDisplay(); this.renderFilteredList(); }
+                else { this.updateDateDisplay(); this.loadWorkList(true); }
             },
 
             updateDateDisplay: function () {
@@ -117,9 +119,18 @@
             },
 
             loadWorkList: function (forceRefresh) {
-                var loader = getEl('dash-loader');
+                if (!forceRefresh && _isLoaded) {
+                    console.log("🚀 Dashboard Cache Hit");
+                    return;
+                }
+
+                var btn = getEl('btn-refresh-dashboard');
+                if (btn) {
+                    btn.classList.add('is-loading');
+                    btn.disabled = true;
+                }
+
                 var empty = getEl('dash-empty');
-                if (loader) loader.classList.remove('hidden');
                 if (empty) empty.classList.add('hidden');
 
                 Server.call({ func: 'apiGetWorkList', silent: true })
@@ -127,12 +138,19 @@
                         if (res && res.success) {
                             _allWorkData = res.data || [];
                             Dashboard.renderFilteredList();
+                            _isLoaded = true;
                         } else {
                             if (typeof UIManager !== 'undefined') UIManager.showToast("Load Failed: " + (res ? res.message : "Unknown Error"), 'error');
                         }
                     })
                     .catch(function (err) { console.error(err); })
-                    .finally(function () { if (loader) loader.classList.add('hidden'); });
+                    .finally(function () {
+
+                        if (btn) {
+                            btn.classList.remove('is-loading');
+                            btn.disabled = false;
+                        }
+                    });
             },
 
             renderFilteredList: function () {
@@ -269,9 +287,16 @@
                 this.clearImage('start');
                 this.clearImage('stop');
 
-                // Auto fetch calendar
+                // Auto fetch calendar only if date changed
                 getEl('import-date-picker').value = inputDate;
-                this.fetchCalendarEvents();
+                if (_lastCalendarFetchDate !== inputDate) {
+                    this.fetchCalendarEvents();
+                } else {
+                    var list = getEl('calendar-picker-list');
+                    if (!list || list.children.length === 0) {
+                        this.fetchCalendarEvents();
+                    }
+                }
 
                 getEl('modal-add-work').showModal();
 
@@ -553,7 +578,10 @@
                 Server.call({ func: 'apiGetCalendarEvents', silent: true }, dateVal)
                     .then(function (res) {
                         loader.classList.add('hidden');
-                        if (res && res.success) Dashboard.renderImportList(res.data);
+                        if (res && res.success) {
+                            Dashboard.renderImportList(res.data);
+                            _lastCalendarFetchDate = dateVal;
+                        }
                         else list.innerHTML = '<div class="text-error text-center text-xs p-4">' + (res ? (res.error || res.message || "No Data") : "No Data") + '</div>';
                     })
                     .catch(function (err) {

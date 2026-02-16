@@ -110,6 +110,26 @@ const SheetService = (() => {
     },
 
     /**
+     * Ensure a sheet exists, create if not
+     * @param {string} sheetName 
+     * @param {Array<string>} headers 
+     * @param {string} spreadsheetId 
+     */
+    ensureSheet: function (sheetName, headers, spreadsheetId = null) {
+      const ssId = spreadsheetId || _getDbId();
+      const ss = SpreadsheetApp.openById(ssId);
+      let sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        console.log(`[SheetService] Creating new sheet: ${sheetName}`);
+        sheet = ss.insertSheet(sheetName);
+        if (headers && headers.length > 0) {
+          sheet.appendRow(headers);
+        }
+      }
+      return sheet;
+    },
+
+    /**
      * Add a row to the sheet (Thread-safe)
      * @param {string} sheetName 
      * @param {Array<any>} rowData 
@@ -252,6 +272,58 @@ const SheetService = (() => {
         throw e;
       } finally {
         lock.releaseLock();
+      }
+    },
+
+    /**
+     * Overwrite entire sheet context (Clear & Replace)
+     * @param {string} sheetName 
+     * @param {Array<Array<any>>} data - Data rows (excluding headers)
+     * @param {Array<string>} headers - Header row
+     * @param {string} spreadsheetId 
+     */
+    overwriteAll: function (sheetName, data, headers, spreadsheetId = null) {
+      const ssId = spreadsheetId || _getDbId();
+      console.log(`[SheetService.overwriteAll] Target SS: ${ssId} | Sheet: ${sheetName}`);
+
+      const lock = LockService.getScriptLock();
+      if (lock.tryLock(10000)) {
+        try {
+          // 1. Ensure Sheet Exists
+          const sheet = this.ensureSheet(sheetName, headers, ssId);
+
+          // 2. Clear Content
+          sheet.clear();
+
+          // 3. Set Headers
+          if (headers && headers.length > 0) {
+            sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+          }
+
+          // 4. Write Data
+          if (data && data.length > 0) {
+            console.log(`[SheetService.overwriteAll] Writing ${data.length} rows...`);
+            // data is array of arrays. check dimensions
+            const numRows = data.length;
+            const numCols = data[0].length;
+            if (numRows > 0 && numCols > 0) {
+              sheet.getRange(2, 1, numRows, numCols).setValues(data);
+            }
+          } else {
+            console.log(`[SheetService.overwriteAll] No data to write (Header only).`);
+          }
+
+          // Invalidate Cache
+          CacheService.getScriptCache().remove(`SHEET_DATA_${ssId}_${sheetName}`);
+          return true;
+        } catch (e) {
+          console.error(`[SheetService.overwriteAll] Error: ${e.toString()}`);
+          throw e;
+        } finally {
+          lock.releaseLock();
+        }
+      } else {
+        throw new Error("System Busy (Lock timeout)");
       }
     }
   };

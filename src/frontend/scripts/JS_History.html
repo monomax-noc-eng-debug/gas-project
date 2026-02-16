@@ -13,17 +13,25 @@
          },
 
          loadHistory: function (force) {
+            const btn = getEl('btn-refresh-history');
+            if (btn) {
+               btn.classList.add('is-loading');
+               btn.disabled = true;
+            }
+
             const loader = getEl('hist-loader');
             const tbody = getEl('hist-table-body');
-            const icon = getEl('hist-refresh-icon');
 
             // If already loaded and not force, skip unless empty?
-            // Actually, let's just create a simple "isLoaded" flag if we want to optimize later.
-            // For now, load every time page is shown to be safe, or check if table has rows.
-            if (!force && tbody && tbody.children.length > 0) return;
+            if (!force && tbody && tbody.children.length > 0) {
+               if (btn) {
+                  btn.classList.remove('is-loading');
+                  btn.disabled = false;
+               }
+               return;
+            }
 
             if (loader) loader.classList.remove('hidden');
-            if (icon) icon.classList.add('fa-spin');
 
             Server.call({ func: 'getShiftHistory', silent: true })
                .then(res => {
@@ -31,8 +39,8 @@
                      this.renderTable(res.data);
                      if (force && typeof UIManager !== 'undefined') UIManager.showToast("อัปเดตข้อมูลเรียบร้อย", "success");
                   } else {
-                     if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="text-center text-error py-4">${res.error}</td></tr>`;
-                     if (typeof UIManager !== 'undefined') UIManager.showToast(res.error, "error");
+                     if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="text-center text-error py-4">${res.error || 'Unknown Error'}</td></tr>`;
+                     if (typeof UIManager !== 'undefined') UIManager.showToast(res.error || 'Load Failed', "error");
                   }
                })
                .catch(e => {
@@ -41,7 +49,10 @@
                })
                .finally(() => {
                   if (loader) loader.classList.add('hidden');
-                  if (icon) icon.classList.remove('fa-spin');
+                  if (btn) {
+                     btn.classList.remove('is-loading');
+                     btn.disabled = false;
+                  }
                });
          },
 

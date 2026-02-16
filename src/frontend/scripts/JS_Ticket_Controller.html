@@ -1,0 +1,771 @@
+<script>
+  /**
+ * ==========================================
+ * MODULE: TICKET CONTROLLER (Logic Layer)
+ * หน้าที่: ควบคุมการทำงานทั้งหมด เชื่อมต่อ Service และ View
+ * ==========================================
+ */
+  const TicketManager = (() => {
+    // --- State Variables ---
+    let _tickets = [];
+    let _config = {};
+    let _profiles = { email: [], site: [], drafts: [] };
+    let _currentAssignees = [];
+    let _tempEmails = []; // เก็บอีเมลที่ดึงมาพักไว้ก่อนบันทึก
+    let _pickers = {}; // Store Flatpickr instances
+    let _isLoaded = false; // Cache Flag
+
+    // --- Helpers ---
+    const getEl = (id) => document.getElementById(id);
+
+    // Debounce: ป้องกันการเรียกฟังก์ชันรัวๆ
+    const debounce = (func, wait) => {
+      let timeout;
+      return function (...args) {
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), wait);
+      };
+    };
+
+    return {
+      /**
+       * 1. Initialization
+       */
+      init: () => {
+        console.log("🚀 Ticket Controller Initialized");
+
+        // รายชื่อพนักงาน (Static Lists) - ควรย้ายไป Config ในอนาคต
+        // เริ่มต้นระบบฟัง Event (Live Preview)
+        TicketManager.setupPreviewListeners();
+        TicketManager.initPickers();
+      },
+
+      initPickers: () => {
+        // Standard Date Picker (Replaced with Native Inputs)
+        // const dateInput = document.getElementById("inp-ticket-date");
+        // const timeInput = document.getElementById("inp-ticket-time-display");
+
+        // if (dateInput) {
+        //   _pickers.date = flatpickr(dateInput, {
+        //     dateFormat: "Y-m-d",
+        //     altInput: true,
+        //     altFormat: "d/m/Y",
+        //     disableMobile: "true", 
+        //     static: true, 
+        //     allowInput: true
+        //   });
+        // }
+
+        // if (timeInput) {
+        //   _pickers.time = flatpickr(timeInput, {
+        //     enableTime: true,
+        //     noCalendar: true,
+        //     dateFormat: "H:i",
+        //     time_24hr: true,
+        //     disableMobile: "true",
+        //     static: true, 
+        //     allowInput: true,
+        //     onChange: (selectedDates, dateStr) => {
+        //       if (document.getElementById('inp-ticket-time')) {
+        //         document.getElementById('inp-ticket-time').value = dateStr;
+        //       }
+        //     }
+        //   });
+        // }
+      },
+
+      onShow: () => {
+        TicketManager.loadData(false);
+      },
+
+      // ============================================================
+      //  Parsing Helper
+      // ============================================================
+      smartParseDate: (val) => {
+        if (!val) return { date: '', time: '' };
+        try {
+          let d = new Date(val);
+          // Regex for D/M/YYYY or DD/MM/YYYY with comma or space (e.g. "15/2/2026, 20:02:17")
+          const dmyMatch = String(val).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:,\s*|\s+)(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+          if (dmyMatch) {
+            const [_, day, month, year, hh, mm] = dmyMatch;
+            // Construct ISO string to ensure correct parsing
+            d = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hh.padStart(2, '0')}:${mm.padStart(2, '0')}:00`);
+          }
+
+          if (isNaN(d.getTime())) return { date: '', time: '' };
+
+          const yyyy = d.getFullYear();
+          const mo = String(d.getMonth() + 1).padStart(2, '0');
+          const da = String(d.getDate()).padStart(2, '0');
+          const ho = String(d.getHours()).padStart(2, '0');
+          const mi = String(d.getMinutes()).padStart(2, '0');
+
+          return {
+            date: `${yyyy}-${mo}-${da}`,
+            time: `${ho}:${mi}`
+          };
+        } catch (e) { return { date: '', time: '' }; }
+      },
+
+      /**
+       * 2. Load Data (ดึงข้อมูลทั้งหมดเมื่อเปิดหน้า)
+       */
+      loadData: (force = false) => {
+        if (!force && _isLoaded) {
+          console.log("🚀 Ticket Cache Hit");
+          return;
+        }
+
+        const btn = getEl('btn-refresh-ticket');
+        const loader = getEl('ticket-loader');
+        const empty = getEl('ticket-empty');
+
+        if (btn) {
+          btn.classList.add('is-loading');
+          btn.disabled = true;
+        }
+        if (loader) loader.classList.remove('hidden');
+        if (empty) empty.classList.add('hidden'); // Hide empty state while loading
+
+        Promise.all([
+          TicketService.getAllTickets(),
+          TicketService.getConfig(),
+          TicketService.getEmailProfiles(),
+          TicketService.getSiteProfiles(),
+          TicketService.getMailDrafts()
+        ]).then(([resTickets, resConfig, resEmails, resSites, resDrafts]) => {
+
+          // 2.1 Config & Dropdowns (No Change)
+          if (resConfig.success) {
+            _config = resConfig.data;
+            TicketView.populateSelect('sel-ticket-type', _config.types);
+            TicketView.populateSelect('sel-ticket-status', _config.statuses);
+            TicketView.populateSelect('sel-ticket-severity', _config.severities);
+            TicketView.populateSelect('sel-ticket-status', _config.statuses);
+            TicketView.populateSelect('sel-ticket-severity', _config.severities);
+            TicketView.populateSelect('sel-ticket-category', Object.keys(_config.categories));
+            // Populate Responsible Staff from Config
+            if (_config.staff && _config.staff.length > 0) {
+              TicketView.populateSelect('sel-ticket-resp', _config.staff, 'เลือกหัวหน้าทีม...');
+            } else {
+              // Fallback if config is empty
+              TicketView.populateSelect('sel-ticket-resp', [], 'เลือกหัวหน้าทีม...');
+            }
+
+            // Populate Assignees (Operators) from Config
+            if (_config.assignees && _config.assignees.length > 0) {
+              TicketView.populateSelect('sel-ticket-assign-picker', _config.assignees, '+ เพิ่มผู้ปฏิบัติงาน');
+            } else {
+              TicketView.populateSelect('sel-ticket-assign-picker', [], '+ เพิ่มผู้ปฏิบัติงาน');
+            }
+          }
+
+          // 2.2 Profiles (Email/Site/Drafts)
+          if (resEmails.success) _profiles.email = resEmails.data || [];
+          if (resSites.success) _profiles.site = resSites.data || [];
+          if (resDrafts.success) _profiles.drafts = resDrafts.data || [];
+
+          TicketView.populateSelectObj('sel-email-profile', _profiles.email, '-- โหลดรายชื่อผู้รับ --');
+          TicketView.populateSelectObj('sel-email-draft', _profiles.site, '-- โหลด Template ข้อมูล --');
+          TicketView.populateSelectObj('sel-mail-draft', _profiles.drafts, '-- โหลด Draft ที่บันทึก --');
+
+          // 2.3 Tickets Table
+          if (resTickets.success) {
+            _tickets = TicketManager.sortTickets(resTickets.data || []);
+            TicketView.renderTable(_tickets);
+            TicketView.updateStats(_tickets);
+            _isLoaded = true; // Mark as loaded
+          } else {
+            UIManager.showToast("โหลดข้อมูลไม่สำเร็จ: " + resTickets.message, "error");
+          }
+
+        }).catch(err => {
+          console.error(err);
+          UIManager.showToast("เกิดข้อผิดพลาดในการเชื่อมต่อ", "error");
+        }).finally(() => {
+          if (btn) {
+            btn.classList.remove('is-loading');
+            btn.disabled = false;
+          }
+          if (loader) loader.classList.add('hidden');
+        });
+      },
+
+      // Helper: เรียงลำดับข้อมูล (วันที่ล่าสุด -> ID มากไปน้อย)
+      sortTickets: (data) => {
+        return data.sort((a, b) => {
+          const dtA = (a.date || '0000-00-00') + (a.time || '00:00');
+          const dtB = (b.date || '0000-00-00') + (b.time || '00:00');
+          if (dtA !== dtB) return dtB.localeCompare(dtA);
+          return String(b.ticketNumber || '').localeCompare(String(a.ticketNumber || ''));
+        });
+      },
+
+      // ============================================================
+      //  3. EMAIL IMPORT LOGIC (UPDATED: Check MONOMAX/SVR & Duplicate)
+      // ============================================================
+
+      manualFetchEmail: () => {
+        UIManager.showLoading('สแกนหาอีเมล...');
+
+        // เรียก Service ไปดึง Preview จาก Gmail (ยังไม่บันทึก)
+        TicketService.fetchEmailPreviews().then(res => {
+          UIManager.hideLoading();
+
+          if (!res.success || !res.items || res.items.length === 0) {
+            Swal.fire({ icon: 'info', title: 'ไม่พบอีเมล', text: 'ไม่มีรายการใหม่ใน Inbox', timer: 2000, showConfirmButton: false });
+            return;
+          }
+
+          _tempEmails = res.items; // เก็บข้อมูลดิบไว้
+          const processedList = [];
+
+          _tempEmails.forEach(email => {
+            const subject = (email.subject || '').trim();
+            const subjectUpper = subject.toUpperCase();
+
+            // --- 1. กรอง Label 'complete' ---
+            // (เช็คว่ามี Label ชื่อ complete ไหม ถ้ามีให้ข้าม)
+            if (email.labels && Array.isArray(email.labels)) {
+              const isComplete = email.labels.some(l => l.toLowerCase().includes('complete'));
+              if (isComplete) return; // ข้ามรายการนี้ไป
+            }
+
+            // --- 2. กรอง Keyword: ต้องมี MONOMAX หรือ SVR ---
+            const hasMonomax = subjectUpper.includes('MONO MAX') || subjectUpper.includes('MONOMAX');
+            const hasSVR = subjectUpper.includes('SVR');
+
+            if (!hasMonomax && !hasSVR) {
+              return; // ข้ามถ้าไม่ใช่เรื่องงาน
+            }
+
+            let status = 'NEW';
+            let potentialId = null;
+
+            // --- 3. Regex หา ID: SVR ตามด้วยตัวเลข (มีขีดหรือไม่มีก็ได้) ---
+            // รองรับ: SVR138559780, SVR-12345
+            const idMatch = subject.match(/SVR-?\d+/i);
+
+            if (idMatch) {
+              potentialId = idMatch[0].toUpperCase();
+
+              // --- 4. เช็คซ้ำในระบบ (_tickets) ---
+              // ตรวจสอบทั้งในช่อง ticketNumber และใน Subject ของ Ticket เก่า
+              const exists = _tickets.find(t =>
+                (t.ticketNumber && t.ticketNumber.toUpperCase() === potentialId) ||
+                (t.subject && t.subject.toUpperCase().includes(potentialId))
+              );
+
+              if (exists) {
+                status = 'DUPLICATE'; // มีข้อมูลแล้ว
+              } else {
+                status = 'NEW'; // ข้อมูลใหม่ พร้อมนำเข้า
+              }
+            } else {
+              // มีคำว่า MONOMAX แต่หาเลข SVR ไม่เจอ
+              status = 'NO_SVR';
+            }
+
+            processedList.push({ ...email, status, potentialId });
+          });
+
+          if (processedList.length === 0) {
+            Swal.fire({ icon: 'warning', title: 'ไม่พบรายการใหม่', text: 'อีเมลที่มีอาจจะ Complete ไปแล้ว หรือไม่เกี่ยวข้อง' });
+            return;
+          }
+
+          // ส่งข้อมูลไปวาดตารางและเปิด Modal
+          TicketView.renderEmailImportTable(processedList);
+          getEl('modal-import-email').showModal();
+
+        }).catch(err => {
+          console.error(err);
+          UIManager.hideLoading();
+          UIManager.showToast("ดึงข้อมูลอีเมลล้มเหลว", "error");
+        });
+      },
+
+      toggleAllEmails: (checkbox) => {
+        const boxes = document.querySelectorAll('.chk-email-import');
+        boxes.forEach(box => {
+          if (!box.disabled) box.checked = checkbox.checked;
+        });
+      },
+
+      confirmImportEmails: () => {
+        // 1. หาว่าผู้ใช้ติ๊กรายการไหนบ้าง
+        const checkboxes = document.querySelectorAll('.chk-email-import:checked');
+        if (checkboxes.length === 0) {
+          UIManager.showToast("กรุณาเลือกรายการที่จะบันทึก", "warning");
+          return;
+        }
+
+        // 2. ดึงข้อมูลจากตาราง (Map กลับไปหา Subject เพื่อความชัวร์)
+        const selectedSubjects = [];
+        checkboxes.forEach(box => {
+          const row = box.closest('tr');
+          const subjDiv = row.querySelector('td:nth-child(3) div');
+          if (subjDiv) selectedSubjects.push(subjDiv.getAttribute('title') || subjDiv.innerText.trim());
+        });
+
+        const selectedEmails = _tempEmails.filter(e => selectedSubjects.includes(e.subject));
+
+        UIManager.showLoading(`กำลังบันทึก ${selectedEmails.length} รายการ...`);
+
+        // 3. ส่งไปบันทึกจริงที่ Server
+        TicketService.importEmails(selectedEmails).then(res => {
+          UIManager.hideLoading();
+          if (res.success) {
+            getEl('modal-import-email').close();
+
+            Swal.fire({
+              icon: 'success',
+              title: 'บันทึกสำเร็จ!',
+              text: `นำเข้าข้อมูลเรียบร้อย ${res.count} รายการ`,
+              timer: 2000,
+              showConfirmButton: false
+            });
+
+            TicketManager.loadData(); // รีโหลดตารางหลัก
+          } else {
+            UIManager.showToast("บันทึกไม่สำเร็จ: " + res.message, "error");
+          }
+        });
+      },
+
+      // ============================================================
+      //  4. STANDARD ACTIONS (Create/Edit/Save)
+      // ============================================================
+
+      openModal: (mode, id = null) => {
+        const modal = getEl('modal-ticket-form');
+        const title = getEl('ticket-modal-title');
+        const idInput = getEl('inp-ticket-id');
+        const btnSave = getEl('btn-save-ticket');
+        const btnDraft = getEl('btn-save-draft');
+
+        // Reset Form & State
+        getEl('form-ticket').reset();
+        _currentAssignees = [];
+        TicketView.renderAssigneeTags([]);
+
+        // Set Checkbox Defaults
+        if (getEl('chk-show-greeting')) getEl('chk-show-greeting').checked = true;
+        if (getEl('chk-show-note')) getEl('chk-show-note').checked = true;
+
+        if (mode === 'CREATE') {
+          title.innerText = 'สร้าง Ticket ใหม่';
+          TicketView.switchTab(1); // Main Tab
+
+          idInput.value = '';
+          idInput.removeAttribute('readonly');
+          idInput.classList.remove('bg-gray-100');
+          idInput.placeholder = 'Auto Gen';
+
+          btnSave.classList.remove('hidden');
+          btnDraft.classList.add('hidden');
+
+          // Set Default Date/Time
+          const now = new Date();
+          // if (_pickers.date) _pickers.date.setDate(now);
+          // Standard HTML5 Date Input YYYY-MM-DD
+          getEl('inp-ticket-date').value = now.toISOString().split('T')[0];
+
+          const hh = String(now.getHours()).padStart(2, '0');
+          const mm = String(now.getMinutes()).padStart(2, '0');
+          const timeStr = `${hh}:${mm}`;
+
+          // if (_pickers.time) _pickers.time.setDate(timeStr);
+          getEl('inp-ticket-time').value = timeStr;
+
+          getEl('sel-ticket-status').value = 'Open';
+          getEl('sel-ticket-status').value = 'Open';
+          TicketManager.handleCategoryChange(); // Reset subcat
+
+          // Hide Email Tab in Create Mode
+          const btnEmailTab = getEl('tab-btn-email');
+          if (btnEmailTab) btnEmailTab.classList.add('hidden');
+
+        } else {
+          // EDIT MODE
+          const row = _tickets.find(t => t.ticketNumber == id);
+          if (!row) { UIManager.showToast("ไม่พบข้อมูล Ticket", "error"); return; }
+
+          const setVal = (k, v) => { const el = getEl(k); if (el) el.value = v || ''; };
+
+          setVal('inp-ticket-id', row.ticketNumber);
+          idInput.setAttribute('readonly', true);
+          idInput.classList.add('bg-gray-100');
+
+          // Fill Data
+          // 4.1 Smart Date Parsing
+          const parsed = TicketManager.smartParseDate(row.date);
+          const dDate = parsed.date;
+          const dTime = row.time || parsed.time || "00:00";
+
+          // if (_pickers.date) _pickers.date.setDate(dDate);
+          getEl('inp-ticket-date').value = dDate;
+
+          // if (_pickers.time) _pickers.time.setDate(dTime);
+          getEl('inp-ticket-time').value = dTime;
+
+          setVal('inp-ticket-subject', row.subject);
+          setVal('txt-ticket-detail', row.detail);
+
+          setVal('sel-ticket-type', row.type);
+          setVal('sel-ticket-status', row.status);
+          setVal('sel-ticket-severity', row.severity);
+
+          setVal('sel-ticket-category', row.category);
+          TicketManager.handleCategoryChange(); // Trigger subcat update
+          setVal('sel-ticket-subcategory', row.subCategory);
+
+          setVal('txt-ticket-action', row.action);
+          setVal('txt-ticket-resolved-detail', row.resolvedDetail);
+          setVal('sel-ticket-resp', row.responsibility);
+
+          // Restore Assignees
+          if (row.assign && row.assign !== '-') {
+            _currentAssignees = row.assign.split(',').map(s => s.trim()).filter(s => s);
+            TicketView.renderAssigneeTags(_currentAssignees);
+          }
+
+          if (mode === 'EMAIL') {
+            title.innerText = 'ส่งอีเมล: ' + id;
+            TicketView.switchTab(4); // Switch to Email Tab
+            btnSave.classList.add('hidden');
+            btnDraft.classList.remove('hidden');
+            // Update preview immediately
+            setTimeout(() => TicketManager.updateEmailPreview(), 100);
+          } else {
+            title.innerText = 'แก้ไข Ticket: ' + id;
+            TicketView.switchTab(1); // Switch to Main Tab
+            btnSave.classList.remove('hidden');
+            btnDraft.classList.add('hidden');
+          }
+
+          // Show Email Tab in Edit Mode
+          const btnEmailTab = getEl('tab-btn-email');
+          if (btnEmailTab) btnEmailTab.classList.remove('hidden');
+        }
+
+        modal.showModal();
+      },
+
+      saveTicketOnly: () => {
+        const form = getEl('form-ticket');
+        if (!form.checkValidity()) {
+          TicketView.switchTab(1); // กลับมาหน้าแรกถ้ามี error
+          form.reportValidity();
+          return;
+        }
+
+        UIManager.showLoading('กำลังบันทึก...');
+
+        UIManager.showLoading('กำลังบันทึก...');
+
+        // Force Auto-Subject Logic
+        // ถ้ามี Auto-Subject ให้ใช้ Auto-Subject บันทึกแทน Input Subject
+        const autoSubj = getEl('auto-subject-text');
+        if (autoSubj && autoSubj.innerText && autoSubj.innerText !== '...') {
+          // อัปเดต input subject ให้ตรงกับ auto subject ก่อน submit
+          getEl('inp-ticket-subject').value = autoSubj.innerText;
+        }
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        data.assign = _currentAssignees.join(', ');
+
+        // Check ID to decide Create vs Update
+        const isUpdate = getEl('inp-ticket-id').hasAttribute('readonly') && data.id;
+
+        TicketService.saveTicket(data, isUpdate)
+          .then(res => {
+            UIManager.hideLoading();
+            if (res.success) {
+              UIManager.showToast("บันทึกข้อมูลสำเร็จ", "success");
+              getEl('modal-ticket-form').close();
+              TicketManager.loadData();
+            } else {
+              UIManager.showToast("Error: " + res.message, "error");
+            }
+          })
+          .catch(err => {
+            UIManager.hideLoading();
+            UIManager.showToast("Connection Error", "error");
+          });
+      },
+
+      saveAndDraft: () => {
+        const form = getEl('form-ticket');
+        if (!form.checkValidity()) {
+          TicketView.switchTab(1);
+          form.reportValidity();
+          return;
+        }
+
+        UIManager.showLoading('กำลังบันทึกและสร้าง Draft...');
+
+        // 1. Prepare Ticket Data
+        const formData = new FormData(form);
+        const ticketData = Object.fromEntries(formData.entries());
+        ticketData.assign = _currentAssignees.join(', ');
+
+        // 2. Prepare Email Data (From Preview)
+        const emailSubject = getEl('preview-subject').innerText;
+        const emailBody = getEl('preview-body-html').innerHTML;
+
+        const emailData = {
+          to: getEl('email-to').value,
+          cc: getEl('email-cc').value,
+          subject: emailSubject,
+          bodyHtml: emailBody
+        };
+
+        // 3. Call Service
+        TicketService.saveAndDraft(ticketData, emailData).then(res => {
+          UIManager.hideLoading();
+          if (res.success) {
+            getEl('modal-ticket-form').close();
+            TicketManager.loadData();
+
+            // Show Link to Open Draft
+            if (res.draftUrl) {
+              const btnLink = getEl('btn-open-draft-link');
+              if (btnLink) {
+                btnLink.href = res.draftUrl;
+                getEl('modal-open-draft').showModal();
+              }
+            } else {
+              UIManager.showToast("สร้าง Draft สำเร็จ (ไม่มีลิงก์)", "success");
+            }
+          } else {
+            UIManager.showToast("เกิดข้อผิดพลาด: " + res.message, "error");
+          }
+        }).catch(err => {
+          UIManager.hideLoading();
+          UIManager.showToast("Connection Error", "error");
+        });
+      },
+
+      deleteTicket: (id) => {
+        Swal.fire({
+          title: 'ยืนยันการลบ?',
+          text: `ต้องการลบ Ticket ${id} ใช่หรือไม่?`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'ลบข้อมูล',
+          cancelButtonText: 'ยกเลิก'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            UIManager.showLoading('กำลังลบ...');
+            TicketService.deleteTicket(id).then(res => {
+              UIManager.hideLoading();
+              if (res.success) {
+                UIManager.showToast("ลบข้อมูลสำเร็จ", "success");
+                TicketManager.loadData();
+              } else {
+                UIManager.showToast("ลบไม่สำเร็จ: " + res.message, "error");
+              }
+            });
+          }
+        });
+      },
+
+      // ============================================================
+      //  5. UI INTERACTION HELPERS
+      // ============================================================
+
+      handleCategoryChange: () => {
+        const cat = getEl('sel-ticket-category').value;
+        const subEl = getEl('sel-ticket-subcategory');
+        if (!subEl) return;
+
+        if (cat && _config.categories && _config.categories[cat]) {
+          const subs = _config.categories[cat];
+          subEl.innerHTML = '<option value="">เลือก...</option>' +
+            subs.map(s => `<option value="${s}">${s}</option>`).join('');
+        } else {
+          subEl.innerHTML = '<option value="">-</option>';
+        }
+        TicketManager.updateEmailPreview();
+      },
+
+      addAssigneeTag: (val) => {
+        if (val && !_currentAssignees.includes(val)) {
+          _currentAssignees.push(val);
+          TicketView.renderAssigneeTags(_currentAssignees);
+        }
+        getEl('sel-ticket-assign-picker').value = '';
+      },
+
+      removeAssignee: (index) => {
+        _currentAssignees.splice(index, 1);
+        TicketView.renderAssigneeTags(_currentAssignees);
+      },
+
+      filterData: () => {
+        const term = getEl('ticket-search').value.toLowerCase();
+        const filtered = _tickets.filter(t => {
+          const id = String(t.ticketNumber || '').toLowerCase();
+          const subj = String(t.subject || '').toLowerCase();
+          const status = String(t.status || '').toLowerCase();
+          return id.includes(term) || subj.includes(term) || status.includes(term);
+        });
+        TicketView.renderTable(filtered);
+      },
+
+      // ============================================================
+      //  6. EMAIL PROFILE & PREVIEW LOGIC
+      // ============================================================
+
+      setupPreviewListeners: () => {
+        const debouncedUpdate = debounce(() => TicketManager.updateEmailPreview(), 300);
+
+        // Inputs ที่มีผลต่อ Email Preview
+        const inputs = document.querySelectorAll('#form-ticket input, #form-ticket select, #form-ticket textarea');
+        inputs.forEach(el => {
+          el.addEventListener('input', debouncedUpdate);
+          el.addEventListener('change', debouncedUpdate);
+        });
+      },
+
+      updateEmailPreview: () => {
+        // Update Subject
+        const subj = TicketEmail.generateSubject();
+        const previewSubj = getEl('preview-subject');
+        const autoSubj = getEl('auto-subject-text');
+        const autoSubj2 = getEl('auto-subject-text-2'); // Hidden one
+
+        if (previewSubj) previewSubj.innerText = subj;
+        if (autoSubj) autoSubj.innerText = subj;
+        if (autoSubj2) autoSubj2.innerText = subj;
+
+        // Update Body
+        const data = TicketEmail.collectData();
+        const html = TicketEmail.renderPreview(data);
+        const body = getEl('preview-body-html');
+        if (body) body.innerHTML = html;
+
+        // Update To Header
+        const to = getEl('preview-to');
+        if (to) to.innerText = data.to || '-';
+      },
+
+      // โหลด Profile ผู้รับ (To, Cc)
+      applyEmailProfile: (idx) => {
+        if (idx === '' || idx === null) return;
+        const p = _profiles.email[idx];
+        if (p) {
+          getEl('email-to').value = p.to || '';
+          getEl('email-cc').value = p.cc || '';
+          TicketManager.updateEmailPreview();
+          UIManager.showToast(`โหลดผู้รับ: ${p.name}`, "success");
+        }
+      },
+
+      // โหลด Site Info (Company, Contact, etc.)
+      applySiteProfile: (idx) => {
+        if (idx === '' || idx === null) return;
+        const p = _profiles.site[idx];
+        if (p) {
+          const setVal = (id, v) => { if (getEl(id)) getEl(id).value = v || ''; };
+
+          setVal('email-company', p.company);
+          setVal('email-contact-name', p.contactName);
+          setVal('email-contact-num', p.contactNum);
+          setVal('email-site-name', p.siteName);
+          setVal('email-site-num', p.siteNum);
+          setVal('email-site-email', p.siteEmail);
+          setVal('email-site-addr', p.siteAddr);
+          setVal('email-greeting', p.greeting);
+          setVal('email-note', p.note);
+
+          // Toggles
+          if (getEl('chk-show-greeting')) getEl('chk-show-greeting').checked = p.showGreeting !== false;
+          if (getEl('chk-show-note')) getEl('chk-show-note').checked = p.showNote !== false;
+
+          TicketManager.updateEmailPreview();
+          UIManager.showToast(`โหลดข้อมูล: ${p.name}`, "success");
+        }
+      },
+
+      // โหลด Saved Draft
+      applyDraft: (idx) => {
+        if (idx === '' || idx === null) return;
+        const d = _profiles.drafts[idx];
+        if (d) {
+          const setVal = (id, v) => { if (getEl(id)) getEl(id).value = v || ''; };
+
+          setVal('email-to', d.to);
+          setVal('email-cc', d.cc);
+          setVal('email-greeting', d.greeting);
+          setVal('email-note', d.note);
+          setVal('email-company', d.company);
+          setVal('email-contact-name', d.contactName);
+          setVal('email-contact-num', d.contactNum);
+          setVal('email-site-name', d.siteName);
+          setVal('email-site-num', d.siteNum);
+          setVal('email-site-email', d.siteEmail);
+          setVal('email-site-addr', d.siteAddr);
+          setVal('email-root-cause', d.rootCause);
+          setVal('email-action', d.action);
+          setVal('email-impact', d.impact);
+          setVal('email-schedule', d.schedule);
+
+          if (getEl('chk-show-greeting')) getEl('chk-show-greeting').checked = d.showGreeting !== false;
+          if (getEl('chk-show-note')) getEl('chk-show-note').checked = d.showNote !== false;
+
+          TicketManager.updateEmailPreview();
+          UIManager.showToast(`โหลด Draft: ${d.name}`, "success");
+        }
+      },
+
+      saveCurrentDraft: () => {
+        const modal = getEl('modal-save-draft');
+        const inp = getEl('inp-draft-name-save');
+        if (modal && inp) {
+          inp.value = '';
+          modal.showModal();
+        } else {
+          const name = prompt("ตั้งชื่อ Draft Template:");
+          if (name) TicketManager.confirmSaveDraft(name);
+        }
+      },
+
+      confirmSaveDraft: (nameOverride = null) => {
+        const inp = getEl('inp-draft-name-save');
+        const name = nameOverride || (inp ? inp.value : null);
+
+        if (!name) { UIManager.showToast("กรุณาใส่ชื่อ Template", "warning"); return; }
+
+        const currentData = TicketEmail.collectData();
+        const newDraft = { name: name, ...currentData };
+
+        _profiles.drafts.push(newDraft);
+
+        TicketService.saveDraftsList(_profiles.drafts).then(res => {
+          if (res.success) {
+            UIManager.showToast("บันทึก Template สำเร็จ", "success");
+            TicketView.populateSelectObj('sel-mail-draft', _profiles.drafts, '-- โหลด Draft ที่บันทึก --');
+            const modal = getEl('modal-save-draft');
+            if (modal) modal.close();
+          } else {
+            UIManager.showToast("บันทึกไม่สำเร็จ", "error");
+            _profiles.drafts.pop(); // Revert
+          }
+        });
+      }
+    };
+  })();
+
+  // Auto Initialize
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof Router !== 'undefined') {
+      Router.register('page-ticket', TicketManager);
+    }
+    TicketManager.init();
+  });
+</script>

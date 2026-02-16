@@ -1,157 +1,444 @@
-<div id="page-settings" class="page-section hidden w-full h-full relative bg-base-200/50 overflow-hidden flex flex-col p-4 md:p-6 gap-6">
+<div id="page-settings"
+  class="page-section hidden w-full h-full relative bg-base-200/50 overflow-hidden flex flex-col p-4 md:p-6 gap-6">
 
-  <div class="flex flex-col md:flex-row justify-between items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
-    
+  <!-- ================= HEADER ================= -->
+  <div
+    class="flex flex-col md:flex-row justify-between items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
+
     <div class="flex items-center gap-3 w-full md:w-auto">
       <div class="bg-primary/10 p-2 rounded-xl text-primary">
         <i class="fas fa-cogs text-xl"></i>
       </div>
       <div>
         <h2 class="text-base font-bold text-gray-800">ตั้งค่า (Settings)</h2>
-        <p class="text-[10px] text-gray-400">จัดการ Configuration และข้อมูลระบบ</p>
+        <p class="text-[10px] text-gray-400">จัดการ Configuration, ผู้รับผิดชอบ และ Email</p>
       </div>
     </div>
 
     <div class="flex items-center gap-3 w-full md:w-auto justify-end">
-      
-      <button onclick="SettingsManager.loadSettings(true)" id="btn-sett-refresh"
-        class="btn btn-sm btn-ghost btn-circle text-base-content/60 hover:text-primary tooltip tooltip-bottom" data-tip="รีเฟรช">
+      <button onclick="SettingsManager.loadAll(true)" id="btn-sett-refresh"
+        class="btn btn-sm btn-ghost btn-circle text-base-content/60 hover:text-primary tooltip tooltip-bottom"
+        data-tip="รีเฟรช">
         <i class="fas fa-sync-alt" id="icon-sett-refresh"></i>
       </button>
 
       <button onclick="SettingsManager.saveSettings()" id="btn-sett-save"
-        class="btn btn-sm btn-primary text-white shadow-sm gap-2 px-4 font-medium">
+        class="btn btn-sm btn-primary text-white shadow-sm gap-2 px-4 font-medium transition-transform active:scale-95">
         <span id="loader-sett-save" class="loading loading-spinner loading-xs hidden"></span>
-        <i class="fas fa-save" id="icon-sett-save"></i> 
+        <i class="fas fa-save" id="icon-sett-save"></i>
         <span>บันทึกข้อมูล</span>
       </button>
     </div>
   </div>
 
-  <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-hidden">
+  <!-- ================= GRID LAYOUT ================= -->
+  <div class="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-10 space-y-6">
 
-    <div id="sett-loader" class="absolute inset-0 z-20 bg-white/80 backdrop-blur-[1px] flex flex-col items-center justify-center rounded-2xl hidden">
+    <div id="sett-loader"
+      class="absolute inset-0 z-20 bg-white/80 backdrop-blur-[1px] flex flex-col items-center justify-center rounded-2xl hidden top-20">
       <span class="loading loading-spinner loading-lg text-primary"></span>
       <p class="mt-2 text-sm text-gray-500 animate-pulse">กำลังโหลดข้อมูล...</p>
     </div>
 
-    <div class="flex flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar">
+    <!-- SECTION 1: PEOPLE (Team Leaders & Operators) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col h-1/3 min-h-[200px]">
-        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50">
-          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-            <i class="fas fa-info-circle text-info"></i> Statuses
+      <!-- Team Leaders -->
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col min-h-[220px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-indigo-50/50">
+          <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-2">
+            <i class="fas fa-user-tie"></i> ผู้รับผิดชอบ (Responsibility)
           </span>
-          <span id="count-statuses" class="badge badge-ghost badge-xs font-mono">0</span>
+          <span id="count-staff" class="badge badge-primary badge-outline badge-xs font-mono">0</span>
         </div>
-        <div class="divider my-0 h-px bg-base-100"></div>
-        
-        <div class="p-3 bg-white">
+        <div class="p-3 bg-white border-b border-base-100">
           <div class="relative">
-            <input type="text" id="in-new-status" onkeypress="SettingsManager.handleEnter(event, 'statuses')"
-              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-info text-xs"
-              placeholder="เพิ่มสถานะ (Enter)...">
-            <i class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
+            <input type="text" id="in-new-staff" onkeypress="SettingsManager.handleEnter(event, 'staff')"
+              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-indigo-500 text-xs"
+              placeholder="เพิ่มชื่อหัวหน้าทีม... (Enter)">
+            <i
+              class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
           </div>
         </div>
-
-        <div id="list-statuses" class="flex-1 overflow-y-auto p-3 pt-0 space-y-1 custom-scrollbar"></div>
+        <div id="list-staff" class="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar max-h-60"></div>
       </div>
 
-      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col h-1/3 min-h-[200px]">
-        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50">
-          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-            <i class="fas fa-tag text-secondary"></i> Ticket Types
+      <!-- Operators (Assignees) -->
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col min-h-[220px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-teal-50/50">
+          <span class="text-xs font-bold text-teal-600 uppercase tracking-wider flex items-center gap-2">
+            <i class="fas fa-users-cog"></i> ผู้ปฏิบัติงาน (Operators)
           </span>
-          <span id="count-types" class="badge badge-ghost badge-xs font-mono">0</span>
+          <span id="count-assignees" class="badge badge-accent badge-outline badge-xs font-mono">0</span>
         </div>
-        <div class="divider my-0 h-px bg-base-100"></div>
-        <div class="p-3 bg-white">
+        <div class="p-3 bg-white border-b border-base-100">
           <div class="relative">
-            <input type="text" id="in-new-type" onkeypress="SettingsManager.handleEnter(event, 'types')"
-              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-secondary text-xs"
-              placeholder="เพิ่มประเภท (Enter)...">
-            <i class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
+            <input type="text" id="in-new-assignee" onkeypress="SettingsManager.handleEnter(event, 'assignees')"
+              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-teal-500 text-xs"
+              placeholder="เพิ่มชื่อผู้ปฏิบัติงาน... (Enter)">
+            <i
+              class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
           </div>
         </div>
-        <div id="list-types" class="flex-1 overflow-y-auto p-3 pt-0 space-y-1 custom-scrollbar"></div>
-      </div>
-
-      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col h-1/3 min-h-[200px]">
-        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50">
-          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-            <i class="fas fa-fire text-error"></i> Severities
-          </span>
-          <span id="count-severities" class="badge badge-ghost badge-xs font-mono">0</span>
-        </div>
-        <div class="divider my-0 h-px bg-base-100"></div>
-        <div class="p-3 bg-white">
-          <div class="relative">
-            <input type="text" id="in-new-severity" onkeypress="SettingsManager.handleEnter(event, 'severities')"
-              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-error text-xs"
-              placeholder="เพิ่มระดับ (Enter)...">
-            <i class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
-          </div>
-        </div>
-        <div id="list-severities" class="flex-1 overflow-y-auto p-3 pt-0 space-y-1 custom-scrollbar"></div>
+        <div id="list-assignees" class="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar max-h-60"></div>
       </div>
 
     </div>
 
-    <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col overflow-hidden h-full min-h-[600px]">
-      
+    <!-- SECTION 2: TICKET METADATA (Status, Type, Severity) -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+      <!-- Statuses -->
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col min-h-[200px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-base-100/50">
+          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+            <i class="fas fa-info-circle text-info"></i> สถานะ (Statuses)
+          </span>
+          <span id="count-statuses" class="badge badge-ghost badge-xs font-mono">0</span>
+        </div>
+        <div class="p-3 bg-white">
+          <div class="relative">
+            <input type="text" id="in-new-status" onkeypress="SettingsManager.handleEnter(event, 'statuses')"
+              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-info text-xs"
+              placeholder="เพิ่มสถานะ...">
+            <i
+              class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
+          </div>
+        </div>
+        <div id="list-statuses" class="flex-1 overflow-y-auto p-3 pt-0 space-y-1 custom-scrollbar max-h-48"></div>
+      </div>
+
+      <!-- Ticket Types -->
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col min-h-[200px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-base-100/50">
+          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+            <i class="fas fa-tag text-secondary"></i> ประเภท (Types)
+          </span>
+          <span id="count-types" class="badge badge-ghost badge-xs font-mono">0</span>
+        </div>
+        <div class="p-3 bg-white">
+          <div class="relative">
+            <input type="text" id="in-new-type" onkeypress="SettingsManager.handleEnter(event, 'types')"
+              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-secondary text-xs"
+              placeholder="เพิ่มประเภท...">
+            <i
+              class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
+          </div>
+        </div>
+        <div id="list-types" class="flex-1 overflow-y-auto p-3 pt-0 space-y-1 custom-scrollbar max-h-48"></div>
+      </div>
+
+      <!-- Severities -->
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col min-h-[200px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-base-100/50">
+          <span class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+            <i class="fas fa-fire text-error"></i> ความรุนแรง (Severities)
+          </span>
+          <span id="count-severities" class="badge badge-ghost badge-xs font-mono">0</span>
+        </div>
+        <div class="p-3 bg-white">
+          <div class="relative">
+            <input type="text" id="in-new-severity" onkeypress="SettingsManager.handleEnter(event, 'severities')"
+              class="input input-sm input-bordered w-full pr-8 focus:outline-none focus:border-error text-xs"
+              placeholder="เพิ่มระดับ...">
+            <i
+              class="fas fa-plus absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none"></i>
+          </div>
+        </div>
+        <div id="list-severities" class="flex-1 overflow-y-auto p-3 pt-0 space-y-1 custom-scrollbar max-h-48"></div>
+      </div>
+
+    </div>
+
+    <!-- SECTION 3: CATEGORIES (Full Width) -->
+    <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col overflow-hidden">
       <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50 shrink-0">
         <div>
           <h3 class="text-xs font-bold uppercase text-gray-500 tracking-wider flex items-center gap-2">
-            <i class="fas fa-folder-tree text-success"></i> Categories
+            <i class="fas fa-folder-tree text-success"></i> Categories & Sub-Categories
           </h3>
           <p class="text-[10px] text-gray-400 mt-1">จัดการหมวดหมู่หลักและย่อย</p>
         </div>
         <div class="join shadow-sm">
           <input type="text" id="in-new-cat" onkeypress="if(event.key==='Enter') SettingsManager.addCategory()"
-            class="input input-sm input-bordered join-item w-36 focus:outline-none focus:border-success text-xs" placeholder="หมวดหมู่ใหม่...">
+            class="input input-sm input-bordered join-item w-48 focus:outline-none focus:border-success text-xs"
+            placeholder="หมวดหมู่หลักใหม่...">
           <button onclick="SettingsManager.addCategory()" class="btn btn-sm btn-primary join-item px-3">
             <i class="fas fa-plus text-xs"></i>
           </button>
         </div>
       </div>
+      <div id="container-categories" class="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-white">
+        <!-- Categories will be rendered here as cards/collapsibles -->
+      </div>
+    </div>
 
-      <div id="container-categories" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-white"></div>
+    <!-- SECTION 4: EMAIL SETTINGS -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+      <!-- Email Profiles -->
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col h-full min-h-[300px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50 shrink-0">
+          <div>
+            <h3 class="text-xs font-bold uppercase text-gray-500 tracking-wider flex items-center gap-2">
+              <i class="fas fa-envelope text-primary"></i> Email Profiles
+            </h3>
+            <p class="text-[10px] text-gray-400 mt-1">รายชื่อผู้รับ (To/CC)</p>
+          </div>
+          <span id="count-email-profiles" class="badge badge-ghost badge-xs font-mono">0</span>
+        </div>
+        <div class="p-3 bg-base-50 border-b border-base-100 space-y-2">
+          <div class="grid grid-cols-1 gap-2">
+            <input type="text" id="in-profile-name" class="input input-sm input-bordered w-full text-xs font-bold"
+              placeholder="Profile Name">
+            <input type="text" id="in-profile-to" class="input input-sm input-bordered w-full text-xs font-mono"
+              placeholder="To: email@example.com">
+            <input type="text" id="in-profile-cc" class="input input-sm input-bordered w-full text-xs font-mono"
+              placeholder="CC: (Optional)">
+          </div>
+          <button onclick="SettingsManager.addEmailProfile()" class="btn btn-xs btn-primary w-full gap-1">
+            <i class="fas fa-plus text-[10px]"></i> เพิ่ม Profile
+          </button>
+        </div>
+        <div id="list-email-profiles" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar max-h-60"></div>
+      </div>
+
+      <!-- Site Profiles (Draft Templates) -->
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col h-full min-h-[300px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50 shrink-0">
+          <div>
+            <h3 class="text-xs font-bold uppercase text-gray-500 tracking-wider flex items-center gap-2">
+              <i class="fas fa-id-card-alt text-warning"></i> Site Profiles
+            </h3>
+            <p class="text-[10px] text-gray-400 mt-1">ข้อมูลแบบฟอร์ม (Draft Template)</p>
+          </div>
+          <span id="count-email-drafts" class="badge badge-ghost badge-xs font-mono">0</span>
+        </div>
+        <div class="p-3 bg-base-50 border-b border-base-100 space-y-2">
+          <input type="text" id="in-draft-name" class="input input-sm input-bordered w-full text-xs font-bold"
+            placeholder="Template Name">
+
+          <!-- Hidden inputs for quick add (simplified) - User should use Edit to fill details or add mainly -->
+          <div class="text-[10px] text-gray-400 italic text-center py-1">ใส่ชื่อเพื่อสร้าง Template ว่าง
+            แล้วกดปุ่มแก้ไขเพื่อกรอกรายละเอียด</div>
+
+          <div class="hidden">
+            <!-- Required hidden inputs to prevent JS errors on Add -->
+            <input type="text" id="in-draft-greeting">
+            <input type="text" id="in-draft-note">
+            <input type="text" id="in-draft-company">
+            <input type="text" id="in-draft-contact-name">
+            <input type="text" id="in-draft-contact-num">
+            <input type="text" id="in-draft-site-name">
+            <input type="text" id="in-draft-site-num">
+            <input type="text" id="in-draft-site-email">
+            <input type="text" id="in-draft-site-addr">
+            <input type="text" id="in-draft-impact">
+            <input type="text" id="in-draft-action">
+          </div>
+
+          <button onclick="SettingsManager.addEmailDraft()" class="btn btn-xs btn-warning w-full gap-1">
+            <i class="fas fa-plus text-[10px]"></i> เพิ่ม Template ว่าง
+          </button>
+        </div>
+        <div id="list-email-drafts" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar max-h-60"></div>
+      </div>
+
+      <!-- Saved Mail Drafts -->
+      <div class="card bg-white rounded-xl shadow-sm border border-base-200 flex flex-col h-full min-h-[300px]">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-gray-50/50 shrink-0">
+          <div>
+            <h3 class="text-xs font-bold uppercase text-gray-500 tracking-wider flex items-center gap-2">
+              <i class="fas fa-save text-info"></i> Saved Mail Drafts
+            </h3>
+            <p class="text-[10px] text-gray-400 mt-1">ฉบับร่างที่บันทึกไว้</p>
+          </div>
+          <span id="count-mail-drafts" class="badge badge-ghost badge-xs font-mono">0</span>
+        </div>
+        <div class="p-3 bg-blue-50/50 border-b border-blue-100 text-[10px] text-blue-600 flex gap-2 items-start">
+          <i class="fas fa-info-circle mt-0.5"></i>
+          <span>การเพิ่ม Draft ใหม่ ให้ทำผ่านหน้า Ticket (ปุ่ม Save Draft)</span>
+        </div>
+        <div id="list-mail-drafts" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar max-h-60"></div>
+      </div>
+
     </div>
 
   </div>
 
+  <!-- ========== Edit General Modal ========== -->
   <dialog id="modal_edit_setting" class="modal">
-    <div class="modal-box rounded-2xl p-0 overflow-hidden">
+    <div class="modal-box rounded-2xl p-0 overflow-hidden shadow-2xl">
       <div class="bg-gray-50 px-6 py-4 border-b border-base-200">
         <h3 class="font-bold text-lg flex items-center gap-2 text-gray-800">
           <span class="w-1.5 h-5 bg-primary rounded-full"></span>
           <span id="modal-edit-title">แก้ไขข้อมูล</span>
         </h3>
       </div>
-      
       <div class="p-6">
         <div class="form-control w-full">
-          <input type="text" id="modal-edit-input" 
-                 class="input input-bordered w-full focus:outline-none focus:border-primary text-sm" 
-                 placeholder="ใส่ข้อมูลใหม่..." 
-                 onkeypress="if(event.key==='Enter') SettingsManager.saveEditFromModal()" />
+          <input type="text" id="modal-edit-input"
+            class="input input-bordered w-full focus:outline-none focus:border-primary text-sm shadow-sm"
+            placeholder="ใส่ข้อมูลใหม่..." onkeypress="if(event.key==='Enter') SettingsManager.saveEditFromModal()" />
           <label class="label pb-0">
-            <span class="label-text-alt text-error hidden font-medium flex items-center gap-1 mt-1" id="modal-edit-error">
+            <span class="label-text-alt text-error hidden font-medium flex items-center gap-1 mt-1"
+              id="modal-edit-error">
               <i class="fas fa-exclamation-circle"></i> กรุณากรอกข้อมูล
             </span>
           </label>
         </div>
       </div>
-
       <div class="px-6 py-4 bg-gray-50 flex justify-end gap-2 border-t border-base-200">
-        <button class="btn btn-sm btn-ghost text-gray-500" onclick="SettingsManager.closeModal()">ยกเลิก</button>
-        <button class="btn btn-sm btn-primary px-6" onclick="SettingsManager.saveEditFromModal()">บันทึก</button>
+        <button class="btn btn-sm btn-ghost text-gray-500 hover:bg-gray-200"
+          onclick="SettingsManager.closeModal()">ยกเลิก</button>
+        <button class="btn btn-sm btn-primary px-6 shadow-md"
+          onclick="SettingsManager.saveEditFromModal()">บันทึก</button>
       </div>
     </div>
-    <form method="dialog" class="modal-backdrop bg-black/30 backdrop-blur-[1px]">
-      <button onclick="SettingsManager.closeModal()">close</button>
-    </form>
+    <form method="dialog" class="modal-backdrop bg-black/40 backdrop-blur-sm"><button
+        onclick="SettingsManager.closeModal()">close</button></form>
+  </dialog>
+
+  <!-- ========== Edit Email Profile Modal ========== -->
+  <dialog id="modal_edit_email_profile" class="modal">
+    <div class="modal-box rounded-2xl p-0 overflow-hidden max-w-md shadow-2xl">
+      <div class="bg-gray-50 px-6 py-4 border-b border-base-200">
+        <h3 class="font-bold text-lg flex items-center gap-2 text-gray-800">
+          <span class="w-1.5 h-5 bg-primary rounded-full"></span>
+          แก้ไข Email Profile
+        </h3>
+      </div>
+      <div class="p-6 space-y-3">
+        <div class="form-control">
+          <span class="label-text text-xs font-bold text-gray-500 mb-1">Profile Name</span>
+          <input type="text" id="edit-profile-name"
+            class="input input-sm input-bordered w-full text-xs font-bold shadow-sm">
+        </div>
+        <div class="form-control">
+          <span class="label-text text-xs font-bold text-gray-500 mb-1">To</span>
+          <input type="text" id="edit-profile-to"
+            class="input input-sm input-bordered w-full text-xs font-mono shadow-sm">
+        </div>
+        <div class="form-control">
+          <span class="label-text text-xs font-bold text-gray-500 mb-1">CC</span>
+          <input type="text" id="edit-profile-cc"
+            class="input input-sm input-bordered w-full text-xs font-mono shadow-sm">
+        </div>
+      </div>
+      <div class="px-6 py-4 bg-gray-50 flex justify-end gap-2 border-t border-base-200">
+        <button class="btn btn-sm btn-ghost text-gray-500 hover:bg-gray-200"
+          onclick="getEl('modal_edit_email_profile').close()">ยกเลิก</button>
+        <button class="btn btn-sm btn-primary px-6 shadow-md"
+          onclick="SettingsManager.saveEditEmailProfile()">บันทึก</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop bg-black/40 backdrop-blur-sm"><button>close</button></form>
+  </dialog>
+
+  <!-- ========== Edit Email Draft Modal ========== -->
+  <dialog id="modal_edit_email_draft" class="modal">
+    <div class="modal-box rounded-2xl p-0 overflow-hidden max-w-lg shadow-2xl">
+      <div class="bg-gray-50 px-6 py-4 border-b border-base-200">
+        <h3 class="font-bold text-lg flex items-center gap-2 text-gray-800">
+          <span class="w-1.5 h-5 bg-warning rounded-full"></span>
+          แก้ไข Email Draft Template
+        </h3>
+      </div>
+      <div class="p-6 space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
+        <div class="form-control">
+          <span class="label-text text-xs font-bold text-gray-500 mb-1">Draft Name</span>
+          <input type="text" id="edit-draft-name"
+            class="input input-sm input-bordered w-full text-xs font-bold shadow-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Greeting</span>
+            <input type="text" id="edit-draft-greeting" class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Note</span>
+            <input type="text" id="edit-draft-note" class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-control flex flex-row items-center gap-2">
+            <span class="label-text text-xs text-gray-500">แสดง Greeting</span>
+            <input type="checkbox" id="edit-draft-show-greeting" class="toggle toggle-primary toggle-xs" checked>
+          </div>
+          <div class="form-control flex flex-row items-center gap-2">
+            <span class="label-text text-xs text-gray-500">แสดง Note</span>
+            <input type="checkbox" id="edit-draft-show-note" class="toggle toggle-primary toggle-xs" checked>
+          </div>
+        </div>
+        <div class="divider my-0"></div>
+        <div class="form-control">
+          <span class="label-text text-xs font-bold text-gray-500 mb-1">Company Name</span>
+          <input type="text" id="edit-draft-company" class="input input-sm input-bordered w-full text-xs shadow-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Contact Name</span>
+            <input type="text" id="edit-draft-contact-name"
+              class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Contact Number</span>
+            <input type="text" id="edit-draft-contact-num"
+              class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Site Contact Name</span>
+            <input type="text" id="edit-draft-site-name" class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Site Contact Number</span>
+            <input type="text" id="edit-draft-site-num" class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Site Email</span>
+            <input type="text" id="edit-draft-site-email"
+              class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Site Address</span>
+            <input type="text" id="edit-draft-site-addr" class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+        </div>
+        <div class="divider my-0"></div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Root Cause</span>
+            <input type="text" id="edit-draft-root-cause"
+              class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Action Taken</span>
+            <input type="text" id="edit-draft-action" class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Business Impact</span>
+            <input type="text" id="edit-draft-impact" class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+          <div class="form-control">
+            <span class="label-text text-xs font-bold text-gray-500 mb-1">Schedule Onsite</span>
+            <input type="text" id="edit-draft-schedule" class="input input-sm input-bordered w-full text-xs shadow-sm">
+          </div>
+        </div>
+      </div>
+      <div class="px-6 py-4 bg-gray-50 flex justify-end gap-2 border-t border-base-200">
+        <button class="btn btn-sm btn-ghost text-gray-500 hover:bg-gray-200"
+          onclick="getEl('modal_edit_email_draft').close()">ยกเลิก</button>
+        <button class="btn btn-sm btn-primary px-6 shadow-md"
+          onclick="SettingsManager.saveEditEmailDraft()">บันทึก</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop bg-black/40 backdrop-blur-sm"><button>close</button></form>
   </dialog>
 
 </div>

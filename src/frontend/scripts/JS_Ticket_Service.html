@@ -1,0 +1,36 @@
+<script>
+/**
+ * SERVICE LAYER
+ * หน้าที่: ติดต่อ Server, ดึงข้อมูล, บันทึกข้อมูล
+ */
+const TicketService = (() => {
+    return {
+        // --- Config & Profiles ---
+        getConfig: () => Server.call({ func: 'getTicketConfig', silent: true }),
+        getEmailProfiles: () => Server.call({ func: 'getEmailProfiles', silent: true }),
+        getSiteProfiles: () => Server.call({ func: 'getEmailDrafts', silent: true }), // Site Info
+        getMailDrafts: () => Server.call({ func: 'getMailDrafts', silent: true }),     // Saved Drafts
+
+        // --- Ticket Operations ---
+        getAllTickets: () => Server.call({ func: 'getTickets', silent: true }),
+        
+        saveTicket: (data, isUpdate) => {
+            const func = isUpdate ? 'updateTicket' : 'createTicket';
+            return Server.call({ func: func, silent: false }, data);
+        },
+
+        saveAndDraft: (ticketData, emailData) => {
+            return Server.call({ func: 'createTicketAndDraft', silent: false }, { ticket: ticketData, email: emailData });
+        },
+
+        deleteTicket: (id) => Server.call({ func: 'deleteTicket', silent: false }, id),
+
+        // --- Email Sync ---
+        fetchEmailPreviews: () => Server.call({ func: 'getEmailPreviews', silent: true }),
+        importEmails: (payloads) => Server.call({ func: 'saveBatchTickets', silent: true }, payloads),
+        
+        // --- Saved Drafts ---
+        saveDraftsList: (drafts) => Server.call({ func: 'saveMailDrafts', silent: true }, drafts),
+    };
+})();
+</script>

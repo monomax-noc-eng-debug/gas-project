@@ -30,19 +30,19 @@ const TicketService = {
       let listBacklog = [];   // งานค้าง (ทุกวัน)
 
       tickets.forEach(t => {
-        if (!t || !t[2]) return;
-        const id = t[2];
-        const statusRaw = String(t[4] || "").toUpperCase().trim();
-        const statusDisplay = t[4] || "";
+        if (!t || !t.ticketNumber) return;
+        const id = t.ticketNumber;
+        const statusRaw = String(t.status || "").toUpperCase().trim();
+        const statusDisplay = t.status || "";
         // Prioritize Subject (Short Description) as requested
-        const detail = t[8] || t[9] || '-';
+        const detail = t.subject || t.detail || '-';
 
         // Parse dates
-        const createdParsed = API_UTILS.parseCustomDateTime(t[15]);
-        const resolvedParsed = API_UTILS.parseCustomDateTime(t[16]);
+        const createdParsed = API_UTILS.parseCustomDateTime(t.createdDate);
+        const resolvedParsed = API_UTILS.parseCustomDateTime(t.resolvedDate);
 
         // Fallback for created date (if incident date created is used)
-        const incidentParsed = API_UTILS.parseCustomDateTime(t[1]);
+        const incidentParsed = API_UTILS.parseCustomDateTime(t.date);
         const createdDateStr = createdParsed.date || incidentParsed.date;
         const resolvedDateStr = resolvedParsed.date;
 

@@ -9,10 +9,15 @@
         <p class="text-[10px] text-gray-400">รายการส่งรายงานย้อนหลัง</p>
       </div>
     </div>
-    <button onclick="HistoryManager.loadHistory(true)"
-      class="btn btn-sm btn-ghost btn-circle text-base-content/60 hover:text-primary tooltip tooltip-bottom"
-      data-tip="รีเฟรช">
-      <i class="fas fa-sync-alt" id="hist-refresh-icon"></i>
+    <button id="btn-refresh-history" onclick="HistoryManager.loadHistory(true)"
+      class="btn btn-sm btn-neutral text-white shadow-sm btn-loading-overlay min-w-[90px]">
+      <span class="default-content flex items-center gap-2">
+        <i class="fas fa-sync-alt text-xs"></i>
+        <span class="hidden sm:inline text-xs ml-1">โหลดข้อมูล</span>
+      </span>
+      <span class="loading-content">
+        <span class="custom-loader"></span>
+      </span>
     </button>
   </div>
 

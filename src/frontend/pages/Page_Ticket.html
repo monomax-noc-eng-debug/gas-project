@@ -1,215 +1,423 @@
-<div id="page-ticket" class="page-section hidden w-full h-full bg-base-200/50 flex flex-col p-4 md:p-6 gap-6 overflow-hidden">
+<div id="page-ticket"
+  class="page-section hidden w-full h-full bg-slate-50 flex flex-col font-sans text-slate-600 p-4 md:p-6 gap-6">
 
-    <div class="flex justify-between items-center bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
+  <!-- ================= HEADER (Updated Style) ================= -->
+  <div
+    class="flex flex-col md:flex-row justify-between items-center gap-4 bg-white px-6 py-4 rounded-2xl shadow-sm border border-base-300 shrink-0 z-20">
+
+    <div class="flex items-center gap-3 w-full md:w-auto">
+      <div class="bg-primary/10 p-2 rounded-xl text-primary">
+        <i class="fas fa-ticket-alt text-xl"></i>
+      </div>
+      <div>
+        <h2 class="text-base font-bold text-gray-800">จัดการงานแจ้งซ่อม (Ticket)</h2>
+        <p class="text-[10px] text-gray-400">ระบบติดตามงานและคำร้อง</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 w-full md:w-auto md:justify-end">
+
+      <div class="relative w-full md:w-56">
+        <input type="text" id="ticket-search" onkeyup="TicketManager.filterData()" placeholder="ค้นหา Ticket ID..."
+          class="input input-sm input-bordered w-full pl-8 focus:outline-none focus:border-primary text-xs" />
+        <i
+          class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+      </div>
+
+      <button id="btn-refresh-ticket" onclick="TicketManager.loadData(true)"
+        class="btn btn-sm btn-neutral text-white shadow-sm gap-2 px-3 font-medium transition-transform active:scale-95 btn-loading-overlay">
+        <span class="default-content flex items-center gap-2">
+          <i class="fas fa-sync-alt" id="icon-ticket-refresh"></i>
+          <span>โหลดข้อมูล</span>
+        </span>
+        <span class="loading-content hidden">
+          <span class="loading loading-spinner loading-xs"></span>
+        </span>
+      </button>
+
+      <button onclick="TicketManager.manualFetchEmail()"
+        class="btn btn-sm btn-outline gap-2 px-3 font-medium transition-transform active:scale-95">
+        <i class="fas fa-envelope-open-text"></i>
+        <span>ดึงข้อมูลอีเมล</span>
+      </button>
+
+      <button onclick="TicketManager.openModal('CREATE')"
+        class="btn btn-sm btn-primary text-white shadow-sm gap-2 px-4 font-medium transition-transform active:scale-95 ml-2">
+        <i class="fas fa-plus"></i>
+        <span>สร้างรายการ</span>
+      </button>
+
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-hidden flex flex-col gap-6">
+
+    <div class="stats shadow w-full border border-slate-200 overflow-x-auto">
+
+      <div class="stat min-w-[150px]">
+        <div class="stat-figure text-primary bg-primary/10 p-3 rounded-full"><i class="fas fa-layer-group text-xl"></i>
+        </div>
+        <div class="stat-title">ทั้งหมด</div>
+        <div class="stat-value text-primary" id="stat-total">0</div>
+        <div class="stat-desc">รายการในระบบ</div>
+      </div>
+
+      <div class="stat min-w-[150px]">
+        <div class="stat-figure text-error bg-error/10 p-3 rounded-full"><i
+            class="fas fa-exclamation-circle text-xl"></i></div>
+        <div class="stat-title text-error">เปิดงาน</div>
+        <div class="stat-value text-error" id="stat-open">0</div>
+        <div class="stat-desc">ต้องดำเนินการ</div>
+      </div>
+
+      <div class="stat min-w-[150px]">
+        <div class="stat-figure text-warning bg-warning/10 p-3 rounded-full"><i class="fas fa-clock text-xl"></i></div>
+        <div class="stat-title text-warning">รอตรวจสอบ</div>
+        <div class="stat-value text-warning" id="stat-pending">0</div>
+        <div class="stat-desc">กำลังดำเนินการ</div>
+      </div>
+
+      <div class="stat min-w-[150px]">
+        <div class="stat-figure text-success bg-success/10 p-3 rounded-full"><i class="fas fa-check-circle text-xl"></i>
+        </div>
+        <div class="stat-title text-success">เสร็จสิ้น</div>
+        <div class="stat-value text-success" id="stat-resolved">0</div>
+        <div class="stat-desc">ปิดงานแล้ว</div>
+      </div>
+
+      <div class="stat min-w-[150px] bg-slate-50 border-l">
+        <div class="stat-figure text-info"><i class="fas fa-fire-alt"></i></div>
+        <div class="stat-title">Incident</div>
+        <div class="stat-value text-sm" id="stat-incident">0</div>
+      </div>
+
+      <div class="stat min-w-[150px] bg-slate-50">
+        <div class="stat-figure text-secondary"><i class="fas fa-clipboard-list"></i></div>
+        <div class="stat-title">Request</div>
+        <div class="stat-value text-sm" id="stat-request">0</div>
+      </div>
+
+    </div>
+
+    <div class="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col relative">
+
+      <div id="ticket-empty"
+        class="absolute inset-0 flex flex-col items-center justify-center text-slate-300 hidden pointer-events-none z-0">
+        <i class="fas fa-inbox text-6xl opacity-20 mb-4"></i>
+        <p>ไม่พบข้อมูลรายการ</p>
+      </div>
+
+      <div id="ticket-loader" class="absolute inset-0 flex items-center justify-center bg-white/80 z-10 hidden">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+      </div>
+
+      <div class="overflow-auto h-full w-full custom-scrollbar">
+        <table class="table table-pin-rows table-sm w-full">
+          <thead>
+            <tr class="bg-slate-100 text-slate-600">
+              <th class="w-12 text-center">#</th>
+              <th>รหัส / วันที่</th>
+              <th class="hidden md:table-cell">วันที่แจ้ง</th>
+              <th>หัวข้อ / รายละเอียด</th>
+              <th class="text-center hidden md:table-cell">ประเภท</th>
+              <th class="text-center hidden md:table-cell">ความสำคัญ</th>
+              <th class="text-center">สถานะ</th>
+              <th class="hidden lg:table-cell">ผู้รับผิดชอบ</th>
+              <th class="text-right pr-6">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="ticket-table-body" class="text-slate-600">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <dialog id="modal-import-email" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box w-11/12 max-w-5xl h-auto max-h-[85vh]">
+      <h3 class="font-bold text-lg flex items-center gap-2">
+        <i class="fas fa-inbox text-primary"></i> เลือกอีเมลที่ต้องการนำเข้า
+      </h3>
+      <p class="py-2 text-sm text-slate-500">ระบบตรวจสอบ SVR ID และรายการซ้ำอัตโนมัติ</p>
+
+      <div class="overflow-x-auto mt-4 max-h-[60vh] border rounded-lg bg-base-100 custom-scrollbar">
+        <table class="table table-pin-rows table-xs">
+          <thead>
+            <tr class="bg-base-200">
+              <th class="w-10"><label><input type="checkbox" class="checkbox checkbox-xs"
+                    onchange="TicketManager.toggleAllEmails(this)" /></label></th>
+              <th>สถานะ</th>
+              <th>หัวข้อ (Subject)</th>
+              <th>ผู้ส่ง (From)</th>
+              <th>วันที่</th>
+            </tr>
+          </thead>
+          <tbody id="email-import-body">
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-action justify-between items-center">
+        <div class="text-xs text-slate-400 flex gap-4">
+          <span class="flex items-center gap-1"><i class="fas fa-circle text-success text-[8px]"></i> พร้อมนำเข้า</span>
+          <span class="flex items-center gap-1"><i class="fas fa-circle text-warning text-[8px]"></i> ซ้ำในระบบ</span>
+          <span class="flex items-center gap-1"><i class="fas fa-circle text-error text-[8px]"></i> ไม่มี SVR</span>
+        </div>
+        <div class="flex gap-2">
+          <form method="dialog"><button class="btn btn-sm btn-ghost">ยกเลิก</button></form>
+          <button onclick="TicketManager.confirmImportEmails()"
+            class="btn btn-sm btn-primary">บันทึกรายการที่เลือก</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="modal-ticket-form" class="modal modal-middle backdrop-blur-sm">
+    <div class="modal-box w-11/12 max-w-7xl h-[90vh] p-0 bg-white rounded-2xl flex flex-col shadow-2xl">
+      <div class="flex items-center justify-between px-6 py-4 border-b bg-white z-20">
         <div class="flex items-center gap-3">
-            <div class="bg-primary/10 p-2 rounded-xl text-primary">
-                <i class="fas fa-ticket-alt text-xl"></i>
-            </div>
-            <div>
-                <h2 class="text-base font-bold text-gray-800">ทิคเก็ต (Ticket)</h2>
-                <p class="text-[10px] text-gray-400">รายการแจ้งปัญหาและงานทั้งหมด</p>
-            </div>
+          <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 text-lg">
+            <i class="fas fa-edit"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-lg text-slate-800" id="ticket-modal-title">รายละเอียดงาน</h3>
+            <p class="text-xs text-slate-400">บันทึกข้อมูลหรือแก้ไข</p>
+          </div>
         </div>
-        
-        <div class="flex items-center gap-2">
-            <button onclick="TicketManager.loadTickets(true)"
-                class="btn btn-sm btn-ghost btn-circle text-base-content/60 hover:text-primary tooltip tooltip-bottom"
-                data-tip="รีเฟรช">
-                <i class="fas fa-sync-alt"></i>
-            </button>
-            <button onclick="TicketManager.openModal('CREATE')"
-                class="btn btn-sm btn-primary text-white shadow-sm gap-2 font-medium px-4">
-                <i class="fas fa-plus text-xs"></i> <span class="hidden sm:inline">สร้าง Ticket</span>
-            </button>
-        </div>
-    </div>
+        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost"><i class="fas fa-times"></i></button>
+        </form>
+      </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 shrink-0">
-        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
-            <div class="stat-figure text-primary/20"><i class="fas fa-layer-group text-xl"></i></div>
-            <div class="stat-title text-[10px] uppercase font-bold text-gray-400">Total</div>
-            <div class="stat-value text-2xl text-primary" id="stat-total">0</div>
-        </div>
-        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
-            <div class="stat-title text-[10px] uppercase font-bold text-red-400">Open</div>
-            <div class="stat-value text-2xl text-red-500" id="stat-open">0</div>
-        </div>
-        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
-            <div class="stat-title text-[10px] uppercase font-bold text-amber-400">Pending</div>
-            <div class="stat-value text-2xl text-amber-500" id="stat-pending">0</div>
-        </div>
-        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
-            <div class="stat-title text-[10px] uppercase font-bold text-green-400">Resolved</div>
-            <div class="stat-value text-2xl text-green-500" id="stat-resolved">0</div>
-        </div>
-        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
-            <div class="stat-title text-[10px] uppercase font-bold text-gray-400">Closed</div>
-            <div class="stat-value text-2xl text-gray-500" id="stat-closed">0</div>
-        </div>
-        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
-            <div class="stat-title text-[10px] uppercase font-bold text-blue-400">Request</div>
-            <div class="stat-value text-xl text-blue-500" id="stat-request">0</div>
-        </div>
-        <div class="stat bg-white shadow-sm border border-base-200 rounded-xl p-3">
-            <div class="stat-title text-[10px] uppercase font-bold text-pink-400">Incident</div>
-            <div class="stat-value text-xl text-pink-500" id="stat-incident">0</div>
-        </div>
-    </div>
+      <div class="flex-1 overflow-y-auto bg-slate-50/50">
+        <form id="form-ticket" class="h-full flex flex-col">
+          <div class="hidden">
+            <div class="tabs"><a id="tab-btn-1" onclick="TicketView.switchTab(1)"></a><a id="tab-btn-4"
+                onclick="TicketView.switchTab(4)"></a></div>
+          </div>
 
-    <div class="card bg-white shadow-sm border border-base-200 flex-1 min-h-0 flex flex-col overflow-hidden">
-        
-        <div class="p-4 border-b border-base-100 flex items-center gap-3 bg-white z-20">
-            <div class="relative flex-1 max-w-md">
-                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
-                <input type="text" id="ticket-search" onkeyup="TicketManager.filterData()" 
-                    placeholder="ค้นหา ID, หัวข้อ, สถานะ..." 
-                    class="input input-sm input-bordered w-full pl-9 focus:input-primary rounded-lg text-xs">
-            </div>
-        </div>
-
-        <div class="flex-1 overflow-x-auto overflow-y-auto relative custom-scrollbar bg-white">
-            
-            <div id="ticket-loader" class="absolute inset-0 bg-white/80 z-30 flex flex-col items-center justify-center hidden backdrop-blur-[1px]">
-                <span class="loading loading-dots loading-lg text-primary"></span>
-            </div>
-
-            <div id="ticket-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-300 hidden z-10 pointer-events-none">
-                <i class="fas fa-inbox text-4xl mb-2 opacity-30"></i>
-                <p class="text-sm">ไม่พบข้อมูล Ticket</p>
-            </div>
-
-            <table class="table table-md w-full text-left">
-                <thead class="bg-gray-50 text-gray-600 font-bold text-sm uppercase sticky top-0 z-20 shadow-sm">
-                    <tr>
-                        <th class="whitespace-nowrap py-4 pl-4 w-16 text-center">No.</th>
-                        <th class="whitespace-nowrap py-4 w-32">Ticket ID</th>
-                        <th class="whitespace-nowrap py-4 w-32">Date</th>
-                        <th class="whitespace-nowrap py-4 min-w-[250px]">Subject</th>
-                        <th class="whitespace-nowrap py-4 w-28 text-center">Type</th>
-                        <th class="whitespace-nowrap py-4 w-28 text-center">Severity</th>
-                        <th class="whitespace-nowrap py-4 w-32 text-center">Status</th>
-                        <th class="whitespace-nowrap py-4 w-40">Category</th>
-                        <th class="whitespace-nowrap py-4 w-40">Assign To</th>
-                        <th class="whitespace-nowrap py-4 pr-4 w-20 text-center">Action</th>
-                    </tr>
-                </thead>
-                <tbody id="ticket-table-body" class="text-sm divide-y divide-gray-100">
-                    </tbody>
-            </table>
-        </div>
-    </div>
-
-    <dialog id="modal-ticket-form" class="modal modal-bottom sm:modal-middle">
-        <div class="modal-box w-11/12 max-w-3xl p-0 rounded-2xl bg-white shadow-2xl overflow-hidden">
-            
-            <div class="px-6 py-4 border-b border-base-200 flex justify-between items-center bg-base-50">
-                <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
-                    <span class="w-2 h-6 bg-primary rounded-full"></span>
-                    <span id="ticket-modal-title">Ticket Detail</span>
-                </h3>
-                <form method="dialog">
-                    <button class="btn btn-sm btn-circle btn-ghost text-gray-400 hover:text-gray-600">✕</button>
-                </form>
-            </div>
-
-            <form id="form-ticket" onsubmit="TicketManager.handleSubmit(event)" class="overflow-y-auto max-h-[calc(100vh-12rem)]">
-                <input type="hidden" name="id" id="inp-ticket-id">
-
-                <div class="p-6 space-y-6">
-                    
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div class="form-control">
-                            <span class="label-text text-xs font-bold text-gray-400 mb-1">Date</span>
-                            <input type="date" name="date" id="inp-ticket-date" required class="input input-sm input-bordered w-full">
-                        </div>
-                        <div class="form-control">
-                            <span class="label-text text-xs font-bold text-gray-400 mb-1">Time</span>
-                            <input type="time" name="time" id="inp-ticket-time" required class="input input-sm input-bordered w-full">
-                        </div>
-                        <div class="form-control">
-                            <span class="label-text text-xs font-bold text-gray-400 mb-1">Type</span>
-                            <select name="type" id="sel-ticket-type" class="select select-sm select-bordered w-full"></select>
-                        </div>
-                        <div class="form-control">
-                            <span class="label-text text-xs font-bold text-gray-400 mb-1">Status</span>
-                            <select name="status" id="sel-ticket-status" class="select select-sm select-bordered w-full font-bold"></select>
-                        </div>
+          <div id="tab-content-1" class="p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div class="lg:col-span-8 space-y-6">
+                <div class="card bg-white shadow-sm border p-6">
+                  <h4 class="text-sm font-bold text-slate-400 mb-4 uppercase">ข้อมูลทั่วไป</h4>
+                  <div class="form-control mb-4">
+                    <label class="label"><span class="label-text font-bold">หัวข้อ (Subject) <span
+                          class="text-red-500">*</span></span></label>
+                    <input type="text" name="subject" id="inp-ticket-subject" required
+                      class="input input-bordered w-full" placeholder="ระบุหัวข้อ...">
+                    <div class="mt-2 text-xs text-slate-400 bg-slate-50 p-2 rounded border flex items-center gap-2">
+                      <i class="fas fa-robot"></i> Auto-Subject: <span id="auto-subject-text"
+                        class="text-indigo-600 font-bold">...</span>
                     </div>
-
-                    <div class="divider my-0"></div>
-
-                    <div class="space-y-4">
-                        <div class="form-control">
-                            <span class="label-text text-xs font-bold text-gray-400 mb-1">Subject / หัวข้อ</span>
-                            <input type="text" name="subject" id="inp-ticket-subject" required class="input input-bordered w-full font-bold text-gray-700 placeholder:font-normal" placeholder="ระบุหัวข้อปัญหา...">
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div class="form-control">
-                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Category</span>
-                                <select name="category" id="sel-ticket-category" onchange="TicketManager.updateSubCategories()" class="select select-sm select-bordered w-full"></select>
-                            </div>
-                            <div class="form-control">
-                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Sub Category</span>
-                                <select name="subCategory" id="sel-ticket-subcategory" class="select select-sm select-bordered w-full"></select>
-                            </div>
-                            <div class="form-control">
-                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Severity</span>
-                                <select name="severity" id="sel-ticket-severity" class="select select-sm select-bordered w-full"></select>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="form-control">
-                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Description</span>
-                                <textarea name="detail" id="txt-ticket-detail" class="textarea textarea-bordered h-24 text-xs" placeholder="รายละเอียด..."></textarea>
-                            </div>
-                            <div class="form-control">
-                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Action Taken</span>
-                                <textarea name="action" id="txt-ticket-action" class="textarea textarea-bordered h-24 text-xs" placeholder="การแก้ไขเบื้องต้น..."></textarea>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="collapse collapse-arrow border border-base-200 bg-base-50 rounded-xl">
-                        <input type="checkbox" /> 
-                        <div class="collapse-title text-sm font-bold text-gray-600 flex items-center gap-2">
-                            <i class="fas fa-check-double text-green-500"></i> Resolution & Assign
-                        </div>
-                        <div class="collapse-content space-y-4 pt-2">
-                            <div class="form-control">
-                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Resolution Detail</span>
-                                <textarea name="resolvedDetail" id="txt-ticket-resolved" class="textarea textarea-bordered h-20 text-xs" placeholder="รายละเอียดการแก้ไข..."></textarea>
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="form-control">
-                                    <span class="label-text text-xs font-bold text-gray-400 mb-1">Responsibility</span>
-                                    <input type="text" name="responsibility" id="inp-ticket-resp" class="input input-sm input-bordered w-full">
-                                </div>
-                                <div class="form-control">
-                                    <span class="label-text text-xs font-bold text-gray-400 mb-1">Assignee</span>
-                                    <input type="text" name="assignee" id="inp-ticket-assign" class="input input-sm input-bordered w-full">
-                                </div>
-                            </div>
-                            <div class="form-control">
-                                <span class="label-text text-xs font-bold text-gray-400 mb-1">Remark</span>
-                                <textarea name="remark" id="txt-ticket-remark" class="textarea textarea-bordered h-16 text-xs"></textarea>
-                            </div>
-                        </div>
-                    </div>
-
+                  </div>
+                  <div class="form-control">
+                    <label class="label"><span class="label-text font-bold">รายละเอียด (Detail)</span></label>
+                    <textarea name="detail" id="txt-ticket-detail" class="textarea textarea-bordered h-32"
+                      placeholder="รายละเอียดปัญหา..."></textarea>
+                  </div>
                 </div>
-
-                <div class="px-6 py-4 border-t border-base-200 bg-gray-50 flex justify-end gap-2 sticky bottom-0 z-10">
-                    <button type="button" class="btn btn-sm btn-ghost text-gray-500" onclick="document.getElementById('modal-ticket-form').close()">Cancel</button>
-                    <button type="submit" id="btn-save-ticket" class="btn btn-sm btn-primary min-w-[100px]">
-                        <span class="loading loading-spinner loading-xs hidden" id="spinner-save-ticket"></span>
-                        Save
-                    </button>
+                <div class="card bg-white shadow-sm border p-6">
+                  <h4 class="text-sm font-bold text-slate-400 mb-4 uppercase">การดำเนินการ</h4>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                      <label class="label"><span class="label-text font-bold">สิ่งที่ทำไปแล้ว (Action)</span></label>
+                      <textarea name="action" id="txt-ticket-action" class="textarea textarea-bordered h-24"></textarea>
+                    </div>
+                    <div class="form-control">
+                      <label class="label"><span class="label-text font-bold">สาเหตุ/วิธีแก้ (Root Cause)</span></label>
+                      <textarea name="resolvedDetail" id="txt-ticket-resolved-detail"
+                        class="textarea textarea-bordered h-24"></textarea>
+                    </div>
+                  </div>
                 </div>
-            </form>
+              </div>
+              <div class="lg:col-span-4 space-y-6">
+                <div class="card bg-white shadow-sm border p-6">
+                  <div class="flex justify-between items-center mb-4">
+                    <span class="text-xs font-bold text-slate-400 uppercase">สถานะ</span>
+                    <input type="text" name="id" id="inp-ticket-id"
+                      class="input input-xs w-20 text-center font-mono bg-slate-100" readonly placeholder="AUTO">
+                  </div>
+                  <select name="status" id="sel-ticket-status"
+                    class="select select-bordered w-full mb-3 font-bold"></select>
+                  <div class="grid grid-cols-2 gap-2">
+                    <input type="date" name="date" id="inp-ticket-date"
+                      class="input input-sm input-bordered w-full bg-white" placeholder="วว/ดด/ปปปป">
+                    <input type="time" name="time" id="inp-ticket-time"
+                      class="input input-sm input-bordered w-full bg-white">
+                  </div>
+                </div>
+                <div class="card bg-white shadow-sm border p-6">
+                  <h4 class="text-sm font-bold text-slate-400 mb-4 uppercase">การจำแนก</h4>
+                  <div class="space-y-3">
+                    <div class="form-control"><label class="label py-0 text-xs">ประเภท</label><select name="type"
+                        id="sel-ticket-type" class="select select-bordered select-sm w-full"></select></div>
+                    <div class="form-control"><label class="label py-0 text-xs">ความรุนแรง</label><select
+                        name="severity" id="sel-ticket-severity"
+                        class="select select-bordered select-sm w-full"></select></div>
+                    <div class="form-control"><label class="label py-0 text-xs">หมวดหมู่</label><select name="category"
+                        id="sel-ticket-category" onchange="TicketManager.handleCategoryChange()"
+                        class="select select-bordered select-sm w-full">
+                        <option value="">เลือก...</option>
+                      </select></div>
+                    <div class="form-control"><label class="label py-0 text-xs">หมวดหมู่ย่อย</label><select
+                        name="subCategory" id="sel-ticket-subcategory" class="select select-bordered select-sm w-full">
+                        <option value="">-</option>
+                      </select></div>
+                  </div>
+                </div>
+                <div class="card bg-white shadow-sm border p-6">
+                  <h4 class="text-sm font-bold text-slate-400 mb-4 uppercase">ผู้รับผิดชอบ</h4>
+                  <div class="form-control mb-2"><label class="label py-0 text-xs">หัวหน้าทีม</label><select
+                      name="responsibility" id="sel-ticket-resp"
+                      class="select select-bordered select-sm w-full"></select></div>
+                  <div class="form-control">
+                    <label class="label py-0 text-xs">ผู้ปฏิบัติงาน</label>
+                    <select id="sel-ticket-assign-picker" onchange="TicketManager.addAssigneeTag(this.value)"
+                      class="select select-bordered select-sm w-full mb-2">
+                      <option value="">+ เพิ่มคน</option>
+                    </select>
+                    <input type="hidden" name="assignee" id="inp-ticket-assign">
+                    <div id="assignee-tags-container"
+                      class="flex flex-col gap-1 p-2 bg-slate-50 border rounded h-32 overflow-y-auto"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="tab-content-4" class="hidden h-full flex flex-col lg:flex-row bg-slate-50">
+            <div class="w-full lg:w-5/12 bg-white border-r border-slate-200 p-6 overflow-y-auto custom-scrollbar">
+              <h4 class="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><i
+                  class="fas fa-paper-plane text-primary"></i> ตั้งค่าอีเมล</h4>
+
+              <div class="space-y-4">
+                <div class="form-control">
+                  <label class="label py-1 text-xs font-bold text-slate-400">โหลดข้อมูล</label>
+                  <div class="grid grid-cols-1 gap-2">
+                    <select id="sel-email-draft" onchange="TicketManager.applySiteProfile(this.value)"
+                      class="select select-bordered select-sm w-full bg-slate-50"></select>
+                    <select id="sel-email-profile" onchange="TicketManager.applyEmailProfile(this.value)"
+                      class="select select-bordered select-sm w-full"></select>
+                  </div>
+                </div>
+                <div class="flex gap-2 items-end">
+                  <select id="sel-mail-draft" onchange="TicketManager.applyDraft(this.value)"
+                    class="select select-bordered select-sm w-full flex-1"></select>
+                  <button type="button" onclick="TicketManager.saveCurrentDraft()"
+                    class="btn btn-sm btn-square btn-outline tooltip" data-tip="บันทึก Template"><i
+                      class="fas fa-save"></i></button>
+                </div>
+              </div>
+
+              <div class="divider my-4"></div>
+
+              <div class="space-y-3">
+                <div class="form-control">
+                  <label class="label py-0 text-xs font-bold">ผู้รับ (To)</label>
+                  <input type="text" id="email-to" class="input input-bordered input-sm w-full font-mono text-xs">
+                </div>
+                <div class="form-control">
+                  <label class="label py-0 text-xs font-bold">สำเนา (Cc)</label>
+                  <input type="text" id="email-cc" class="input input-bordered input-sm w-full font-mono text-xs">
+                </div>
+              </div>
+
+              <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mt-6 space-y-3">
+                <div class="form-control">
+                  <div class="flex justify-between items-center mb-1"><span
+                      class="text-xs font-bold text-indigo-800">คำขึ้นต้น (Greeting)</span><input type="checkbox"
+                      id="chk-show-greeting" class="toggle toggle-primary toggle-xs" checked
+                      onchange="TicketManager.updateEmailPreview()"></div>
+                  <input type="text" id="email-greeting" class="input input-bordered input-sm w-full bg-white">
+                </div>
+                <div class="form-control">
+                  <div class="flex justify-between items-center mb-1"><span
+                      class="text-xs font-bold text-indigo-800">หมายเหตุ (Note)</span><input type="checkbox"
+                      id="chk-show-note" class="toggle toggle-primary toggle-xs" checked
+                      onchange="TicketManager.updateEmailPreview()"></div>
+                  <input type="text" id="email-note" class="input input-bordered input-sm w-full bg-white">
+                </div>
+              </div>
+
+              <div class="hidden">
+                <input type="text" id="email-company"><input type="text" id="email-contact-name"><input type="text"
+                  id="email-contact-num">
+                <input type="text" id="email-site-name"><input type="text" id="email-site-num"><input type="text"
+                  id="email-site-email"><input type="text" id="email-site-addr">
+                <input type="text" id="email-root-cause"><input type="text" id="email-action"><input type="text"
+                  id="email-impact"><input type="text" id="email-schedule">
+                <div id="auto-subject-text-2"></div>
+              </div>
+            </div>
+
+            <div class="w-full lg:w-7/12 bg-slate-100 p-6 flex flex-col h-full">
+              <div class="flex justify-between items-center mb-4">
+                <span class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><i
+                    class="fas fa-eye"></i> ตัวอย่าง (Preview)</span>
+                <span class="badge badge-neutral text-xs">HTML View</span>
+              </div>
+              <div
+                class="flex-1 bg-white shadow-lg rounded-xl border border-slate-200 overflow-y-auto custom-scrollbar p-8">
+                <div class="border-b pb-4 mb-4 space-y-2">
+                  <div class="flex gap-2 text-sm"><span class="font-bold text-slate-500 w-16">Subject:</span> <span
+                      id="preview-subject" class="font-bold text-slate-800">-</span></div>
+                  <div class="flex gap-2 text-sm"><span class="font-bold text-slate-500 w-16">To:</span> <span
+                      id="preview-to" class="font-mono text-slate-600">-</span></div>
+                </div>
+                <div id="preview-body-html" class="prose prose-sm max-w-none text-slate-700"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="tab-content-2" class="hidden"></div>
+          <div id="tab-content-3" class="hidden"></div>
+          <div id="tab-content-5" class="hidden"></div>
+        </form>
+      </div>
+
+      <div class="p-4 border-t bg-white flex justify-between items-center z-20">
+        <div class="flex gap-2 bg-slate-100 p-1 rounded-lg">
+          <button type="button" id="tab-btn-detail"
+            onclick="TicketManager.openModal('EDIT', document.getElementById('inp-ticket-id').value)"
+            class="btn btn-sm px-4 border-none bg-white shadow-sm text-primary hover:bg-white"><i
+              class="fas fa-file-alt"></i> รายละเอียด</button>
+          <button type="button" id="tab-btn-email"
+            onclick="TicketManager.openModal('EMAIL', document.getElementById('inp-ticket-id').value)"
+            class="btn btn-sm px-4 border-none bg-transparent text-slate-500 hover:bg-white/50"><i
+              class="fas fa-envelope"></i> อีเมล</button>
         </div>
-        <form method="dialog" class="modal-backdrop bg-black/40 backdrop-blur-[1px]"><button>close</button></form>
-    </dialog>
+        <div class="flex gap-2">
+          <button type="button" onclick="document.getElementById('modal-ticket-form').close()"
+            class="btn btn-sm btn-ghost">ปิด</button>
+          <button type="button" onclick="TicketManager.saveTicketOnly()" id="btn-save-ticket"
+            class="btn btn-sm btn-success text-white px-6">บันทึก</button>
+          <button type="button" onclick="TicketManager.saveAndDraft()" id="btn-save-draft"
+            class="btn btn-sm btn-primary text-white px-6 hidden">บันทึก & สร้าง Draft</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="modal-open-draft" class="modal">
+    <div class="modal-box text-center">
+      <h3 class="font-bold text-lg text-success">สร้าง Draft สำเร็จ!</h3>
+      <p class="py-2 text-sm text-slate-500">คุณสามารถตรวจสอบและกดส่งได้ใน Gmail</p><a id="btn-open-draft-link" href="#"
+        target="_blank" class="btn btn-primary w-full mt-4">เปิด Gmail Draft</a>
+      <form method="dialog"><button class="btn btn-ghost w-full mt-2">ปิดหน้าต่าง</button></form>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+  <dialog id="modal-save-draft" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">บันทึก Template</h3><input type="text" id="inp-draft-name-save"
+        class="input input-bordered w-full mt-4" placeholder="ตั้งชื่อ Template">
+      <div class="modal-action">
+        <form method="dialog"><button class="btn btn-ghost">ยกเลิก</button></form><button
+          onclick="TicketManager.confirmSaveDraft()" class="btn btn-primary">บันทึก</button>
+      </div>
+    </div>
+  </dialog>
 
 </div>

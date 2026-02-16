@@ -52,11 +52,9 @@ const API_UTILS = (() => {
   };
 })();
 
-// =================================================================
-// 🌐 ROUTER
-// =================================================================
-function doGet(e) { return HtmlService.createTemplateFromFile('src/frontend/index').evaluate().setTitle("Shift Report").setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL); }
-function include(filename) { return HtmlService.createHtmlOutputFromFile(filename).getContent(); }
+// // =================================================================
+// // 🌐 ROUTER
+// // =================================================================
 
 function apiHandler(request) {
   const { func, data } = request;
@@ -67,6 +65,20 @@ function apiHandler(request) {
     'updateTicket': (d) => TicketController.updateTicket(d),
     'deleteTicket': (id) => TicketController.deleteTicket(id),
     'getTicketConfig': () => TicketController.getTicketConfig(),
+    'saveTicketConfig': (d) => TicketController.saveTicketConfig(d),
+    'getEmailProfiles': () => TicketController.getEmailProfiles(),
+    'saveEmailProfiles': (d) => TicketController.saveEmailProfiles(d),
+    'getEmailDrafts': (d) => TicketController.getEmailDrafts(d),
+    'saveEmailDrafts': (d) => TicketController.saveEmailDrafts(d),
+    'getMailDrafts': (d) => TicketController.getMailDrafts(d),
+    'saveMailDrafts': (d) => TicketController.saveMailDrafts(d),
+    'createTicketAndDraft': (d) => TicketController.createTicketAndDraft(d),
+    'getStaffAndAssignees': () => TicketController.getStaffAndAssignees(),
+    'saveStaffAndAssignees': (d) => TicketController.saveStaffAndAssignees(d),
+
+    // 🌟 [แก้ไข] เปลี่ยนจาก syncTickets เป็น 2 บรรทัดนี้
+    'getEmailPreviews': () => GmailService.getUnsyncedEmails(),
+    'saveBatchTickets': (d) => GmailService.saveBatchTickets(d),
 
     // Match Core
     'apiGetWorkList': () => MatchController.apiGetWorkList(),
@@ -77,7 +89,7 @@ function apiHandler(request) {
     'getCalendarEvents': (d) => MatchController.apiGetCalendarEvents(d),
     'apiGetCalendarEvents': (d) => MatchController.apiGetCalendarEvents(d),
 
-    // Report Page Logic (Refactored)
+    // Report Page Logic
     'getTicketDetails': (d) => TicketService.getTicketDetails(d),
     'getMatchesByDate': (d) => MatchService.getMatchesByDate(d),
     'getVerificationReport': (d) => MatchService.getVerificationReport(d),
@@ -88,8 +100,16 @@ function apiHandler(request) {
     'getMasterTeamList': () => API_UTILS.createRes(true, [])
   };
 
-  if (apiMap[func]) { try { return apiMap[func](data); } catch (e) { return JSON.stringify({ success: false, error: e.toString() }); } }
-  return JSON.stringify({ success: false, error: "Function not found" });
+  if (apiMap[func]) {
+    try {
+      const result = apiMap[func](data);
+      // แปลง result เป็น JSON String ถ้ามันเป็น Object เพื่อให้ Client รับค่าได้ถูกต้อง
+      return (typeof result === 'object') ? JSON.stringify(result) : result;
+    } catch (e) {
+      return JSON.stringify({ success: false, error: e.toString() });
+    }
+  }
+  return JSON.stringify({ success: false, error: "Function not found: " + func });
 }
 
 // Global Delegates (Legacy Support)
@@ -99,6 +119,15 @@ function updateTicket(d) { return TicketController.updateTicket(d); }
 function deleteTicket(id) { return TicketController.deleteTicket(id); }
 function getTicketConfig() { return TicketController.getTicketConfig(); }
 function saveTicketConfig(d) { return TicketController.saveTicketConfig(d); }
+function getEmailProfiles() { return TicketController.getEmailProfiles(); }
+function saveEmailProfiles(d) { return TicketController.saveEmailProfiles(d); }
+function getEmailDrafts() { return TicketController.getEmailDrafts(); }
+function saveEmailDrafts(d) { return TicketController.saveEmailDrafts(d); }
+function getMailDrafts() { return TicketController.getMailDrafts(); }
+function saveMailDrafts(d) { return TicketController.saveMailDrafts(d); }
+function getStaffAndAssignees() { return TicketController.getStaffAndAssignees(); }
+function saveStaffAndAssignees(d) { return TicketController.saveStaffAndAssignees(d); }
+function createTicketAndDraft(d) { return TicketController.createTicketAndDraft(d); }
 function apiGetWorkList() { return MatchController.apiGetWorkList(); }
 function apiCreateWorkItem(d) { return MatchController.apiCreateWorkItem(d); }
 function apiUpdateWorkItem(d) { return MatchController.apiUpdateWorkItem(d); }

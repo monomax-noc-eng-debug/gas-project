@@ -130,7 +130,7 @@ const MatchService = {
         return { dashboard: dbData, external: { home: homeExt, away: awayExt, score: scoreExt }, status: status };
       });
 
-      reportList.sort((a, b) => a.dashboard.time.localeCompare(b.dashboard.time));
+      reportList.sort((a, b) => (a.dashboard.date + " " + a.dashboard.time).localeCompare(b.dashboard.date + " " + b.dashboard.time));
       return API_UTILS.createRes(true, { list: reportList, stats: { totalMatches: reportList.length, dateRange: { from: prevDateStr, to: targetDateStr } } });
     } catch (e) { return API_UTILS.createRes(false, "Error: " + e.toString()); }
   }

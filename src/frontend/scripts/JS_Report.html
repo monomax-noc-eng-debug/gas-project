@@ -1,15 +1,18 @@
 <script>
     /**
-     * JS_Report.html
-     * Version: Final Stable (Fixed Date Format & Logic)
-     */
+         * JS_Report.html
+         * Version: Final Shift Logic + Safe Mode
+         */
     window.ReportManager = (function () {
+        // --- State Variables ---
         var _files = { mono: [], ais: [], start: [] };
         var _autoStartUrls = [];
+        var _autoMonoUrls = [];
         var _isCustomReporter = false;
         var _picker = null;
         var _isLoading = false;
 
+        // --- Helpers ---
         var el = function (id) { return document.getElementById(id); };
         var show = function (id, visible) { var e = el(id); if (e) e.classList.toggle('hidden', !visible); };
 
@@ -24,7 +27,39 @@
             } catch (e) { return url; }
         };
 
+        // 🧠 Smart Date Parser (Safe Version)
+        var smartParse = function (val) {
+            if (!val) return { date: '', display: '' };
+            let d = null;
+            try {
+                if (val instanceof Date) {
+                    d = val;
+                } else if (typeof val === 'string') {
+                    const s = val.trim();
+                    // Try DD/MM/YYYY
+                    const matchDMY = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+                    if (matchDMY) {
+                        d = new Date(parseInt(matchDMY[3]), parseInt(matchDMY[2]) - 1, parseInt(matchDMY[1]), parseInt(matchDMY[4] || 0), parseInt(matchDMY[5] || 0), parseInt(matchDMY[6] || 0));
+                    } else {
+                        // Try ISO or other formats
+                        const tryD = new Date(s);
+                        if (!isNaN(tryD.getTime())) d = tryD;
+                    }
+                }
+            } catch (e) { console.warn("Date parse error", e); }
+
+            if (d && !isNaN(d.getTime())) {
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return { date: `${yyyy}-${mm}-${dd}`, display: `${dd}/${mm}/${yyyy}`, nativeObj: d };
+            }
+            return { date: '', display: val || '-', nativeObj: null };
+        };
+
         return {
+            _autoMonoUrls: _autoMonoUrls, // Expose for debug
+
             init: function () {
                 document.addEventListener('page-change', function (e) {
                     if (e.detail.pageId === 'page-report') ReportManager.onPageShow();
@@ -44,7 +79,6 @@
                         _picker = new Pikaday({
                             field: input,
                             format: 'YYYY-MM-DD',
-                            // ✅ เพิ่มส่วนนี้เพื่อบังคับ Format วันที่ให้ถูกต้อง (2026-02-10)
                             toString(date, format) {
                                 const day = String(date.getDate()).padStart(2, '0');
                                 const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -57,11 +91,7 @@
                         setTimeout(function () { ReportManager.autoFetchAll(); }, 300);
                     }
                 }
-            },
-
-            openDatePicker: function () {
-                if (_picker) { _picker.show(); }
-                else { var input = el('inputDate'); if (input) input.focus(); }
+                this.fetchReporters();
             },
 
             autoFetchAll: function () {
@@ -80,6 +110,7 @@
                     if (typeof UIManager !== 'undefined') UIManager.showToast("อัปเดตข้อมูลเรียบร้อย", "success");
                 }).catch(function (err) {
                     console.error("Fetch Error:", err);
+                    if (typeof UIManager !== 'undefined') UIManager.showToast("เกิดข้อผิดพลาดในการโหลดข้อมูล", "error");
                 }).finally(function () {
                     self._setLoading(false);
                 });
@@ -92,93 +123,200 @@
                 if (input) input.disabled = loading;
                 if (btn) {
                     btn.disabled = loading;
-                    btn.innerHTML = loading ? '<span class="loading loading-spinner"></span>' : '<i class="fas fa-sync-alt"></i> โหลดข้อมูล';
+                    if (loading) btn.classList.add('is-loading');
+                    else btn.classList.remove('is-loading');
                 }
             },
 
+            // ✅ ฟังก์ชันดึง Ticket (Robust & Shift Logic)
             fetchTickets: function () {
-                var dateVal = el('inputDate').value;
+                var selectedDate = el('inputDate').value; // YYYY-MM-DD
+
+                // 🔍 Safe Element Selector: หา ID ทั้ง 2 แบบ กันพลาด
+                var tbody = el('disp-ticket-tbody') || el('ticket-table-body');
+                if (!tbody) {
+                    console.error("❌ ไม่พบตาราง Ticket (ID: disp-ticket-tbody หรือ ticket-table-body)");
+                    return Promise.resolve(); // ออกจากฟังก์ชันเพื่อไม่ให้ค้าง
+                }
+
                 show('loader-ticket', true);
                 show('empty-ticket', false);
-                el('disp-ticket-tbody').innerHTML = '';
+                tbody.innerHTML = '';
 
-                return Server.call({ func: 'getTicketDetails', silent: true }, dateVal)
+                return Server.call({ func: 'getTickets', silent: true })
                     .then(function (res) {
                         if (res && res.success) {
-                            // 3-Bucket stats
-                            var s = res.stats;
-                            var resolvedTotal = (parseInt(s.resolved) || 0) + (parseInt(s.closed) || 0);
+                            var allTickets = res.data || [];
 
-                            if (el('disp-ticket-total')) el('disp-ticket-total').innerText = s.total || 0;
-                            if (el('disp-ticket-new')) el('disp-ticket-new').innerText = s.new || 0;
-                            if (el('disp-ticket-resolved')) el('disp-ticket-resolved').innerText = resolvedTotal;
-                            if (el('disp-ticket-backlog')) el('disp-ticket-backlog').innerText = s.backlog || 0;
+                            // Stats Logic (Shift Based)
+                            let stats = {
+                                newToday: 0,    // สร้างวันนี้
+                                closedToday: 0, // ปิดวันนี้
+                                pending: 0,     // ค้าง (ทั้งหมด)
+                                filteredCount: 0
+                            };
 
-                            el('ticketSummary').value = res.text;
+                            let listForTable = [];
 
-                            if (res.list && res.list.length > 0) {
-                                var html = res.list.map(function (t) {
-                                    // Color by tag (bucket)
-                                    var badgeClass = 'badge-ghost';
-                                    var tagBadge = '';
-                                    if (t.tag === 'NEW') {
-                                        badgeClass = 'badge-success text-white';
-                                        tagBadge = '<span class="badge badge-success badge-xs ml-1 font-bold gap-0.5">🟢 NEW</span>';
-                                    } else if (t.tag === 'RESOLVED') {
-                                        badgeClass = 'badge-info text-white';
-                                        tagBadge = '<span class="badge badge-info badge-xs ml-1 font-bold gap-0.5">🔵 DONE</span>';
-                                    } else if (t.tag === 'BACKLOG') {
-                                        badgeClass = 'badge-error text-white';
-                                        tagBadge = '<span class="badge badge-error badge-xs ml-1 font-bold gap-0.5">🔴 ค้าง</span>';
+                            allTickets.forEach(r => {
+                                // Named object keys from Backend
+                                const createdObj = smartParse(r.date);
+                                const resolvedObj = smartParse(r.resolvedDate);
+
+                                const status = String(r.status || '').toLowerCase();
+                                const isClosed = (status.includes('close') || status.includes('resolved') || status.includes('fix'));
+
+                                // 🟢 1. งานเข้าใหม่ (นับจากวันที่แจ้งเหตุ)
+                                if (createdObj.date === selectedDate) {
+                                    stats.newToday++;
+                                }
+
+                                // 🔵 2. ปิดได้ในกะ (นับจากวันที่ปิดงาน)
+                                if (isClosed) {
+                                    if (resolvedObj.date === selectedDate) {
+                                        stats.closedToday++;
                                     }
+                                    // Fallback: ถ้าไม่มีวันที่ปิด แต่สถานะปิดและสร้างวันนี้ ให้ถือว่าปิดวันนี้
+                                    else if (!resolvedObj.date && createdObj.date === selectedDate) {
+                                        stats.closedToday++;
+                                    }
+                                }
+                                // 🔴 3. งานค้าง (สถานะยังไม่ปิด)
+                                else {
+                                    stats.pending++;
+                                }
 
-                                    return `<tr class="border-b border-gray-100 hover:bg-gray-50">
-                                            <td class="font-mono font-bold text-center text-[10px] text-gray-500 w-24">${t.id}</td>
-                                            <td class="text-center p-1 w-28">
-                                                <div class="flex items-center justify-center">
-                                                    <span class="badge ${badgeClass} badge-xs font-bold whitespace-nowrap">${t.status}</span>
-                                                    ${tagBadge}
-                                                </div>
-                                            </td>
-                                            <td class="p-2">
-                                                <div class="text-xs text-gray-700 line-clamp-1 block" title="${t.detail}">${t.detail}</div>
-                                            </td>
-                                        </tr>`;
+                                // 📝 4. Filter แสดงในตาราง
+                                // เงื่อนไข: (สร้างวันนี้) OR (ปิดวันนี้) OR (ยังค้างอยู่)
+                                let showRow = false;
+                                let tag = '';
+
+                                if (createdObj.date === selectedDate) {
+                                    showRow = true;
+                                    tag = 'NEW';
+                                } else if (isClosed && (resolvedObj.date === selectedDate || (!resolvedObj.date && createdObj.date === selectedDate))) {
+                                    showRow = true;
+                                    tag = 'RESOLVED';
+                                } else if (!isClosed) {
+                                    showRow = true;
+                                    tag = 'BACKLOG';
+                                }
+
+                                // 🎯 Date Logic for Display (Yesterday/Today)
+                                // Use the robustly parsed Date object from smartParse
+                                const ticketDate = createdObj.nativeObj || new Date(r.date);
+                                const selectedDateObj = new Date(selectedDate);
+                                const yesterdayObj = new Date(selectedDate);
+                                yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+
+                                const isSameDay = (d1, d2) => d1.getFullYear() === d2.getFullYear() &&
+                                    d1.getMonth() === d2.getMonth() &&
+                                    d1.getDate() === d2.getDate();
+
+                                let dateDisplay = createdObj.display; // Default
+                                if (!isNaN(ticketDate.getTime())) {
+                                    const hh = String(ticketDate.getHours()).padStart(2, '0');
+                                    const mm = String(ticketDate.getMinutes()).padStart(2, '0');
+
+                                    if (isSameDay(ticketDate, selectedDateObj)) {
+                                        dateDisplay = `<span class="text-blue-600 font-bold">(วันนี้) ${hh}:${mm}</span>`;
+                                    } else if (isSameDay(ticketDate, yesterdayObj)) {
+                                        dateDisplay = `<span class="text-gray-500">(เมื่อวาน) ${hh}:${mm}</span>`;
+                                    } else {
+                                        dateDisplay = `${createdObj.display} ${hh}:${mm}`;
+                                    }
+                                }
+
+                                if (showRow) {
+                                    stats.filteredCount++;
+                                    listForTable.push({
+                                        id: r.ticketNumber,
+                                        dateDisplay: dateDisplay,
+                                        status: r.status || '-',
+                                        subject: r.subject || '-',
+                                        tag: tag,
+                                        sortKey: tag === 'NEW' ? 3 : (tag === 'RESOLVED' ? 2 : 1) // Sort Priority
+                                    });
+                                }
+                            });
+
+                            // Update UI Stats (ใช้ || 0 กันเหนียว)
+                            if (el('disp-ticket-total')) el('disp-ticket-total').innerText = stats.filteredCount || 0;
+                            if (el('disp-ticket-new')) el('disp-ticket-new').innerText = stats.newToday || 0;
+                            if (el('disp-ticket-resolved')) el('disp-ticket-resolved').innerText = stats.closedToday || 0;
+                            if (el('disp-ticket-backlog')) el('disp-ticket-backlog').innerText = stats.pending || 0;
+
+                            // Update Textarea
+                            if (el('ticketSummary')) el('ticketSummary').value = `งานวันนี้: ${stats.newToday}, ปิดได้: ${stats.closedToday}, ค้าง: ${stats.pending}`;
+
+                            // Render Table
+                            listForTable.sort((a, b) => b.sortKey - a.sortKey || String(b.id).localeCompare(String(a.id)));
+
+                            if (listForTable.length > 0) {
+                                var html = listForTable.map(function (t) {
+                                    // 🎨 Color Coding
+                                    var st = String(t.status || '').toLowerCase();
+                                    var badgeClass = 'badge-ghost bg-gray-100 text-gray-500 border-none';
+
+                                    if (st.includes('open')) badgeClass = 'badge-error text-white shadow-sm';
+                                    else if (st.includes('pending') || st.includes('wait')) badgeClass = 'badge-warning text-white shadow-sm';
+                                    else if (st.includes('resolved') || st.includes('close')) badgeClass = 'badge-success text-white shadow-sm';
+
+                                    // Mini Tag
+                                    var miniTag = '';
+                                    if (t.tag === 'NEW') miniTag = '<span class="text-[9px] text-blue-500 font-bold ml-1 tracking-tighter">✨NEW</span>';
+                                    else if (t.tag === 'RESOLVED') miniTag = '<span class="text-[9px] text-green-500 font-bold ml-1 tracking-tighter">✓DONE</span>';
+                                    else if (t.tag === 'BACKLOG') miniTag = '<span class="text-[9px] text-gray-400 font-bold ml-1 tracking-tighter">⏳OLD</span>';
+
+                                    return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                                                <td class="font-mono font-bold text-center text-[10px] text-gray-400 w-24 py-3">${t.id}</td>
+                                                <td class="text-center p-1 w-32">
+                                                    <div class="flex flex-col items-center justify-center">
+                                                        <span class="badge ${badgeClass} badge-xs font-bold uppercase tracking-wide h-5 px-2 min-w-[70px]">
+                                                            ${t.status}
+                                                        </span>
+                                                        ${miniTag}
+                                                    </div>
+                                                </td>
+                                                <td class="p-2 overflow-hidden">
+                                                    <div class="text-xs text-gray-700 font-medium truncate w-full" title="${t.subject}">
+                                                        ${t.subject}
+                                                    </div>
+                                                    <div class="text-[9px] text-gray-400 mt-0.5 font-mono">${t.dateDisplay}</div>
+                                                </td>
+                                            </tr>`;
+
                                 }).join('');
-                                el('disp-ticket-tbody').innerHTML = html;
-                            } else { show('empty-ticket', true); }
+                                tbody.innerHTML = html;
+                            } else {
+                                show('empty-ticket', true);
+                            }
                         }
                     })
+                    .catch(function (err) { console.error("Ticket Load Error", err); show('empty-ticket', true); })
                     .finally(() => show('loader-ticket', false));
             },
 
+            // --- ส่วนอื่นๆ (Match, Images, Upload) คงเดิม ---
             fetchMatches: function () {
                 var dateVal = el('inputDate').value;
                 show('verify-loader', true);
                 el('verification-tbody').innerHTML = '';
 
-                // 1. Get Stats breakdown (API return data: { "Premier League": 2, ... })
+                // 1. Get Stats breakdown
                 var p1 = Server.call({ func: 'getMatchesByDate', silent: true }, dateVal).then(res => {
                     if (res.success) {
-                        // ✅ สร้าง Format สรุปสำหรับรายงาน (ตามตัวอย่างที่ขอ)
                         var summaryText = "";
                         var breakdownHtml = "";
-
                         if (res.data) {
                             for (var league in res.data) {
-                                // Text for Report/Preview
                                 summaryText += `${league}: ${res.data[league]}\n`;
-                                // HTML Badge for UI
                                 breakdownHtml += `<div class="badge badge-ghost badge-sm text-[10px] gap-1 whitespace-nowrap border-slate-200">
                                     ${league}: <span class="font-bold text-slate-700">${res.data[league]}</span>
                                 </div>`;
                             }
                         }
-
-                        // Set value to hidden input for submission
-                        el('matchSummary').value = summaryText || "ไม่มีรายการแข่งขัน";
-
-                        // Render Badges
+                        if (el('matchSummary')) el('matchSummary').value = summaryText || "ไม่มีรายการแข่งขัน";
                         var bd = el('league-breakdown');
                         if (bd) bd.innerHTML = breakdownHtml;
                     }
@@ -187,34 +325,36 @@
                 // 2. Get Verification Table
                 var p2 = Server.call({ func: 'getVerificationReport', silent: true }, dateVal).then(res => {
                     if (res.success) {
-                        el('matchTotalValue').value = res.data.stats.totalMatches;
+                        if (el('matchTotalValue')) el('matchTotalValue').value = res.data.stats.totalMatches;
                         if (el('disp-match-total')) el('disp-match-total').innerText = res.data.stats.totalMatches + " คู่";
 
-                        // ✅ Show date range label
-                        var dr = res.data.stats.dateRange;
-                        if (dr && el('date-range-label')) {
-                            var fmtShort = function (ds) {
-                                if (!ds) return '';
-                                var parts = ds.split('-');
-                                var months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-                                return parseInt(parts[2]) + ' ' + months[parseInt(parts[1]) - 1];
-                            };
-                            el('date-range-label').innerHTML = '📅 ข้อมูลช่วง: <b>' + fmtShort(dr.from) + ' 10:00</b> → <b>' + fmtShort(dr.to) + ' 10:00</b>';
-                        }
-
                         var list = res.data.list || [];
-                        var dateRange = res.data.stats.dateRange || {};
-
-                        // ✅ Calculate Match Ended (Count items with Stop Image)
                         var endedCount = list.filter(item => item.dashboard && item.dashboard.stopImg).length;
-                        el('matchEndedValue').value = endedCount;
+                        if (el('matchEndedValue')) el('matchEndedValue').value = endedCount;
 
                         if (list.length === 0) {
                             show('verify-empty', true);
                         } else {
                             show('verify-empty', false);
-                            var html = list.map(item => {
+                            var html = "";
+                            var currentGroup = "";
+
+                            list.forEach(item => {
                                 var db = item.dashboard;
+                                var isToday = (db.date === dateVal);
+                                var groupKey = isToday ? "today" : "yesterday";
+
+                                if (groupKey !== currentGroup) {
+                                    currentGroup = groupKey;
+                                    var label = isToday
+                                        ? `<span class="text-blue-600 flex items-center gap-1"><i class="fas fa-sun text-yellow-500"></i> หลังเที่ยงคืน (วันนี้)</span>`
+                                        : `<span class="text-gray-500 flex items-center gap-1"><i class="fas fa-moon text-indigo-400"></i> ก่อนเที่ยงคืน (เมื่อวาน)</span>`;
+
+                                    html += `<tr class="bg-gray-50/80 border-b border-gray-200">
+                                        <td colspan="5" class="px-3 py-1.5 font-bold text-[10px] uppercase">${label}</td>
+                                    </tr>`;
+                                }
+
                                 var hasEvidence = !!(db.startImg || db.stopImg);
                                 var badge = hasEvidence
                                     ? '<div class="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center mx-auto"><i class="fas fa-check text-success text-[10px]"></i></div>'
@@ -224,26 +364,9 @@
                                     ? `<a href="${formatDriveUrl(url)}" target="_blank" class="btn btn-xs btn-square btn-ghost text-${color}"><i class="fas ${icon}"></i></a>`
                                     : `<span class="text-gray-300 text-[10px]">-</span>`;
 
-                                // ✅ Date indicator: show which day this match belongs to
-                                var dateBadge = '';
-                                if (db.date && dateRange.from) {
-                                    var isPrevDay = (db.date === dateRange.from);
-                                    var fmtDay = function (ds) {
-                                        if (!ds) return '';
-                                        var p = ds.split('-');
-                                        return parseInt(p[2]) + '/' + parseInt(p[1]);
-                                    };
-                                    dateBadge = isPrevDay
-                                        ? '<div class="text-[8px] font-bold text-orange-500 leading-none">' + fmtDay(db.date) + '</div>'
-                                        : '<div class="text-[8px] font-bold text-blue-500 leading-none">' + fmtDay(db.date) + '</div>';
-                                }
-
-                                return `<tr class="border-b border-gray-100">
-                                    <td class="text-center">
-                                        <div class="font-mono text-[10px]">${db.time}</div>
-                                        ${dateBadge}
-                                    </td>
-                                    <td class="text-xs">
+                                html += `<tr class="border-b border-gray-100 hover:bg-white transition-colors">
+                                    <td class="text-center font-mono text-[10px] text-gray-500">${db.time}</td>
+                                    <td class="text-xs py-2">
                                         <div class="font-bold text-slate-700">${db.home} v ${db.away}</div>
                                         <div class="text-[9px] text-slate-400">${db.league}</div>
                                     </td>
@@ -251,25 +374,21 @@
                                     <td class="text-center">${imgBtn(db.stopImg, 'fa-stop-circle', 'error')}</td>
                                     <td class="text-center">${badge}</td>
                                 </tr>`;
-                            }).join('');
+                            });
                             el('verification-tbody').innerHTML = html;
                         }
                     }
                 });
-
                 return Promise.all([p1, p2]).finally(() => show('verify-loader', false));
             },
 
             fetchStartImages: function () {
                 var dateVal = el('inputDate').value;
-
-                // Reset Start List
                 var autoStartList = el('auto-start-list');
                 if (autoStartList) autoStartList.innerHTML = '';
                 show('auto-start-images', false);
                 _autoStartUrls = [];
 
-                // Reset Mono (Stop) List
                 var autoMonoList = el('auto-mono-list');
                 if (autoMonoList) autoMonoList.innerHTML = '';
                 show('auto-mono-images', false);
@@ -277,32 +396,36 @@
 
                 return Server.call({ func: 'getDailyProofImages', silent: true }, dateVal).then(res => {
                     if (res.success) {
-                        var hasStartImages = res.data.start && res.data.start.length > 0;
-
-                        // Render Start Images
-                        if (hasStartImages) {
+                        if (res.data.start && res.data.start.length > 0) {
                             show('auto-start-images', true);
-                            res.data.start.forEach(img => {
-                                ReportManager._renderAutoImage(img, autoStartList, _autoStartUrls);
-                            });
+                            res.data.start.forEach(img => ReportManager._renderAutoImage(img, autoStartList, _autoStartUrls));
                         }
+                        if (el('statusStart')) el('statusStart').value = (res.data.start && res.data.start.length > 0) ? 'เรียบร้อย' : 'ไม่มี';
 
-                        // ✅ Auto-set Start dropdown based on available images
-                        var statusStartEl = el('statusStart');
-                        if (statusStartEl) {
-                            statusStartEl.value = hasStartImages ? 'เรียบร้อย' : 'ไม่มี';
-                            ReportManager.toggleStartArea(statusStartEl.value);
-                        }
-
-                        // Render Stop Images (for Mono)
                         if (res.data.stop && res.data.stop.length > 0) {
                             show('auto-mono-images', true);
-                            res.data.stop.forEach(img => {
-                                ReportManager._renderAutoImage(img, autoMonoList, ReportManager._autoMonoUrls);
-                            });
+                            res.data.stop.forEach(img => ReportManager._renderAutoImage(img, autoMonoList, ReportManager._autoMonoUrls));
                         }
                     }
                 });
+            },
+
+            fetchReporters: function () {
+                Server.call({ func: 'getStaffAndAssignees', silent: true }).then(function (res) {
+                    if (res && res.success && res.data && res.data.leaders) {
+                        var select = el('reporterSelect');
+                        if (!select) return;
+
+                        var currentVal = select.value;
+                        var html = '<option value="">-- เลือก --</option>';
+                        res.data.leaders.forEach(function (name) {
+                            html += `<option value="${name}">${name}</option>`;
+                        });
+                        html += '<option value="OTHER">อื่นๆ</option>';
+                        select.innerHTML = html;
+                        if (currentVal) select.value = currentVal; // Restore selection if exists
+                    }
+                }).catch(function (err) { console.error("Fetch Reporters Error", err); });
             },
 
             _renderAutoImage: function (img, container, urlArray) {
@@ -313,36 +436,20 @@
                                  <div class="auto-hover absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 text-white text-xs transition-opacity"><i class="fas fa-plus-circle"></i></div>
                                  <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-[7px] text-white truncate px-1 py-0.5 leading-tight">${img.label}</div>`;
 
-                // Determine which count badge to update
-                var countElId = (urlArray === _autoStartUrls) ? 'auto-start-count' : 'auto-mono-count';
-
                 div.onclick = () => {
                     var checkEl = div.querySelector('.auto-check');
-                    var hoverEl = div.querySelector('.auto-hover');
-                    var imgEl = div.querySelector('img');
-
                     if (div.classList.contains('ring-2')) {
-                        // Deselect
                         div.classList.remove('ring-2', 'ring-green-500', 'border-green-400');
                         div.classList.add('border-slate-200');
-                        if (checkEl) checkEl.classList.add('hidden');
-                        if (hoverEl) hoverEl.innerHTML = '<i class="fas fa-plus-circle"></i>';
-                        if (imgEl) imgEl.classList.add('opacity-60');
-                        const idx = urlArray.indexOf(img.url);
+                        checkEl.classList.add('hidden');
+                        var idx = urlArray.indexOf(img.url);
                         if (idx > -1) urlArray.splice(idx, 1);
                     } else {
-                        // Select
                         div.classList.add('ring-2', 'ring-green-500', 'border-green-400');
                         div.classList.remove('border-slate-200');
-                        if (checkEl) checkEl.classList.remove('hidden');
-                        if (hoverEl) hoverEl.innerHTML = '<i class="fas fa-minus-circle"></i>';
-                        if (imgEl) imgEl.classList.remove('opacity-60');
+                        checkEl.classList.remove('hidden');
                         urlArray.push(img.url);
                     }
-
-                    // Update count badge
-                    var countEl = el(countElId);
-                    if (countEl) countEl.textContent = urlArray.length + ' เลือก';
                 };
                 container.appendChild(div);
             },
@@ -354,81 +461,28 @@
                 }
             },
 
-            triggerPaste: async function (type) {
-                try {
-                    const items = await navigator.clipboard.read();
-                    for (const item of items) {
-                        const types = item.types.filter(t => t.startsWith('image/'));
-                        for (const t of types) {
-                            const blob = await item.getType(t);
-                            const file = new File([blob], `pasted_${type}_${Date.now()}.png`, { type: t });
-                            _files[type].push(file);
-                            this.renderFileList(type);
-                            if (typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย", "success");
-                            return;
-                        }
-                    }
-                    if (typeof UIManager !== 'undefined') UIManager.showToast("ไม่พบรูปภาพใน Clipboard", "warning");
-                } catch (e) {
-                    console.warn("Clipboard API Error:", e);
-                    // Focus the dropzone so user can Ctrl+V
-                    var dz = el('dropzone-' + type);
-                    if (dz) dz.focus();
-                    if (typeof UIManager !== 'undefined') UIManager.showToast("กด Ctrl+V ที่กรอบเส้นปะ เพื่อวางรูป", "info");
-                }
-            },
-
-            // ✅ Direct paste event handler for dropzones (onpaste attribute)
-            handlePasteEvent: function (e, type) {
-                var items = (e.clipboardData || e.originalEvent.clipboardData).items;
-                for (var i = 0; i < items.length; i++) {
-                    if (items[i].type.indexOf("image") !== -1) {
-                        var blob = items[i].getAsFile();
-                        _files[type].push(blob);
-                        ReportManager.renderFileList(type);
-                        if (typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย ✅", "success");
-                        e.preventDefault();
-                        return;
-                    }
-                }
-            },
-
-            setupPasteHandlers: function () {
-                // Attach paste listeners to dropzone elements
-                ['mono', 'ais', 'start'].forEach(type => {
-                    var dz = el('dropzone-' + type);
-                    if (dz && !dz.hasAttribute('data-listening')) {
-                        dz.addEventListener('paste', (e) => {
-                            ReportManager.handlePasteEvent(e, type);
-                        });
-                        dz.setAttribute('data-listening', 'true');
-                    }
-                });
-            },
-
             renderFileList: function (type) {
-                var listId = type + 'FileList';
-                var container = el(listId);
-                if (!container) return;
+                var dropzone = el('dropzone-' + type);
+                if (!dropzone) return;
+                var files = _files[type];
+                dropzone.innerHTML = '';
 
-                container.innerHTML = '';
-                _files[type].forEach((file, idx) => {
-                    var div = document.createElement('div');
-                    div.className = "flex justify-between items-center bg-white p-1.5 rounded border text-[10px] mb-1 shadow-sm";
-                    div.innerHTML = `<span class="truncate w-32 text-slate-600">${file.name}</span>
-                                     <button onclick="ReportManager.removeFile('${type}',${idx})" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-0.5 rounded transition-colors"><i class="fas fa-times"></i></button>`;
-                    container.appendChild(div);
-                });
-                // Compact dropzone when files exist, full when empty
-                var dropzoneId = 'dropzone-' + type;
-                var dz = el(dropzoneId);
-                if (dz) {
-                    if (_files[type].length > 0) {
-                        dz.classList.add('py-1', 'p-1.5');
-                        dz.classList.remove('p-2.5', 'p-2');
-                    } else {
-                        dz.classList.remove('py-1', 'p-1.5');
-                    }
+                if (files.length === 0) {
+                    dropzone.className = `border-2 border-dashed border-gray-300 p-2 text-center rounded-lg text-xs text-gray-400`;
+                    dropzone.innerHTML = `<i class="fas fa-cloud-upload-alt"></i> Upload`;
+                } else {
+                    dropzone.className = `border border-gray-200 p-2 rounded-lg bg-white`;
+                    var grid = document.createElement('div');
+                    grid.className = 'flex flex-wrap gap-2 justify-center';
+                    files.forEach((file, idx) => {
+                        var url = URL.createObjectURL(file);
+                        var item = document.createElement('div');
+                        item.className = "relative w-16 h-16 rounded overflow-hidden border shadow-sm";
+                        item.innerHTML = `<img src="${url}" class="w-full h-full object-cover">
+                                          <button onclick="event.stopPropagation(); ReportManager.removeFile('${type}', ${idx})" class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white flex items-center justify-center text-[10px]"><i class="fas fa-times"></i></button>`;
+                        grid.appendChild(item);
+                    });
+                    dropzone.appendChild(grid);
                 }
             },
 
@@ -436,59 +490,13 @@
                 _files[type].splice(index, 1);
                 this.renderFileList(type);
             },
-            showTicketInfo: function () {
-                Swal.fire({
-                    title: 'หลักการนับ Ticket',
-                    html: '<div style="text-align:left;font-size:12px;line-height:1.7">' +
-                        '<div style="background:#ecfdf5;padding:10px 12px;border-radius:8px;border:1px solid #bbf7d0;margin-bottom:8px">' +
-                        '<b style="color:#15803d">🟢 งานเข้าใหม่ (New)</b><br>' +
-                        '<span style="color:#16a34a">นับจาก <u>วันที่สร้าง</u> ตรงกับวันที่เลือก<br>ไม่สนว่าตอนนี้สถานะเป็นอะไร<br>(แม้เปิดแล้วปิดเลยก็นับเป็น New)</span></div>' +
-                        '<div style="background:#eff6ff;padding:10px 12px;border-radius:8px;border:1px solid #bfdbfe;margin-bottom:8px">' +
-                        '<b style="color:#1d4ed8">🔵 ปิดได้วันนี้ (Resolved)</b><br>' +
-                        '<span style="color:#2563eb">นับจาก <u>วันที่ปิดงาน</u> ตรงกับวันที่เลือก<br>ไม่สนว่าสร้างเมื่อไหร่ = ผลงานกะนี้</span></div>' +
-                        '<div style="background:#fef2f2;padding:10px 12px;border-radius:8px;border:1px solid #fecaca">' +
-                        '<b style="color:#b91c1c">🔴 งานค้าง (Backlog)</b><br>' +
-                        '<span style="color:#dc2626">งานทุกรายการที่ <u>ยังไม่ปิด</u><br>(Open, Pending, In Progress)<br>รวมทุกวัน เพื่อไม่ให้งานหลุด</span></div></div>',
-                    icon: 'info',
-                    confirmButtonText: 'เข้าใจแล้ว 👍',
-                    width: '32rem', // Approx 500px, responsive
-                    heightAuto: false, // 🔧 Critical fix: Don't mess with body height
-                    scrollbarPadding: false // 🔧 Critical fix: Don't add padding-right
-                });
-            },
-
-            handleReporterChange: function (val) {
-                var isOther = (val === 'OTHER');
-                _isCustomReporter = isOther;
-                show('wrapper-reporter-other', isOther);
-                if (isOther) setTimeout(() => el('reporterOther').focus(), 100);
-            },
-
-            resetReporter: function () {
-                el('reporterSelect').value = '';
-                el('reporterOther').value = '';
-                show('wrapper-reporter-other', false);
-            },
-
-            toggleStartArea: function (val) {
-                var hasStart = (val !== 'ไม่มี');
-                show('start-upload-area', hasStart);
-            },
-
-            toggleAisActions: function (val) {
-                var hasAis = (val !== 'ไม่มี');
-                show('proof-ais-box', hasAis);
-            },
 
             submitForm: function (mode) {
                 var reporter = _isCustomReporter ? el('reporterOther').value : el('reporterSelect').value;
                 if (!reporter) return UIManager.showToast("ระบุชื่อผู้รายงาน", "warning");
 
-                var hasMono = (_files.mono && _files.mono.length > 0) || (ReportManager._autoMonoUrls && ReportManager._autoMonoUrls.length > 0);
-                if (!hasMono) return UIManager.showToast("กรุณาแนบรูป Mono หรือเลือกจาก Dashboard", "error");
-
                 var btn = el('btn-submit-report');
-                if (mode === 'send') { btn.disabled = true; el('spin-btn-send').classList.remove('hidden'); }
+                btn.disabled = true; el('spin-btn-send').classList.remove('hidden');
 
                 var formData = {
                     date: el('inputDate').value,
@@ -514,10 +522,11 @@
                     },
                     proofImages: {},
                     autoStartUrls: _autoStartUrls,
-                    autoMonoUrls: ReportManager._autoMonoUrls,
+                    autoMonoUrls: _autoMonoUrls,
                     isDraft: (mode === 'preview')
                 };
 
+                // Compress & Send...
                 var compress = (file) => new Promise(res => {
                     var r = new FileReader(); r.readAsDataURL(file);
                     r.onload = e => {
@@ -527,7 +536,7 @@
                             var m = 1000, w = i.width, h = i.height;
                             if (w > h && w > m) { h *= m / w; w = m } else if (h > m) { w *= m / h; h = m }
                             c.width = w; c.height = h; ctx.drawImage(i, 0, 0, w, h);
-                            res(c.toDataURL('image/jpeg', 0.7).split(',')[1]);
+                            res(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
                         }
                     }
                 });
@@ -539,18 +548,17 @@
                             if (_files.ais.length) formData.proofImages.ais = await Promise.all(_files.ais.map(compress));
                             if (_files.start.length) formData.proofImages.start = await Promise.all(_files.start.map(compress));
                         }
-
                         var res = await Server.call({ func: 'processShiftReport' }, formData);
-
                         if (res && res.success) {
                             if (res.isPreview) {
                                 el('chatPreviewText').innerText = res.chatPreview;
                                 el('preview_modal').showModal();
                             } else {
                                 UIManager.showToast("ส่งรายงานสำเร็จ", "success");
+                                // Reset...
                                 _files = { mono: [], ais: [], start: [] };
                                 _autoStartUrls = [];
-                                ReportManager._autoMonoUrls = [];
+                                _autoMonoUrls = [];
                                 this.renderFileList('mono');
                                 this.renderFileList('ais');
                                 this.renderFileList('start');
@@ -564,12 +572,81 @@
                 })();
             },
 
-            confirmSend: function () { el('preview_modal').close(); this.submitForm('send'); }
+            showTicketInfo: function () {
+                Swal.fire({
+                    title: 'หลักการนับ Ticket',
+                    html: '<div style="text-align:left;font-size:12px;line-height:1.7">' +
+                        '<div style="background:#ecfdf5;padding:10px 12px;border-radius:8px;border:1px solid #bbf7d0;margin-bottom:8px">' +
+                        '<b style="color:#15803d">🟢 งานเข้าใหม่</b><br>' +
+                        '<span style="color:#16a34a">Ticket ที่ <u>สร้าง</u> ในวันที่เลือก</span></div>' +
+                        '<div style="background:#eff6ff;padding:10px 12px;border-radius:8px;border:1px solid #bfdbfe;margin-bottom:8px">' +
+                        '<b style="color:#1d4ed8">🔵 ปิดได้</b><br>' +
+                        '<span style="color:#2563eb">Ticket ที่ <u>ปิดงาน</u> ในวันที่เลือก (รวมงานค้างเก่าที่มาปิดวันนี้)</span></div>' +
+                        '<div style="background:#fef2f2;padding:10px 12px;border-radius:8px;border:1px solid #fecaca">' +
+                        '<b style="color:#b91c1c">🔴 งานค้าง</b><br>' +
+                        '<span style="color:#dc2626">Ticket ที่สถานะ <u>ยังไม่ปิด</u> ทั้งหมด (นับรวมทุกวันที่)</span></div></div>',
+                    icon: 'info',
+                    confirmButtonText: 'เข้าใจแล้ว 👍',
+                    heightAuto: false,
+                    scrollbarPadding: false
+                });
+            },
+
+            showMatchInfo: function () {
+                Swal.fire({
+                    title: 'หลักการนับ Match',
+                    html: '<div style="text-align:left;font-size:12px;line-height:1.7">' +
+                        '<div style="background:#ecfdf5;padding:10px 12px;border-radius:8px;border:1px solid #bbf7d0;margin-bottom:8px">' +
+                        '<b style="color:#15803d">🕒 ช่วงเวลา (Shift)</b><br>' +
+                        '<span style="color:#16a34a">นับตั้งแต่ <u>10:00 (เมื่อวาน)</u> ถึง <u>09:59 (วันนี้)</u></span></div>' +
+                        '<div style="background:#eff6ff;padding:10px 12px;border-radius:8px;border:1px solid #bfdbfe;margin-bottom:8px">' +
+                        '<b style="color:#1d4ed8">📊 แหล่งข้อมูล</b><br>' +
+                        '<span style="color:#2563eb">ต้องตรงกับตาราง <u>DB_Matches</u> ใน Google Sheet เท่านั้น</span></div>' +
+                        '<div style="background:#fef2f2;padding:10px 12px;border-radius:8px;border:1px solid #fecaca">' +
+                        '<b style="color:#b91c1c">✅ การตรวจสอบ</b><br>' +
+                        '<span style="color:#dc2626">ต้องมีหลักฐาน <u>Start</u> หรือ <u>Stop</u> อย่างน้อย 1 อย่าง</span></div></div>',
+                    icon: 'info',
+                    confirmButtonText: 'เข้าใจแล้ว 👍',
+                    heightAuto: false,
+                    scrollbarPadding: false
+                });
+            },
+
+            // Helpers
+            handleReporterChange: function (v) {
+                var isO = v === 'OTHER'; _isCustomReporter = isO; show('wrapper-reporter-other', isO);
+                if (isO) setTimeout(() => el('reporterOther').focus(), 100);
+            },
+            resetReporter: function () { el('reporterSelect').value = ''; el('reporterOther').value = ''; show('wrapper-reporter-other', false); },
+            toggleStartArea: function (v) { show('start-upload-area', v !== 'ไม่มี'); },
+            toggleAisActions: function (v) { show('proof-ais-box', v !== 'ไม่มี'); },
+            confirmSend: function () { el('preview_modal').close(); this.submitForm('send'); },
+            setupPasteHandlers: function () {
+                ['mono', 'ais', 'start'].forEach(type => {
+                    var dz = el('dropzone-' + type);
+                    if (dz && !dz.hasAttribute('data-listening')) {
+                        dz.addEventListener('paste', (e) => {
+                            var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                            for (var i = 0; i < items.length; i++) {
+                                if (items[i].type.indexOf("image") !== -1) {
+                                    var blob = items[i].getAsFile();
+                                    _files[type].push(blob);
+                                    ReportManager.renderFileList(type);
+                                    if (typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย ✅", "success");
+                                    e.preventDefault();
+                                    return;
+                                }
+                            }
+                        });
+                        dz.setAttribute('data-listening', 'true');
+                    }
+                });
+            }
         };
     })();
 
     if (window.ReportManager) {
         window.ReportManager.init();
-        setTimeout(() => window.ReportManager.setupPasteHandlers(), 1000);
+        setTimeout(() => { if (window.ReportManager.setupPasteHandlers) window.ReportManager.setupPasteHandlers(); }, 1000);
     }
 </script>

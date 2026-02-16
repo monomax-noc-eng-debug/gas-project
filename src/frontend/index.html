@@ -19,6 +19,9 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css">
   <script src="https://cdn.jsdelivr.net/npm/pikaday/pikaday.js"></script>
 
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1/locale/th.js"></script>
   <script>
@@ -120,7 +123,7 @@
         <?!= include('frontend/pages/Page_Report'); ?>
         <?!= include('frontend/pages/Page_Ticket'); ?>
         <?!= include('frontend/pages/Page_History'); ?>
-        <?!= include('frontend/pages/Page_Email'); ?>
+
         <?!= include('frontend/pages/Page_Settings'); ?>
       </main>
     </div>
@@ -135,9 +138,13 @@
   <?!= include('frontend/scripts/JS_Core'); ?>
   <?!= include('frontend/scripts/JS_Dashboard'); ?>
   <?!= include('frontend/scripts/JS_Report'); ?>
-  <?!= include('frontend/scripts/JS_Ticket'); ?>
+
+  <?!= include('frontend/scripts/JS_Ticket_Service'); ?>
+  <?!= include('frontend/scripts/JS_Ticket_View'); ?>
+  <?!= include('frontend/scripts/JS_Ticket_Email'); ?>
+  <?!= include('frontend/scripts/JS_Ticket_Controller'); ?>
   <?!= include('frontend/scripts/JS_History'); ?>
-  <?!= include('frontend/scripts/JS_Email'); ?>
+
   <?!= include('frontend/scripts/JS_Settings'); ?>
   <?!= include('frontend/scripts/JS_App'); ?>
 

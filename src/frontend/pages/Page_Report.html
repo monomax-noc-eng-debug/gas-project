@@ -16,8 +16,14 @@
                     readonly>
             </div>
             <button id="btn-load-data" onclick="ReportManager.autoFetchAll()"
-                class="btn btn-sm btn-neutral text-white shadow-sm">
-                <i class="fas fa-sync-alt text-xs"></i> <span class="hidden sm:inline text-xs">โหลดข้อมูล</span>
+                class="btn btn-sm btn-neutral text-white shadow-sm btn-loading-overlay min-w-[90px]">
+                <span class="default-content flex items-center gap-2">
+                    <i class="fas fa-sync-alt text-xs"></i>
+                    <span class="hidden sm:inline text-xs">โหลดข้อมูล</span>
+                </span>
+                <span class="loading-content">
+                    <span class="custom-loader"></span>
+                </span>
             </button>
         </div>
     </div>
@@ -31,7 +37,12 @@
                 <div class="px-5 py-3 border-b border-base-100 bg-white flex flex-col gap-2 shrink-0">
                     <div class="flex justify-between items-center">
                         <h3 class="font-bold text-sm text-gray-700 flex items-center gap-2">
-                            <i class="fas fa-clipboard-list text-indigo-500"></i> ตรวจสอบการแข่งขัน (10:00 - 10:00)
+                            <i class="fas fa-clipboard-list text-indigo-500"></i> สรุปจำนวนแมตซ์การแข่งขัน
+                            <button onclick="ReportManager.showMatchInfo()"
+                                class="btn btn-xs btn-circle btn-ghost text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50"
+                                title="ดูหลักการนับ">
+                                <i class="fas fa-info-circle"></i>
+                            </button>
                         </h3>
                         <span class="badge badge-neutral badge-sm whitespace-nowrap" id="disp-match-total">0 คู่</span>
                     </div>
@@ -40,7 +51,7 @@
                     </div>
                 </div>
 
-                <div class="overflow-y-auto flex-1 p-0 bg-gray-50/30">
+                <div class="overflow-y-auto flex-1 p-0 bg-gray-50/30 custom-scrollbar">
                     <table class="table table-xs w-full table-pin-rows">
                         <thead class="bg-gray-50 text-gray-500 font-medium">
                             <tr>
@@ -65,7 +76,7 @@
                 <div
                     class="px-5 py-3 border-b border-base-100 bg-white flex flex-col md:flex-row justify-between items-start md:items-center shrink-0 gap-2">
                     <h3 class="font-bold text-sm text-gray-700 flex items-center gap-2">
-                        <i class="fas fa-ticket-alt text-error"></i> Ticket (งานค้าง & งานวันนี้)
+                        <i class="fas fa-ticket-alt text-error"></i> สรุปจำนวนทิคเก็ต
                         <button onclick="ReportManager.showTicketInfo()"
                             class="btn btn-xs btn-circle btn-ghost text-amber-400 hover:text-amber-600 hover:bg-amber-50"
                             title="ดูหลักการนับ">
@@ -84,7 +95,7 @@
                                 id="disp-ticket-total">0</span>)</span>
                     </div>
                 </div>
-                <div class="overflow-y-auto flex-1 p-0">
+                <div class="overflow-y-auto flex-1 p-0 custom-scrollbar">
                     <table class="table table-xs w-full table-pin-rows table-fixed">
                         <thead class="bg-gray-50 text-gray-500">
                             <tr>
@@ -103,180 +114,185 @@
             </div>
         </div>
 
-        <div class="lg:col-span-4 flex flex-col gap-3 h-full overflow-y-auto pb-20 lg:pb-0 scrollbar-hide">
+        <div class="lg:col-span-4 flex flex-col h-full overflow-hidden relative">
 
-            <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-3">
-                <div class="form-control">
-                    <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">ผู้รายงาน</span>
-                    <div class="relative">
-                        <select id="reporterSelect" onchange="ReportManager.handleReporterChange(this.value)"
-                            class="select select-bordered select-sm w-full text-xs bg-slate-50 focus:bg-white transition-colors">
-                            <option value="">-- เลือก --</option>
-                            <option value="เมฆินทร์">เมฆินทร์</option>
-                            <option value="อรรคพล">อรรคพล</option>
-                            <option value="วัชระพล">วัชระพล</option>
-                            <option value="นวพัตร์">นวพัตร์</option>
-                            <option value="OTHER">อื่นๆ</option>
-                        </select>
-                        <div id="wrapper-reporter-other" class="hidden absolute inset-0 bg-white flex gap-1">
-                            <input type="text" id="reporterOther" class="input input-bordered input-sm w-full text-xs"
-                                placeholder="ระบุชื่อ...">
-                            <button onclick="ReportManager.resetReporter()" class="btn btn-sm btn-square btn-ghost"><i
-                                    class="fas fa-times"></i></button>
-                        </div>
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
+            <div class="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3 pb-2 pr-1">
+
+                <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-3 shrink-0">
                     <div class="form-control">
-                        <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">กะ (Shift)</span>
-                        <select id="shiftSelect" class="select select-bordered select-sm w-full text-xs bg-slate-50">
-                            <option value="Night Shift">Night Shift</option>
-                            <option value="Day Shift">Day Shift</option>
-                        </select>
-                    </div>
-                    <div class="form-control">
-                        <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">ส่งเข้าแชท</span>
-                        <select id="chatTargetSelect"
-                            class="select select-bordered select-sm w-full text-xs bg-slate-50">
-                            <option value="">Save Only</option>
-                            <option value="group_all">Group All</option>
-                            <option value="group_dev">Group Dev</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-2">
-                <div class="flex justify-between items-center">
-                    <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
-                        <i class="fas fa-play-circle text-yellow-500"></i> หลักฐาน Start Channel
-                    </span>
-                    <select id="statusStart" class="select select-xs select-bordered w-auto text-xs"
-                        onchange="ReportManager.toggleStartArea(this.value)">
-                        <option value="ไม่มี">ไม่มี</option>
-                        <option value="เรียบร้อย">เรียบร้อย</option>
-                        <option value="ติดปัญหา">ติดปัญหา</option>
-                    </select>
-                </div>
-
-                <div id="start-upload-area" class="hidden space-y-2">
-                    <div id="auto-start-images" class="hidden bg-amber-50/50 p-2 rounded-lg border border-amber-200/60">
-                        <div class="text-[9px] text-amber-600 mb-1.5 flex items-center justify-between">
-                            <span class="flex items-center gap-1">
-                                <i class="fas fa-hand-pointer text-amber-500"></i>
-                                <b>คลิกเลือก</b>รูปที่ต้องการใส่ใน PDF
-                            </span>
-                            <span id="auto-start-count" class="badge badge-xs badge-warning font-mono">0 เลือก</span>
-                        </div>
-                        <div id="auto-start-list" class="flex flex-wrap gap-2"></div>
-                    </div>
-
-                    <div id="dropzone-start" onclick="document.getElementById('fileStart').click()"
-                        onpaste="ReportManager.handlePasteEvent(event, 'start')" tabindex="0"
-                        class="border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/30 hover:bg-amber-50 rounded-lg p-2.5 cursor-pointer transition-all group text-center focus:ring-2 focus:ring-amber-300 focus:outline-none">
-                        <div
-                            class="flex items-center justify-center gap-2 text-amber-400 group-hover:text-amber-500 transition-colors">
-                            <i class="fas fa-cloud-upload-alt text-sm"></i>
-                            <span class="text-[10px] font-semibold">คลิกอัปโหลด หรือ Ctrl+V วางรูป</span>
+                        <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">ผู้รายงาน</span>
+                        <div class="relative">
+                            <select id="reporterSelect" onchange="ReportManager.handleReporterChange(this.value)"
+                                class="select select-bordered select-sm w-full text-xs bg-slate-50 focus:bg-white transition-colors">
+                                <option value="">-- เลือก --</option>
+                                <option value="OTHER">อื่นๆ</option>
+                            </select>
+                            <div id="wrapper-reporter-other" class="hidden absolute inset-0 bg-white flex gap-1">
+                                <input type="text" id="reporterOther"
+                                    class="input input-bordered input-sm w-full text-xs" placeholder="ระบุชื่อ...">
+                                <button onclick="ReportManager.resetReporter()"
+                                    class="btn btn-sm btn-square btn-ghost"><i class="fas fa-times"></i></button>
+                            </div>
                         </div>
                     </div>
-                    <div id="startFileList" class="flex flex-col gap-1"></div>
-                    <input type="file" id="fileStart" class="hidden" multiple accept="image/*"
-                        onchange="ReportManager.handleFileUpload(this, 'start')">
-                </div>
-            </div>
-
-            <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-3">
-
-                <div>
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
-                            <span class="w-2 h-2 rounded-full bg-indigo-500"></span> หลักฐาน Mono <span
-                                class="text-red-500">*</span>
-                        </span>
-                    </div>
-
-                    <div id="auto-mono-images"
-                        class="hidden bg-indigo-50/50 p-2 rounded-lg border border-indigo-200/60 mb-2">
-                        <div class="text-[9px] text-indigo-600 mb-1.5 flex items-center justify-between">
-                            <span class="flex items-center gap-1">
-                                <i class="fas fa-hand-pointer text-indigo-500"></i>
-                                <b>คลิกเลือก</b>รูปที่ต้องการใส่ใน PDF
-                            </span>
-                            <span id="auto-mono-count" class="badge badge-xs badge-primary font-mono">0 เลือก</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="form-control">
+                            <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">กะ (Shift)</span>
+                            <select id="shiftSelect"
+                                class="select select-bordered select-sm w-full text-xs bg-slate-50">
+                                <option value="Night Shift">Night Shift</option>
+                                <option value="Day Shift">Day Shift</option>
+                            </select>
                         </div>
-                        <div id="auto-mono-list" class="flex flex-wrap gap-2"></div>
-                    </div>
-
-                    <input type="file" id="fileMono" multiple accept="image/*" class="hidden"
-                        onchange="ReportManager.handleFileUpload(this, 'mono')">
-                    <div id="monoFileList" class="flex flex-col gap-1 mb-1"></div>
-                    <div id="dropzone-mono" onclick="document.getElementById('fileMono').click()"
-                        onpaste="ReportManager.handlePasteEvent(event, 'mono')" tabindex="0"
-                        class="border-2 border-dashed border-indigo-300 hover:border-indigo-400 bg-indigo-50/30 hover:bg-indigo-50 rounded-lg p-2.5 cursor-pointer transition-all group text-center focus:ring-2 focus:ring-indigo-300 focus:outline-none">
-                        <div
-                            class="flex items-center justify-center gap-2 text-indigo-400 group-hover:text-indigo-500 transition-colors">
-                            <i class="fas fa-cloud-upload-alt text-sm"></i>
-                            <span class="text-[10px] font-semibold">คลิกอัปโหลด หรือ Ctrl+V วางรูป</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="divider my-0 h-px bg-slate-100"></div>
-
-                <div>
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
-                            <span class="w-2 h-2 rounded-full bg-green-500"></span> หลักฐาน AIS
-                        </span>
-                        <div class="flex items-center gap-1">
-                            <select id="statusAis" onchange="ReportManager.toggleAisActions(this.value)"
-                                class="select select-xs select-bordered w-auto text-xs">
-                                <option value="ไม่มี">ไม่มี</option>
-                                <option value="เรียบร้อย">เรียบร้อย</option>
-                                <option value="ติดปัญหา">ติดปัญหา</option>
+                        <div class="form-control">
+                            <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">ส่งเข้าแชท</span>
+                            <select id="chatTargetSelect"
+                                class="select select-bordered select-sm w-full text-xs bg-slate-50">
+                                <option value="">Save Only</option>
+                                <option value="group_all">Group All</option>
+                                <option value="group_dev">Group Dev</option>
                             </select>
                         </div>
                     </div>
-                    <div id="proof-ais-box" class="hidden">
-                        <input type="file" id="fileAis" multiple accept="image/*" class="hidden"
-                            onchange="ReportManager.handleFileUpload(this, 'ais')">
-                        <div id="aisFileList" class="flex flex-col gap-1"></div>
-                        <div id="dropzone-ais" onclick="document.getElementById('fileAis').click()"
-                            onpaste="ReportManager.handlePasteEvent(event, 'ais')" tabindex="0"
-                            class="border-2 border-dashed border-green-300 hover:border-green-400 bg-green-50/30 hover:bg-green-50 rounded-lg p-2 cursor-pointer transition-all group text-center mt-1 focus:ring-2 focus:ring-green-300 focus:outline-none">
+                </div>
+
+                <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-2 shrink-0">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
+                            <i class="fas fa-play-circle text-yellow-500"></i> หลักฐาน Start Channel
+                        </span>
+                        <select id="statusStart" class="select select-xs select-bordered w-auto text-xs"
+                            onchange="ReportManager.toggleStartArea(this.value)">
+                            <option value="ไม่มี">ไม่มี</option>
+                            <option value="เรียบร้อย">เรียบร้อย</option>
+                            <option value="ติดปัญหา">ติดปัญหา</option>
+                        </select>
+                    </div>
+
+                    <div id="start-upload-area" class="hidden space-y-2">
+                        <div id="auto-start-images"
+                            class="hidden bg-amber-50/50 p-2 rounded-lg border border-amber-200/60">
+                            <div class="text-[9px] text-amber-600 mb-1.5 flex items-center justify-between">
+                                <span class="flex items-center gap-1">
+                                    <i class="fas fa-hand-pointer text-amber-500"></i>
+                                    <b>คลิกเลือก</b>รูปที่ต้องการใส่ใน PDF
+                                </span>
+                                <span id="auto-start-count" class="badge badge-xs badge-warning font-mono">0
+                                    เลือก</span>
+                            </div>
+                            <div id="auto-start-list" class="flex flex-wrap gap-2"></div>
+                        </div>
+
+                        <div id="dropzone-start" onclick="document.getElementById('fileStart').click()"
+                            onpaste="ReportManager.handlePasteEvent(event, 'start')" tabindex="0"
+                            class="border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/30 hover:bg-amber-50 rounded-lg p-2.5 cursor-pointer transition-all group text-center focus:ring-2 focus:ring-amber-300 focus:outline-none">
                             <div
-                                class="flex items-center justify-center gap-2 text-green-400 group-hover:text-green-500 transition-colors">
+                                class="flex items-center justify-center gap-2 text-amber-400 group-hover:text-amber-500 transition-colors">
+                                <i class="fas fa-cloud-upload-alt text-sm"></i>
+                                <span class="text-[10px] font-semibold">คลิกอัปโหลด หรือ Ctrl+V วางรูป</span>
+                            </div>
+                        </div>
+
+                        <input type="file" id="fileStart" class="hidden" multiple accept="image/*"
+                            onchange="ReportManager.handleFileUpload(this, 'start')">
+                    </div>
+                </div>
+
+                <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-3 shrink-0">
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
+                                <span class="w-2 h-2 rounded-full bg-indigo-500"></span> หลักฐาน Mono <span
+                                    class="text-red-500">*</span>
+                            </span>
+                        </div>
+
+                        <div id="auto-mono-images"
+                            class="hidden bg-indigo-50/50 p-2 rounded-lg border border-indigo-200/60 mb-2">
+                            <div class="text-[9px] text-indigo-600 mb-1.5 flex items-center justify-between">
+                                <span class="flex items-center gap-1">
+                                    <i class="fas fa-hand-pointer text-indigo-500"></i>
+                                    <b>คลิกเลือก</b>รูปที่ต้องการใส่ใน PDF
+                                </span>
+                                <span id="auto-mono-count" class="badge badge-xs badge-primary font-mono">0 เลือก</span>
+                            </div>
+                            <div id="auto-mono-list" class="flex flex-wrap gap-2"></div>
+                        </div>
+
+                        <input type="file" id="fileMono" multiple accept="image/*" class="hidden"
+                            onchange="ReportManager.handleFileUpload(this, 'mono')">
+
+                        <div id="dropzone-mono" onclick="document.getElementById('fileMono').click()"
+                            onpaste="ReportManager.handlePasteEvent(event, 'mono')" tabindex="0"
+                            class="border-2 border-dashed border-indigo-300 hover:border-indigo-400 bg-indigo-50/30 hover:bg-indigo-50 rounded-lg p-2.5 cursor-pointer transition-all group text-center focus:ring-2 focus:ring-indigo-300 focus:outline-none">
+                            <div
+                                class="flex items-center justify-center gap-2 text-indigo-400 group-hover:text-indigo-500 transition-colors">
                                 <i class="fas fa-cloud-upload-alt text-sm"></i>
                                 <span class="text-[10px] font-semibold">คลิกอัปโหลด หรือ Ctrl+V วางรูป</span>
                             </div>
                         </div>
                     </div>
+
+                    <div class="divider my-0 h-px bg-slate-100"></div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
+                                <span class="w-2 h-2 rounded-full bg-green-500"></span> หลักฐาน AIS
+                            </span>
+                            <div class="flex items-center gap-1">
+                                <select id="statusAis" onchange="ReportManager.toggleAisActions(this.value)"
+                                    class="select select-xs select-bordered w-auto text-xs">
+                                    <option value="ไม่มี">ไม่มี</option>
+                                    <option value="เรียบร้อย">เรียบร้อย</option>
+                                    <option value="ติดปัญหา">ติดปัญหา</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="proof-ais-box" class="hidden">
+                            <input type="file" id="fileAis" multiple accept="image/*" class="hidden"
+                                onchange="ReportManager.handleFileUpload(this, 'ais')">
+
+                            <div id="dropzone-ais" onclick="document.getElementById('fileAis').click()"
+                                onpaste="ReportManager.handlePasteEvent(event, 'ais')" tabindex="0"
+                                class="border-2 border-dashed border-green-300 hover:border-green-400 bg-green-50/30 hover:bg-green-50 rounded-lg p-2 cursor-pointer transition-all group text-center mt-1 focus:ring-2 focus:ring-green-300 focus:outline-none">
+                                <div
+                                    class="flex items-center justify-center gap-2 text-green-400 group-hover:text-green-500 transition-colors">
+                                    <i class="fas fa-cloud-upload-alt text-sm"></i>
+                                    <span class="text-[10px] font-semibold">คลิกอัปโหลด หรือ Ctrl+V วางรูป</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                <div
+                    class="card bg-white shadow-sm border border-base-300 flex-1 min-h-[120px] rounded-2xl overflow-hidden p-3 flex flex-col shrink-0">
+                    <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">Shift Transfer</span>
+                    <textarea id="transferReport"
+                        class="textarea textarea-ghost w-full h-full text-xs resize-none p-0 focus:outline-none"
+                        placeholder="พิมพ์ข้อความ..."></textarea>
+                </div>
+
             </div>
 
-            <div
-                class="card bg-white shadow-sm border border-base-300 flex-1 min-h-[80px] rounded-2xl overflow-hidden p-3 flex flex-col">
-                <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">Note / งานฝาก</span>
-                <textarea id="transferReport"
-                    class="textarea textarea-ghost w-full h-full text-xs resize-none p-0 focus:outline-none"
-                    placeholder="พิมพ์ข้อความ..."></textarea>
-            </div>
+            <div class="shrink-0 pt-3 pb-1 mt-auto bg-base-200 z-10">
+                <textarea id="matchSummary" class="hidden"></textarea>
+                <textarea id="ticketSummary" class="hidden"></textarea>
+                <input type="hidden" id="matchTotalValue" value="0">
+                <input type="hidden" id="matchEndedValue" value="0">
 
-            <textarea id="matchSummary" class="hidden"></textarea>
-            <textarea id="ticketSummary" class="hidden"></textarea>
-            <input type="hidden" id="matchTotalValue" value="0">
-            <input type="hidden" id="matchEndedValue" value="0">
-
-            <div class="grid grid-cols-2 gap-3 mt-auto">
-                <button onclick="ReportManager.submitForm('preview')"
-                    class="btn btn-sm btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 hover:border-slate-400"><i
-                        class="fas fa-eye"></i> ตัวอย่าง</button>
-                <button id="btn-submit-report" onclick="ReportManager.submitForm('send')"
-                    class="btn btn-sm btn-neutral text-white shadow-md hover:scale-[1.02] transition-transform">
-                    <span id="spin-btn-send" class="loading loading-spinner loading-xs hidden"></span> <i
-                        class="fas fa-paper-plane"></i> ส่งรายงาน
-                </button>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="ReportManager.submitForm('preview')"
+                        class="btn btn-sm btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 hover:border-slate-400"><i
+                            class="fas fa-eye"></i> ตัวอย่าง</button>
+                    <button id="btn-submit-report" onclick="ReportManager.submitForm('send')"
+                        class="btn btn-sm btn-neutral text-white shadow-md hover:scale-[1.02] transition-transform">
+                        <span id="spin-btn-send" class="loading loading-spinner loading-xs hidden"></span> <i
+                            class="fas fa-paper-plane"></i> ส่งรายงาน
+                    </button>
+                </div>
             </div>
         </div>
     </div>

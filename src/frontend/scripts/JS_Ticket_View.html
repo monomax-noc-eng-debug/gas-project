@@ -1,0 +1,223 @@
+<script>
+/**
+ * ==========================================
+ * MODULE: TICKET VIEW (UI Layer)
+ * หน้าที่: จัดการ HTML, Render ตาราง, DaisyUI Components
+ * ==========================================
+ */
+const TicketView = (() => {
+    const getEl = (id) => document.getElementById(id);
+
+    // Helper: Universal Date Parser & Formatter (DD/MM/YY)
+    const _formatDate = (val) => {
+        if (!val) return '-';
+        
+        // ลองแปลงเป็น Date Object ตรงๆ (รองรับ ISO และ String มาตรฐาน)
+        const d = new Date(val);
+        
+        // ถ้า Date Invalid ให้ลอง parse แบบบ้านๆ
+        if (isNaN(d.getTime())) {
+            // Fallback: ถ้ามาเป็น 2024-02-15 split เอา
+            const parts = val.split(/[- :]/);
+            if (parts.length >= 3) {
+                const y = parts[0].length === 4 ? parts[0].slice(2) : parts[0];
+                return `${parts[2]}/${parts[1]}/${y}`;
+            }
+            return val; // จนปัญญา คืนค่าเดิม
+        }
+
+        // ถ้า Date Valid ใช้ toLocaleDateString
+        // en-GB จะได้ format DD/MM/YYYY
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    };
+
+    // Helper: Badge สถานะ (เพิ่ม complete/success)
+    const _getStatusBadge = (status) => {
+        const s = String(status || '').toLowerCase();
+        let color = 'badge-ghost';
+        
+        if (s.includes('open')) color = 'badge-error gap-1 text-white'; 
+        else if (s.includes('pending') || s.includes('wait')) color = 'badge-warning gap-1'; 
+        else if (s.includes('resolved') || s.includes('fix') || s.includes('complete') || s.includes('success')) color = 'badge-success gap-1 text-white'; 
+        else if (s.includes('close')) color = 'badge-neutral gap-1'; 
+        else if (s.includes('draft')) color = 'badge-info gap-1 text-white'; 
+
+        return `<div class="badge ${color} badge-sm font-medium shadow-sm">${status}</div>`;
+    };
+
+    return {
+        renderTable: (data) => {
+            const tbody = getEl('ticket-table-body');
+            const empty = getEl('ticket-empty');
+            
+            if (!data || data.length === 0) {
+                if (empty) empty.classList.remove('hidden');
+                tbody.innerHTML = '';
+                return;
+            }
+            if (empty) empty.classList.add('hidden');
+
+            tbody.innerHTML = data.map((row, i) => {
+                const id = row.ticketNumber;
+                const subject = row.subject || '(ไม่มีหัวข้อ)';
+                const assign = row.assign || '-';
+                
+                let severityDot = '';
+                if(row.severity === 'Critical') severityDot = '<div class="w-2 h-2 rounded-full bg-error mx-auto tooltip" data-tip="Critical"></div>';
+                else if(row.severity === 'High') severityDot = '<div class="w-2 h-2 rounded-full bg-warning mx-auto tooltip" data-tip="High"></div>';
+                else severityDot = '<div class="w-2 h-2 rounded-full bg-success mx-auto opacity-20"></div>';
+
+                return `
+                <tr class="hover cursor-pointer group transition-colors border-b border-slate-50 last:border-none"
+                    onclick="TicketManager.openModal('EDIT', '${id}')">
+                    <td class="text-center font-mono text-xs opacity-50">${i + 1}</td>
+                    <td>
+                        <div class="font-bold text-primary font-mono text-xs">${id}</div>
+                        <div class="text-[10px] opacity-50 md:hidden">${_formatDate(row.date)}</div>
+                    </td>
+                    <td class="hidden md:table-cell text-xs opacity-70 font-mono">${_formatDate(row.date)}</td>
+                    <td>
+                        <div class="font-bold text-sm truncate max-w-[200px] md:max-w-xs text-slate-700 group-hover:text-primary transition-colors">${subject}</div>
+                        <div class="text-[10px] text-slate-400 flex gap-1 items-center">
+                            <span class="bg-slate-100 px-1 rounded">${row.category || '-'}</span>
+                            <i class="fas fa-angle-right text-[8px]"></i>
+                            <span>${row.subCategory || '-'}</span>
+                        </div>
+                    </td>
+                    <td class="text-center hidden md:table-cell"><span class="badge badge-ghost badge-xs font-normal text-[10px]">${row.type || '-'}</span></td>
+                    <td class="text-center hidden md:table-cell">${severityDot}</td>
+                    <td class="text-center">${_getStatusBadge(row.status)}</td>
+                    <td class="hidden lg:table-cell text-xs opacity-70 truncate max-w-[100px]">${assign.split(' ')[0]}</td>
+                    <td class="text-right pr-2">
+                        <div class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="event.stopPropagation(); TicketManager.openModal('EMAIL', '${id}')" class="btn btn-square btn-xs btn-ghost text-slate-400 hover:text-indigo-600 tooltip tooltip-left" data-tip="ส่งอีเมล"><i class="fas fa-envelope"></i></button>
+                            <button onclick="event.stopPropagation(); TicketManager.deleteTicket('${id}')" class="btn btn-square btn-xs btn-ghost text-slate-400 hover:text-red-500 tooltip tooltip-left" data-tip="ลบ"><i class="fas fa-trash-alt"></i></button>
+                        </div>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        },
+
+        renderEmailImportTable: (list) => {
+            const tbody = getEl('email-import-body');
+            if(!tbody) return;
+
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-slate-400">ไม่พบอีเมลใหม่</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = list.map((item, index) => {
+                let badge = '', rowClass = '', disabled = '';
+                if (item.status === 'DUPLICATE') {
+                    badge = '<span class="badge badge-warning badge-xs gap-1"><i class="fas fa-exclamation-triangle"></i> ซ้ำ</span>';
+                    rowClass = 'bg-warning/5 opacity-60';
+                    disabled = 'disabled';
+                } else if (item.status === 'NO_SVR') {
+                    badge = '<span class="badge badge-error badge-xs gap-1"><i class="fas fa-times-circle"></i> ไม่มี SVR</span>';
+                    rowClass = 'bg-error/5';
+                } else {
+                    badge = '<span class="badge badge-success badge-xs gap-1"><i class="fas fa-check"></i> ใหม่</span>';
+                    rowClass = 'hover:bg-base-100';
+                }
+
+                // ใช้ _formatDate ที่ปรับปรุงแล้ว
+                return `
+                <tr class="${rowClass}">
+                    <th>
+                        <label>
+                            <input type="checkbox" class="checkbox checkbox-xs checkbox-primary chk-email-import" value="${index}" ${disabled} />
+                        </label>
+                    </th>
+                    <td>${badge}</td>
+                    <td>
+                        <div class="font-bold text-xs truncate max-w-[250px]" title="${item.subject}">
+                            ${item.subject}
+                        </div>
+                        <div class="text-[10px] opacity-50 truncate max-w-[200px]">${item.snippet || ''}</div>
+                    </td>
+                    <td class="text-xs">
+                        <div class="truncate max-w-[120px]" title="${item.from}">${item.from}</div>
+                    </td>
+                    <td class="text-xs font-mono opacity-70 whitespace-nowrap">
+                        ${_formatDate(item.date)}
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        },
+
+        updateStats: (data) => {
+            let s = { total: 0, open: 0, pending: 0, resolved: 0, incident: 0, request: 0 };
+            
+            data.forEach(r => {
+                s.total++;
+                const st = String(r.status || '').toLowerCase();
+                const ty = String(r.type || '').toLowerCase();
+
+                if (st.includes('open') || st.includes('draft')) s.open++;
+                else if (st.includes('pending') || st.includes('wait')) s.pending++;
+                else if (st.includes('resolved') || st.includes('fix') || st.includes('complete') || st.includes('success')) s.resolved++;
+
+                if (ty.includes('incident') || ty.includes('แจ้งซ่อม')) s.incident++;
+                else if (ty.includes('request') || ty.includes('คำร้อง') || ty.includes('service')) s.request++;
+            });
+            
+            const setTxt = (id, val) => { const el = getEl(id); if (el) el.innerText = val.toLocaleString(); };
+            setTxt('stat-total', s.total);
+            setTxt('stat-open', s.open);
+            setTxt('stat-pending', s.pending);
+            setTxt('stat-resolved', s.resolved);
+            setTxt('stat-incident', s.incident);
+            setTxt('stat-request', s.request);
+        },
+
+        populateSelect: (id, list, placeholder = 'เลือก...') => {
+            const el = getEl(id);
+            if (!el) return;
+            const cur = el.value;
+            el.innerHTML = `<option value="">${placeholder}</option>` + list.map(i => `<option value="${i}">${i}</option>`).join('');
+            if (cur) el.value = cur;
+        },
+
+        populateSelectObj: (id, listObj, placeholder = 'เลือก...') => {
+             const el = getEl(id);
+             if(!el) return;
+             el.innerHTML = `<option value="">${placeholder}</option>` + listObj.map((d, i) => `<option value="${d.id || i}">${d.name}</option>`).join('');
+        },
+
+        switchTab: (index) => {
+            const content1 = getEl('tab-content-1');
+            const content4 = getEl('tab-content-4');
+            const btn1 = getEl('tab-btn-detail');
+            const btn4 = getEl('tab-btn-email');
+
+            if(content1 && content4) {
+                if(index === 1) {
+                    content1.classList.remove('hidden');
+                    content4.classList.add('hidden');
+                    if(btn1) { btn1.classList.remove('bg-transparent', 'text-slate-500'); btn1.classList.add('bg-white', 'shadow-sm', 'text-primary'); }
+                    if(btn4) { btn4.classList.add('bg-transparent', 'text-slate-500'); btn4.classList.remove('bg-white', 'shadow-sm', 'text-primary'); }
+                } else if (index === 4) {
+                    content1.classList.add('hidden');
+                    content4.classList.remove('hidden');
+                    if(btn1) { btn1.classList.add('bg-transparent', 'text-slate-500'); btn1.classList.remove('bg-white', 'shadow-sm', 'text-primary'); }
+                    if(btn4) { btn4.classList.remove('bg-transparent', 'text-slate-500'); btn4.classList.add('bg-white', 'shadow-sm', 'text-primary'); }
+                }
+            }
+        },
+
+        renderAssigneeTags: (assignees) => {
+            const container = getEl('assignee-tags-container');
+            if(!container) return;
+            container.innerHTML = assignees.map((name, i) => `
+                <div class="badge badge-outline gap-2 bg-white p-3 h-auto">
+                    <span class="text-xs font-medium">${name}</span>
+                    <i class="fas fa-times cursor-pointer hover:text-red-500 transition-colors" onclick="TicketManager.removeAssignee(${i})"></i>
+                </div>
+            `).join('');
+        }
+    };
+})();
+</script>

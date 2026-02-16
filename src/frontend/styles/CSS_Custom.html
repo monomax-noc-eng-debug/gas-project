@@ -379,4 +379,87 @@
       transform: rotate(360deg);
     }
   }
+
+  /* ============================================
+     BUTTON LOADING OVERLAY
+     ============================================ */
+  .btn-loading-overlay {
+    position: relative !important;
+    overflow: hidden !important;
+  }
+
+  .btn-loading-overlay .default-content {
+    opacity: 1;
+    transition: opacity 0.2s ease;
+    visibility: visible;
+  }
+
+  .btn-loading-overlay.is-loading .default-content {
+    opacity: 0;
+  }
+
+  .btn-loading-overlay .loading-content {
+    position: absolute !important;
+    inset: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+  }
+
+  .btn-loading-overlay.is-loading .loading-content {
+    opacity: 1;
+  }
+
+  /* Custom Ring Loader */
+  .custom-loader {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 0.8s ease-in-out infinite;
+  }
+
+  /* ============================================
+     PERFORMANCE & ANIMATIONS
+     ============================================ */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Smoother Fading */
+  .fade-in {
+    animation: fadeIn 0.3s ease-in-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* GPU Acceleration Hints for Modals */
+  .modal-box {
+    will-change: transform, opacity;
+  }
+
+  /* Force SweetAlert2 to be on top of Native Dialogs (Top Layer Fix strategy) */
+  .swal2-container,
+  dialog~.swal2-container {
+    z-index: 2147483647 !important;
+  }
+
+  /* Ensure Toast Container (if custom used) is also max */
+  #toast-container {
+    z-index: 2147483647 !important;
+  }
 </style>

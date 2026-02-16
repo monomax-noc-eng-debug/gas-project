@@ -1,4 +1,5 @@
-<div id="page-dashboard" class="page-section hidden w-full h-full relative font-sans bg-base-200/50 flex flex-col p-4 md:p-6 gap-6 overflow-hidden">
+<div id="page-dashboard"
+  class="page-section hidden w-full h-full relative font-sans bg-base-200/50 flex flex-col p-4 md:p-6 gap-6 overflow-hidden">
 
   <style>
     .pika-single {
@@ -10,8 +11,9 @@
     }
   </style>
 
-  <div class="flex flex-col xl:flex-row justify-between items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
-    
+  <div
+    class="flex flex-col xl:flex-row justify-between items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
+
     <div class="flex items-center gap-3 w-full xl:w-auto">
       <div class="bg-primary/10 p-2 rounded-xl text-primary">
         <i class="fas fa-th-large text-xl"></i>
@@ -23,14 +25,16 @@
     </div>
 
     <div class="flex flex-wrap items-center justify-end gap-3 w-full xl:w-auto">
-      
+
       <div class="flex items-center gap-1 bg-base-100 p-1 rounded-xl border border-base-200">
-        <button onclick="Dashboard.changeDate(-1)" class="btn btn-sm btn-circle btn-ghost text-base-content/60 hover:text-primary">
+        <button onclick="Dashboard.changeDate(-1)"
+          class="btn btn-sm btn-circle btn-ghost text-base-content/60 hover:text-primary">
           <i class="fas fa-chevron-left text-xs"></i>
         </button>
-        
+
         <div class="relative group cursor-pointer" onclick="document.getElementById('dash-date-input').click()">
-          <div class="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-base-200 shadow-sm hover:border-primary/50 transition-all min-w-[140px] justify-center">
+          <div
+            class="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-base-200 shadow-sm hover:border-primary/50 transition-all min-w-[140px] justify-center">
             <i class="far fa-calendar-alt text-primary text-xs"></i>
             <input type="text" id="dash-date-input"
               class="bg-transparent border-none outline-none text-sm font-bold text-center w-24 cursor-pointer focus:ring-0 select-none text-gray-700"
@@ -38,14 +42,22 @@
           </div>
         </div>
 
-        <button onclick="Dashboard.changeDate(1)" class="btn btn-sm btn-circle btn-ghost text-base-content/60 hover:text-primary">
+        <button onclick="Dashboard.changeDate(1)"
+          class="btn btn-sm btn-circle btn-ghost text-base-content/60 hover:text-primary">
           <i class="fas fa-chevron-right text-xs"></i>
         </button>
-        
+
         <div class="w-px h-5 bg-gray-200 mx-1"></div>
-        
-        <button onclick="Dashboard.loadWorkList(true)" class="btn btn-sm btn-square btn-ghost text-base-content/60 hover:text-primary tooltip tooltip-bottom" data-tip="รีเฟรช">
-          <i id="dash-loader-icon" class="fas fa-sync-alt"></i>
+
+        <button id="btn-refresh-dashboard" onclick="Dashboard.loadWorkList(true)"
+          class="btn btn-sm btn-neutral text-white shadow-sm btn-loading-overlay min-w-[90px]">
+          <span class="default-content flex items-center gap-2">
+            <i class="fas fa-sync-alt text-xs"></i>
+            <span class="hidden sm:inline text-xs ml-1">โหลดข้อมูล</span>
+          </span>
+          <span class="loading-content">
+            <span class="custom-loader"></span>
+          </span>
         </button>
       </div>
 
@@ -58,7 +70,7 @@
           <span class="text-[10px] font-bold text-red-500 uppercase tracking-wide">LIVE</span>
           <span class="text-sm font-black text-red-600 ml-1" id="stat-live">0</span>
         </div>
-        
+
         <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 shadow-sm">
           <span class="w-2 h-2 rounded-full bg-gray-400"></span>
           <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">DONE</span>
@@ -66,20 +78,19 @@
         </div>
       </div>
 
-      <button onclick="Dashboard.openAddModal()" class="btn btn-sm btn-primary text-white shadow-sm gap-2 font-medium px-4 ml-1">
+      <button onclick="Dashboard.openAddModal()"
+        class="btn btn-sm btn-primary text-white shadow-sm gap-2 font-medium px-4 ml-1">
         <i class="fas fa-plus text-xs"></i> <span>เริ่มงานใหม่</span>
       </button>
     </div>
   </div>
 
   <div class="card bg-white shadow-sm border border-base-200 flex-1 min-h-0 flex flex-col overflow-hidden rounded-2xl">
-    
-    <div id="dash-loader" class="absolute inset-0 bg-white/80 z-20 flex flex-col items-center justify-center hidden backdrop-blur-[1px]">
-      <span class="loading loading-dots loading-lg text-primary"></span>
-      <p class="mt-2 text-sm font-medium text-base-content/60 animate-pulse">กำลังโหลดข้อมูล...</p>
-    </div>
 
-    <div id="dash-empty" class="absolute inset-0 flex flex-col items-center justify-center text-base-content/40 hidden z-10 pointer-events-none">
+
+
+    <div id="dash-empty"
+      class="absolute inset-0 flex flex-col items-center justify-center text-base-content/40 hidden z-10 pointer-events-none">
       <div class="bg-base-50 p-6 rounded-full mb-4 border border-base-200">
         <i class="fas fa-clipboard-list text-4xl opacity-20 text-primary"></i>
       </div>
@@ -101,7 +112,7 @@
           </tr>
         </thead>
         <tbody id="work-list-body" class="text-sm align-middle bg-white divide-y divide-gray-50">
-          </tbody>
+        </tbody>
       </table>
     </div>
   </div>
@@ -115,7 +126,8 @@
           </div>
           <span id="modal-title-work" class="font-bold text-lg text-gray-800">จัดการข้อมูล</span>
         </div>
-        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost text-gray-400 hover:text-gray-600">✕</button></form>
+        <form method="dialog"><button
+            class="btn btn-sm btn-circle btn-ghost text-gray-400 hover:text-gray-600">✕</button></form>
       </div>
 
       <div class="p-6 bg-gray-50/50 max-h-[80vh] overflow-y-auto custom-scrollbar">
@@ -123,13 +135,15 @@
           <input type="hidden" id="input-edit-id">
 
           <div id="section-import" class="space-y-3 h-full flex flex-col">
-            <div class="text-[10px] font-bold uppercase text-gray-400 tracking-wider mb-1">ตารางแข่ง (From Calendar)</div>
+            <div class="text-[10px] font-bold uppercase text-gray-400 tracking-wider mb-1">ตารางแข่ง (From Calendar)
+            </div>
 
             <div class="flex gap-2 mb-2 relative">
               <input type="date" id="import-date-picker"
                 class="input input-sm input-bordered w-full text-center cursor-pointer font-mono text-xs rounded-lg"
                 placeholder="เลือกวันที่">
-              <button type="button" class="btn btn-sm btn-square btn-primary rounded-lg" onclick="Dashboard.fetchCalendarEvents()">
+              <button type="button" class="btn btn-sm btn-square btn-primary rounded-lg"
+                onclick="Dashboard.fetchCalendarEvents()">
                 <i class="fas fa-search"></i>
               </button>
             </div>
@@ -152,19 +166,24 @@
             <div class="grid grid-cols-2 gap-3">
               <div class="form-control">
                 <label class="label pb-1"><span class="label-text text-xs font-bold text-gray-500">วันที่</span></label>
-                <input type="date" id="input-date" name="date" class="input input-sm input-bordered w-full font-mono text-xs" required>
+                <input type="date" id="input-date" name="date"
+                  class="input input-sm input-bordered w-full font-mono text-xs" required>
               </div>
               <div class="form-control">
                 <label class="label pb-1"><span class="label-text text-xs font-bold text-gray-500">เวลา</span></label>
-                <input type="time" id="input-time" name="time" class="input input-sm input-bordered w-full font-mono text-xs" required>
+                <input type="time" id="input-time" name="time"
+                  class="input input-sm input-bordered w-full font-mono text-xs" required>
               </div>
             </div>
             <div class="form-control">
-              <label class="label pb-1"><span class="label-text text-xs font-bold text-gray-500">ลีก (League)</span></label>
-              <input type="text" id="input-league" name="league" class="input input-sm input-bordered w-full text-xs" placeholder="เช่น Premier League" required>
+              <label class="label pb-1"><span class="label-text text-xs font-bold text-gray-500">ลีก
+                  (League)</span></label>
+              <input type="text" id="input-league" name="league" class="input input-sm input-bordered w-full text-xs"
+                placeholder="เช่น Premier League" required>
             </div>
             <div class="p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
-              <label class="label pt-0 pb-2"><span class="label-text text-xs font-bold text-gray-500">คู่แข่งขัน</span></label>
+              <label class="label pt-0 pb-2"><span
+                  class="label-text text-xs font-bold text-gray-500">คู่แข่งขัน</span></label>
               <div class="flex items-center gap-2">
                 <input type="text" id="input-home" name="home" oninput="Dashboard.checkFormInput()"
                   class="input input-sm input-ghost w-full text-center font-bold text-gray-700 placeholder:font-normal bg-gray-50 focus:bg-white transition-colors rounded-lg text-xs"
@@ -176,8 +195,10 @@
               </div>
             </div>
             <div class="form-control">
-              <label class="label pb-1"><span class="label-text text-xs font-bold text-gray-500">ช่อง (Channel)</span></label>
-              <input type="text" id="input-channel" name="channel" class="input input-sm input-bordered w-full text-xs" placeholder="เช่น Sports 1">
+              <label class="label pb-1"><span class="label-text text-xs font-bold text-gray-500">ช่อง
+                  (Channel)</span></label>
+              <input type="text" id="input-channel" name="channel" class="input input-sm input-bordered w-full text-xs"
+                placeholder="เช่น Sports 1">
             </div>
           </div>
 
@@ -185,22 +206,31 @@
             <div class="text-[10px] font-bold uppercase text-gray-400 tracking-wider mb-1">หลักฐาน (Images)</div>
 
             <div id="section-img-start" class="bg-blue-50/50 rounded-xl border border-blue-100 p-3 h-auto">
-              <label class="label pt-0 pb-2"><span class="label-text font-bold text-primary flex items-center gap-2 text-xs"><i class="fas fa-play-circle"></i> รูปเริ่มงาน</span></label>
+              <label class="label pt-0 pb-2"><span
+                  class="label-text font-bold text-primary flex items-center gap-2 text-xs"><i
+                    class="fas fa-play-circle"></i> รูปเริ่มงาน</span></label>
 
-              <div id="wrapper-preview-start" class="relative w-full h-32 bg-white rounded-lg border-2 border-dashed border-blue-200 flex items-center justify-center overflow-hidden group mb-2 hidden">
+              <div id="wrapper-preview-start"
+                class="relative w-full h-32 bg-white rounded-lg border-2 border-dashed border-blue-200 flex items-center justify-center overflow-hidden group mb-2 hidden">
                 <img id="preview-start-img" class="h-full object-contain">
-                <div class="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center transition-opacity gap-2">
-                  <button type="button" onclick="Dashboard.viewImage(document.getElementById('preview-start-img').src)" class="btn btn-circle btn-sm btn-ghost text-white"><i class="fas fa-search"></i></button>
-                  <button type="button" onclick="Dashboard.clearImage('start')" class="btn btn-circle btn-sm btn-error text-white shadow-lg"><i class="fas fa-times"></i></button>
+                <div
+                  class="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center transition-opacity gap-2">
+                  <button type="button" onclick="Dashboard.viewImage(document.getElementById('preview-start-img').src)"
+                    class="btn btn-circle btn-sm btn-ghost text-white"><i class="fas fa-search"></i></button>
+                  <button type="button" onclick="Dashboard.clearImage('start')"
+                    class="btn btn-circle btn-sm btn-error text-white shadow-lg"><i class="fas fa-times"></i></button>
                 </div>
               </div>
 
               <div id="box-upload-start" class="flex gap-2">
-                <input type="file" id="input-start-img" accept="image/*" class="hidden" onchange="Dashboard.handleFileSelect(this, 'start')">
-                <button type="button" onclick="document.getElementById('input-start-img').click()" class="btn btn-sm btn-white border border-gray-200 text-gray-600 flex-1 gap-1 text-[10px] shadow-sm hover:border-primary hover:text-primary">
+                <input type="file" id="input-start-img" accept="image/*" class="hidden"
+                  onchange="Dashboard.handleFileSelect(this, 'start')">
+                <button type="button" onclick="document.getElementById('input-start-img').click()"
+                  class="btn btn-sm btn-white border border-gray-200 text-gray-600 flex-1 gap-1 text-[10px] shadow-sm hover:border-primary hover:text-primary">
                   <i class="fas fa-upload"></i> อัปโหลด
                 </button>
-                <button type="button" onclick="Dashboard.triggerPaste('start')" class="btn btn-sm btn-white border border-gray-200 text-gray-600 flex-1 gap-1 text-[10px] shadow-sm hover:border-primary hover:text-primary">
+                <button type="button" onclick="Dashboard.triggerPaste('start')"
+                  class="btn btn-sm btn-white border border-gray-200 text-gray-600 flex-1 gap-1 text-[10px] shadow-sm hover:border-primary hover:text-primary">
                   <i class="fas fa-paste"></i> วางรูป
                 </button>
               </div>
@@ -208,20 +238,29 @@
             </div>
 
             <div id="section-img-stop" class="bg-red-50/50 rounded-xl border border-red-100 p-3 h-auto hidden">
-              <label class="label pt-0 pb-2"><span class="label-text font-bold text-error flex items-center gap-2 text-xs"><i class="fas fa-stop-circle"></i> รูปจบงาน</span></label>
-              <div id="wrapper-preview-stop" class="relative w-full h-32 bg-white rounded-lg border-2 border-dashed border-red-200 flex items-center justify-center overflow-hidden group mb-2 hidden">
+              <label class="label pt-0 pb-2"><span
+                  class="label-text font-bold text-error flex items-center gap-2 text-xs"><i
+                    class="fas fa-stop-circle"></i> รูปจบงาน</span></label>
+              <div id="wrapper-preview-stop"
+                class="relative w-full h-32 bg-white rounded-lg border-2 border-dashed border-red-200 flex items-center justify-center overflow-hidden group mb-2 hidden">
                 <img id="preview-stop-img" class="h-full object-contain">
-                <div class="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center transition-opacity gap-2">
-                  <button type="button" onclick="Dashboard.viewImage(document.getElementById('preview-stop-img').src)" class="btn btn-circle btn-sm btn-ghost text-white"><i class="fas fa-search"></i></button>
-                  <button type="button" onclick="Dashboard.clearImage('stop')" class="btn btn-circle btn-sm btn-error text-white shadow-lg"><i class="fas fa-times"></i></button>
+                <div
+                  class="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center transition-opacity gap-2">
+                  <button type="button" onclick="Dashboard.viewImage(document.getElementById('preview-stop-img').src)"
+                    class="btn btn-circle btn-sm btn-ghost text-white"><i class="fas fa-search"></i></button>
+                  <button type="button" onclick="Dashboard.clearImage('stop')"
+                    class="btn btn-circle btn-sm btn-error text-white shadow-lg"><i class="fas fa-times"></i></button>
                 </div>
               </div>
               <div id="box-upload-stop" class="flex gap-2">
-                <input type="file" id="inp-file-stop" accept="image/*" class="hidden" onchange="Dashboard.handleFileSelect(this, 'stop')">
-                <button type="button" onclick="document.getElementById('inp-file-stop').click()" class="btn btn-sm btn-white border border-gray-200 text-gray-600 flex-1 gap-1 text-[10px] shadow-sm hover:border-error hover:text-error">
+                <input type="file" id="inp-file-stop" accept="image/*" class="hidden"
+                  onchange="Dashboard.handleFileSelect(this, 'stop')">
+                <button type="button" onclick="document.getElementById('inp-file-stop').click()"
+                  class="btn btn-sm btn-white border border-gray-200 text-gray-600 flex-1 gap-1 text-[10px] shadow-sm hover:border-error hover:text-error">
                   <i class="fas fa-upload"></i> อัปโหลด
                 </button>
-                <button type="button" onclick="Dashboard.triggerPaste('stop')" class="btn btn-sm btn-white border border-gray-200 text-gray-600 flex-1 gap-1 text-[10px] shadow-sm hover:border-error hover:text-error">
+                <button type="button" onclick="Dashboard.triggerPaste('stop')"
+                  class="btn btn-sm btn-white border border-gray-200 text-gray-600 flex-1 gap-1 text-[10px] shadow-sm hover:border-error hover:text-error">
                   <i class="fas fa-paste"></i> วางรูป
                 </button>
               </div>
@@ -232,13 +271,15 @@
       </div>
 
       <div class="p-4 bg-white border-t border-gray-100 flex justify-between items-center rounded-b-2xl">
-        <button type="button" id="btn-delete-work" onclick="Dashboard.handleDeleteWork()" class="btn btn-sm btn-outline btn-error gap-2 hidden">
+        <button type="button" id="btn-delete-work" onclick="Dashboard.handleDeleteWork()"
+          class="btn btn-sm btn-outline btn-error gap-2 hidden">
           <i class="fas fa-trash-alt"></i> ลบรายการ
         </button>
 
         <div class="flex gap-2 ml-auto">
           <form method="dialog"><button class="btn btn-sm btn-ghost text-gray-500">ยกเลิก</button></form>
-          <button type="button" onclick="Dashboard.handleSubmitWork()" class="btn btn-sm btn-primary shadow-lg gap-2 px-6 text-white" id="btn-submit-start">
+          <button type="button" onclick="Dashboard.handleSubmitWork()"
+            class="btn btn-sm btn-primary shadow-lg gap-2 px-6 text-white" id="btn-submit-start">
             <span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span>
             <i class="fas fa-save"></i> <span>บันทึก</span>
           </button>
@@ -251,33 +292,46 @@
   <dialog id="modal-stop-work" class="modal modal-bottom sm:modal-middle">
     <div class="modal-box bg-white max-w-sm p-0 rounded-2xl overflow-hidden shadow-2xl">
       <div class="bg-error px-6 py-4 flex items-center justify-between">
-        <h3 class="font-bold text-lg flex items-center gap-2 text-white"><i class="fas fa-stop-circle"></i> จบงาน (Stop)</h3>
-        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost text-white/80 hover:bg-white/20">✕</button></form>
+        <h3 class="font-bold text-lg flex items-center gap-2 text-white"><i class="fas fa-stop-circle"></i> จบงาน (Stop)
+        </h3>
+        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost text-white/80 hover:bg-white/20">✕</button>
+        </form>
       </div>
       <div class="p-6 space-y-4">
         <input type="hidden" id="inp-stop-id-quick">
 
         <div class="bg-red-50/50 rounded-xl border border-red-100 p-4">
-          <label class="label pt-0"><span class="label-text text-xs font-bold text-gray-500">หลักฐานรูปถ่าย (Optional)</span></label>
-          <div id="wrapper-preview-stop-quick" class="relative w-full h-40 bg-white rounded-lg border-2 border-dashed border-red-200 flex items-center justify-center overflow-hidden group mb-3 hidden">
+          <label class="label pt-0"><span class="label-text text-xs font-bold text-gray-500">หลักฐานรูปถ่าย
+              (Optional)</span></label>
+          <div id="wrapper-preview-stop-quick"
+            class="relative w-full h-40 bg-white rounded-lg border-2 border-dashed border-red-200 flex items-center justify-center overflow-hidden group mb-3 hidden">
             <img id="preview-stop-quick-img" class="h-full w-full object-contain">
-            <div class="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center transition-opacity">
-              <button type="button" onclick="Dashboard.clearImage('stop-quick')" class="btn btn-circle btn-sm btn-error text-white shadow-lg"><i class="fas fa-times"></i></button>
+            <div
+              class="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center transition-opacity">
+              <button type="button" onclick="Dashboard.clearImage('stop-quick')"
+                class="btn btn-circle btn-sm btn-error text-white shadow-lg"><i class="fas fa-times"></i></button>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
-            <input type="file" id="inp-file-stop-quick" accept="image/*" class="hidden" onchange="Dashboard.handleFileSelect(this, 'stop-quick')">
-            <button type="button" onclick="document.getElementById('inp-file-stop-quick').click()" class="btn btn-outline btn-error btn-sm flex flex-col h-auto py-2 gap-1"><i class="fas fa-upload text-lg"></i> <span class="text-[10px]">อัปโหลดรูป</span></button>
-            <button type="button" onclick="Dashboard.triggerPaste('stop-quick')" class="btn btn-outline btn-error btn-sm flex flex-col h-auto py-2 gap-1"><i class="fas fa-paste text-lg"></i> <span class="text-[10px]">วางรูป (Ctrl+V)</span></button>
+            <input type="file" id="inp-file-stop-quick" accept="image/*" class="hidden"
+              onchange="Dashboard.handleFileSelect(this, 'stop-quick')">
+            <button type="button" onclick="document.getElementById('inp-file-stop-quick').click()"
+              class="btn btn-outline btn-error btn-sm flex flex-col h-auto py-2 gap-1"><i
+                class="fas fa-upload text-lg"></i> <span class="text-[10px]">อัปโหลดรูป</span></button>
+            <button type="button" onclick="Dashboard.triggerPaste('stop-quick')"
+              class="btn btn-outline btn-error btn-sm flex flex-col h-auto py-2 gap-1"><i
+                class="fas fa-paste text-lg"></i> <span class="text-[10px]">วางรูป (Ctrl+V)</span></button>
           </div>
           <textarea id="paste-area-stop-quick" class="opacity-0 w-0 h-0 absolute pointer-events-none"></textarea>
         </div>
 
         <div class="grid grid-cols-2 gap-3 mt-2">
-          <button id="btn-submit-stop" onclick="Dashboard.submitStopWork(false)" class="btn btn-neutral text-white shadow-md">
+          <button id="btn-submit-stop" onclick="Dashboard.submitStopWork(false)"
+            class="btn btn-neutral text-white shadow-md">
             <i class="fas fa-camera mr-1"></i> ส่งรูปจบงาน
           </button>
-          <button id="btn-submit-stop-skip" onclick="Dashboard.submitStopWork(true)" class="btn btn-outline btn-error hover:text-white">
+          <button id="btn-submit-stop-skip" onclick="Dashboard.submitStopWork(true)"
+            class="btn btn-outline btn-error hover:text-white">
             <i class="fas fa-fast-forward mr-1"></i> ยืนยันทันที
           </button>
         </div>
@@ -291,7 +345,8 @@
   </dialog>
 
   <dialog id="modal-view-image" class="modal">
-    <div class="modal-box p-0 bg-transparent shadow-none max-w-5xl h-full max-h-screen flex items-center justify-center relative">
+    <div
+      class="modal-box p-0 bg-transparent shadow-none max-w-5xl h-full max-h-screen flex items-center justify-center relative">
       <form method="dialog" class="absolute top-4 right-4 z-50">
         <button class="btn btn-circle btn-sm bg-black/50 text-white border-none hover:bg-black">✕</button>
       </form><img id="img-preview-target" class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl bg-black">
