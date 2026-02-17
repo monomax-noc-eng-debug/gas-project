@@ -19,14 +19,19 @@ const GmailService = (() => {
           return { success: true, count: 0, items: [], message: "ไม่พบอีเมลใหม่" };
         }
 
-        // พยายามดึง ID เดิมมาเช็คซ้ำ (ถ้ามี function นี้)
+        // ดึง ID เดิมและ Map ของ Thread
         let existingIds = [];
+        let threadMap = {}; // Map: { threadId: ticketId }
+
         try {
           if (typeof TicketController.getAllTicketIds === 'function') {
             existingIds = TicketController.getAllTicketIds();
           }
+          if (typeof TicketController.getThreadIdMap === 'function') {
+            threadMap = TicketController.getThreadIdMap();
+          }
         } catch (e) {
-          console.warn("Skipping duplicate check from DB.", e);
+          console.warn("Skipping DB checks.", e);
         }
 
         const previewItems = [];
@@ -35,9 +40,10 @@ const GmailService = (() => {
           const msg = thread.getMessages()[0];
           const rawSubject = msg.getSubject();
           const bodySnippet = msg.getPlainBody().substring(0, 100).replace(/[\r\n]+/g, ' ');
+          const threadId = thread.getId();
 
           let item = {
-            threadId: thread.getId(),
+            threadId: threadId,
             subject: rawSubject,
             snippet: bodySnippet,
             status: 'PENDING',
@@ -53,30 +59,61 @@ const GmailService = (() => {
           } else {
             const svrId = svrMatch[0].toUpperCase();
 
-            // 2. ตรวจสอบ Duplicates
-            if (existingIds.includes(svrId)) {
-              item.status = 'DUPLICATE';
-              item.id = svrId;
-              item.remark = 'มีในระบบแล้ว';
-            } else {
-              // 3. เตรียมข้อมูลสำหรับบันทึก (Valid)
-              const svrEndIndex = svrMatch.index + svrMatch[0].length;
-              let cleanSubject = rawSubject.substring(svrEndIndex).replace(/^[\s:-]+/, '').trim();
-              const parts = cleanSubject.split('|').map(s => s.trim());
+            // ✅ เช็คว่ามี Thread ID นี้ในระบบหรือไม่ (เพื่อ Update ID)
+            if (threadMap[threadId]) {
+              const oldId = threadMap[threadId];
+              
+              if (oldId === svrId) {
+                // ถ้า ID ตรงกันอยู่แล้ว
+                item.status = 'DUPLICATE';
+                item.id = svrId;
+                item.remark = 'SVR ตรงกับในระบบแล้ว';
+              } else if (existingIds.includes(svrId)) {
+                // [ADDED] ถ้า SVR ใหม่ ดันมีอยู่แล้วในระบบ (ซ้ำกับ Ticket อื่น)
+                // ไม่ควรให้ Update เพราะจะไปชนกับ Ticket อื่น
+                item.status = 'DUPLICATE_ID_EXIST';
+                item.id = svrId;
+                item.remark = `ไม่สามารถเปลี่ยน ID ได้ เพราะ ${svrId} มีอยู่แล้ว`;
+              } else {
+                // กรณีปกติ: เปลี่ยน Ticket ID เดิม เป็น SVR ใหม่
+                item.status = 'UPDATE_SVR';
+                item.id = svrId;
+                item.remark = `เปลี่ยน ID จาก ${oldId} เป็น ${svrId}`;
+                item.payload = {
+                  action: 'UPDATE_SVR',
+                  oldId: oldId,
+                  newId: svrId,
+                  threadId: threadId
+                };
+              }
 
-              item.status = 'READY';
-              item.id = svrId;
-              item.payload = {
-                id: svrId,
-                type: parts[1] || 'Request',
-                status: 'Draft',
-                severity: parts[2] || 'Normal',
-                category: parts[3] || 'General',
-                subCategory: parts[4] || '-',
-                subject: cleanSubject,
-                detail: `[Imported via Email]\nFrom: ${msg.getFrom()}\nSubject: ${rawSubject}\n\n${msg.getPlainBody().substring(0, 2000)}...`,
-                threadId: thread.getId()
-              };
+            } else {
+              // กรณีไม่เจอ Thread Map (Ticket ใหม่)
+              if (existingIds.includes(svrId)) {
+                item.status = 'DUPLICATE';
+                item.id = svrId;
+                item.remark = 'มีในระบบแล้ว';
+              } else {
+                // 3. เตรียมข้อมูลสำหรับบันทึก (Valid New Ticket)
+                const svrEndIndex = svrMatch.index + svrMatch[0].length;
+                let cleanSubject = rawSubject.substring(svrEndIndex).replace(/^[\s:-]+/, '').trim();
+                const parts = cleanSubject.split('|').map(s => s.trim());
+
+                item.status = 'READY';
+                item.id = svrId;
+                item.payload = {
+                  action: 'CREATE',
+                  id: svrId,
+                  type: parts[1] || 'Request',
+                  status: 'Draft',
+                  severity: parts[2] || 'Normal',
+                  category: parts[3] || 'General',
+                  subCategory: parts[4] || '-',
+                  subject: cleanSubject,
+                  detail: `[Imported via Email]\nFrom: ${msg.getFrom()}\nSubject: ${rawSubject}\n\n${msg.getPlainBody().substring(0, 2000)}...`,
+                  threadId: threadId
+                };
+              }
             }
           }
           previewItems.push(item);
@@ -109,16 +146,23 @@ const GmailService = (() => {
       let savedCount = 0;
 
       payloads.forEach(data => {
-        // กำหนดวันที่/เวลาปัจจุบันตอนกดบันทึก
-        data.date = Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd");
-        data.time = Utilities.formatDate(new Date(), "Asia/Bangkok", "HH:mm");
+        let res = { success: false };
 
-        // เรียก TicketController.importTicket เพื่อบันทึกลง Sheet
-        const res = TicketController.importTicket(data);
+        // ✅ Check Action Type
+        if (data.action === 'UPDATE_SVR') {
+          res = TicketController.updateTicketIdOnly(data.oldId, data.newId);
+        } else {
+          // Default Create
+          // เช็คว่ามี date/time หรือยัง ถ้าไม่มีให้เติม
+          if(!data.date) data.date = Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd");
+          if(!data.time) data.time = Utilities.formatDate(new Date(), "Asia/Bangkok", "HH:mm");
+          
+          res = TicketController.importTicket(data);
+        }
 
         if (res.success) {
           savedCount++;
-          // ติด Label Complete ที่ Thread เพื่อไม่ให้ดึงซ้ำอีก
+          // ติด Label Complete ที่ Thread
           if (data.threadId) {
             try {
               const thread = GmailApp.getThreadById(data.threadId);
@@ -136,14 +180,13 @@ const GmailService = (() => {
       try {
         if (!data.to || !data.subject) return { success: false, message: "Missing To or Subject" };
 
-        // ใช้ GmailApp.createDraft โดยใส่ htmlBody
         const draft = GmailApp.createDraft(
           data.to,
           data.subject,
-          "", // Plain text body (ว่างไว้ เพราะเราใช้ HTML)
+          "", 
           {
             cc: data.cc || "",
-            htmlBody: data.bodyHtml // <-- สำคัญ: ใส่ HTML ตรงนี้
+            htmlBody: data.bodyHtml 
           }
         );
 

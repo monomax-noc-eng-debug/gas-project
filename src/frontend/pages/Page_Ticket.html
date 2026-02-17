@@ -234,18 +234,30 @@
               </div>
               <div class="lg:col-span-4 space-y-6">
                 <div class="card bg-white shadow-sm border p-6">
-                  <div class="flex justify-between items-center mb-4">
-                    <span class="text-xs font-bold text-slate-400 uppercase">สถานะ</span>
-                    <input type="text" name="id" id="inp-ticket-id"
-                      class="input input-xs w-20 text-center font-mono bg-slate-100" readonly placeholder="AUTO">
+                  <h4 class="text-sm font-bold text-slate-400 mb-4 uppercase">สถานะ & เวลา</h4>
+
+                  <div class="form-control mb-3">
+                    <label class="label py-0 text-xs text-slate-500 mb-1">Ticket ID (SVR) / Status</label>
+                    <div class="flex gap-2">
+                      <input type="text" name="id" id="inp-ticket-id"
+                        class="input input-sm input-bordered w-full font-mono bg-slate-100 text-primary font-bold"
+                        readonly placeholder="AUTO">
+                      <select name="status" id="sel-ticket-status"
+                        class="select select-bordered select-sm w-full font-bold"></select>
+                    </div>
                   </div>
-                  <select name="status" id="sel-ticket-status"
-                    class="select select-bordered w-full mb-3 font-bold"></select>
+
                   <div class="grid grid-cols-2 gap-2">
-                    <input type="date" name="date" id="inp-ticket-date"
-                      class="input input-sm input-bordered w-full bg-white" placeholder="วว/ดด/ปปปป">
-                    <input type="time" name="time" id="inp-ticket-time"
-                      class="input input-sm input-bordered w-full bg-white">
+                    <div>
+                      <label class="label py-0 text-xs text-slate-500 mb-1">วันที่</label>
+                      <input type="date" name="date" id="inp-ticket-date"
+                        class="input input-sm input-bordered w-full bg-white">
+                    </div>
+                    <div>
+                      <label class="label py-0 text-xs text-slate-500 mb-1">เวลา</label>
+                      <input type="time" name="time" id="inp-ticket-time"
+                        class="input input-sm input-bordered w-full bg-white">
+                    </div>
                   </div>
                 </div>
                 <div class="card bg-white shadow-sm border p-6">
@@ -338,6 +350,16 @@
                       id="chk-show-note" class="toggle toggle-primary toggle-xs" checked
                       onchange="TicketManager.updateEmailPreview()"></div>
                   <input type="text" id="email-note" class="input input-bordered input-sm w-full bg-white">
+                </div>
+
+                <!-- Signature Field -->
+                <div class="form-control">
+                  <div class="flex justify-between items-center mb-1"><span
+                      class="text-xs font-bold text-indigo-800">ลงท้าย (Signature)</span><input type="checkbox"
+                      id="chk-show-signature" class="toggle toggle-primary toggle-xs" checked
+                      onchange="TicketManager.updateEmailPreview()"></div>
+                  <textarea id="inp-email-signature" class="textarea textarea-bordered textarea-sm w-full bg-white h-20"
+                    placeholder="Best Regards, ...">MONO MAX Sport NOC</textarea>
                 </div>
               </div>
 

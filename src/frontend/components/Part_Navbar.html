@@ -1,7 +1,6 @@
 <div class="navbar bg-base-100 border-b border-base-200 px-4 z-40 sticky top-0 shadow-sm min-h-[4rem]">
 
   <div class="flex-1 gap-2 items-center">
-
     <label for="my-drawer" class="btn btn-square btn-ghost lg:hidden drawer-button">
       <i class="fas fa-bars text-xl"></i>
     </label>
@@ -12,93 +11,111 @@
   </div>
 
   <div class="flex-none gap-2">
-
-
-    <div class="divider divider-horizontal mx-0 hidden md:flex"></div>
+    <div class="divider divider-horizontal mx-2 hidden md:flex h-8 self-center"></div>
 
     <div class="dropdown dropdown-end">
+
       <div tabindex="0" role="button"
-        class="btn btn-ghost flex items-center gap-2 px-1 md:px-2 rounded-btn h-auto py-1">
-        <div class="avatar placeholder placeholder-online">
-          <div class="bg-primary text-primary-content rounded-full w-8 md:w-9">
-            <span id="nav-avatar-text" class="text-sm md:text-lg font-bold">U</span>
+        class="btn btn-ghost h-auto py-1 px-2 flex items-center gap-3 rounded-full hover:bg-base-200 transition-all duration-200">
+
+        <div class="hidden md:flex flex-col items-end gap-0.5 mr-1">
+          <span id="nav-user-name" class="font-bold text-sm leading-none text-base-content">Loading...</span>
+          <span class="text-[10px] text-base-content/60 leading-none uppercase tracking-wide">User</span>
+        </div>
+
+        <div class="avatar placeholder">
+          <div
+            class="w-9 md:w-10 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2 transition-all duration-300 hover:scale-105">
             <img id="nav-avatar-img" class="hidden" src="" alt="Avatar" />
+            <span id="nav-avatar-text" class="text-lg font-bold bg-neutral text-neutral-content w-full h-full flex items-center justify-center">U</span>
           </div>
         </div>
-        <div class="hidden md:block text-right leading-tight normal-case">
-          <p id="nav-user-name" class="font-bold text-sm text-base-content">Loding...</p>
-          <p id="nav-user-email" class="text-xs text-base-content/60">...</p>
-        </div>
-        <i class="fas fa-chevron-down text-xs text-base-content/50 ml-1 hidden md:block"></i>
+
+        <i class="fas fa-chevron-down text-[10px] opacity-50 hidden md:block ml-1"></i>
       </div>
+
       <ul tabindex="0"
-        class="dropdown-content z-[1] menu p-2 shadow-lg bg-base-100 rounded-box w-52 mt-4 border border-base-200">
-        <li class="menu-title px-4 py-2">
-          <span class="text-xs font-semibold opacity-50">บัญชีผู้ใช้</span>
+        class="dropdown-content z-[100] menu p-2 shadow-2xl bg-base-100 rounded-2xl w-72 mt-3 border border-base-200/60 animate-fade-in-up">
+
+        <li class="disabled pointer-events-none mb-2">
+          <div class="flex flex-col gap-1 p-4 bg-base-200/50 rounded-xl items-center text-center">
+            <div class="avatar mb-2">
+              <div class="w-16 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
+                <img id="nav-menu-avatar-img" class="hidden" src="" alt="Avatar" />
+                <span id="nav-menu-avatar-text" class="text-3xl font-bold bg-neutral text-neutral-content w-full h-full flex items-center justify-center">U</span>
+              </div>
+            </div>
+            <div>
+              <p class="font-bold text-lg text-base-content" id="nav-menu-name-display">User Name</p>
+            </div>
+          </div>
         </li>
-        <li class="px-4 py-2 text-xs text-base-content/70 break-all" id="nav-menu-email">
-          checking...
+
+        <li>
+          <a onclick="Router.navigateTo('page-settings')"
+            class="flex gap-3 py-3 font-medium hover:bg-base-200 rounded-lg group">
+            <div
+              class="w-8 h-8 rounded-full bg-base-200 flex items-center justify-center text-base-content/70 group-hover:bg-primary group-hover:text-primary-content transition-colors duration-200">
+              <i class="fas fa-cog"></i>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-sm">ตั้งค่าระบบ</span>
+              <span class="text-[10px] opacity-60 font-normal">จัดการข้อมูลและการแจ้งเตือน</span>
+            </div>
+          </a>
         </li>
-        <div class="divider my-0"></div>
-        <li><a onclick="Router.navigateTo('page-settings')"><i class="fas fa-cog w-4 text-center"></i> ตั้งค่าระบบ</a>
-        </li>
-        <li class="border-t border-base-200 my-1"></li>
-        <li><a class="text-error hover:bg-error/10" href="https://accounts.google.com/Logout" target="_blank"><i
-              class="fas fa-sign-out-alt w-4 text-center"></i> ออกจากระบบ</a>
+
+        <div class="divider my-1"></div>
+
+        <li>
+          <a onclick="handleLogout()"
+            class="flex gap-3 py-3 text-error hover:bg-error/10 rounded-lg font-medium group cursor-pointer">
+            <div
+              class="w-8 h-8 rounded-full bg-error/10 flex items-center justify-center group-hover:bg-error group-hover:text-white transition-colors duration-200">
+              <i class="fas fa-sign-out-alt"></i>
+            </div>
+            <span class="text-sm">ออกจากระบบ</span>
+          </a>
         </li>
       </ul>
+
     </div>
   </div>
 </div>
 
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    // Simple Profile Loader
-    const updateNav = () => {
-      const user = Store.state.currentUser;
-      if (user) {
-        // Name
-        const nameEl = document.getElementById('nav-user-name');
-        if (nameEl) nameEl.innerText = user.name || 'User';
+  /**
+   * ฟังก์ชันสำหรับอัปเดต UI ของ Navbar
+   * @param {Object} user - ข้อมูลผู้ใช้ {userName: "...", userEmail: "..."}
+   */
+  window.updateNavbarUI = (user) => {
+    if (!user) return;
+    
+    // 1. อัปเดตชื่อแสดงผล
+    const nameEl = document.getElementById('nav-user-name');
+    const menuNameEl = document.getElementById('nav-menu-name-display');
+    const menuEmailEl = document.getElementById('nav-menu-email-display');
+    
+    const displayName = user.userName || user.name || 'Unknown';
+    if (nameEl) nameEl.innerText = displayName;
+    if (menuNameEl) menuNameEl.innerText = displayName;
+    if (menuEmailEl) menuEmailEl.innerText = user.userEmail || '';
 
-        // Email (Subtitle)
-        const emailEl = document.getElementById('nav-user-email');
-        if (emailEl) emailEl.innerText = user.email || '';
+    // 2. จัดการรูปโปรไฟล์ (Avatar)
+    const textEls = [document.getElementById('nav-avatar-text'), document.getElementById('nav-menu-avatar-text')];
+    const imgEls = [document.getElementById('nav-avatar-img'), document.getElementById('nav-menu-avatar-img')];
 
-        // Email (Menu)
-        const menuEmailEl = document.getElementById('nav-menu-email');
-        if (menuEmailEl) menuEmailEl.innerText = user.email || '';
+    // เนื่องจากใช้ Login ผ่าน Sheet ปกติจะไม่มีรูปภาพ (Picture) 
+    // เราจะใช้ตัวอักษรแรกของชื่อแทน
+    const initial = displayName.charAt(0).toUpperCase();
+    
+    imgEls.forEach(el => { if(el) el.classList.add('hidden'); });
+    textEls.forEach(el => { 
+      if(el) {
+        el.classList.remove('hidden');
+        el.innerText = initial;
+      } 
+    });
+  };
 
-        // Avatar
-        const imgEl = document.getElementById('nav-avatar-img');
-        const textEl = document.getElementById('nav-avatar-text');
-
-        if (user.picture) {
-          if (imgEl) { imgEl.src = user.picture; imgEl.classList.remove('hidden'); }
-          if (textEl) textEl.classList.add('hidden');
-        } else {
-          if (imgEl) imgEl.classList.add('hidden');
-          if (textEl) {
-            textEl.classList.remove('hidden');
-            textEl.innerText = (user.name || 'U').charAt(0).toUpperCase();
-          }
-        }
-      }
-    };
-
-    // Watch for store init
-    // Since Store.init() is async, we can check interval or listen to event.
-    // Or simply call it once, and let JS_App.html call it when ready. 
-    // JS_App calls Store.init(). We can hook into it.
-    // Better: Use an interval to check Store state for a few seconds.
-    let attempts = 0;
-    const interval = setInterval(() => {
-      if (Store.state.currentUser) {
-        updateNav();
-        clearInterval(interval);
-      }
-      attempts++;
-      if (attempts > 50) clearInterval(interval); // 5 sec timeout
-    }, 100);
-  });
 </script>

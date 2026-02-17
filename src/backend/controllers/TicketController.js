@@ -55,6 +55,7 @@ const TicketController = (() => {
         const headers = rawData[0];
         const getIdx = (keys) => _findColIndex(headers, keys);
 
+        // ✅ จุดที่ 1: กำหนด Index (ตำแหน่งคอลัมน์)
         const idx = {
           no: getIdx(["No.", "ลำดับ"]),
           date: getIdx(["Date", "วันที่แจ้ง", "วันที่"]),
@@ -68,7 +69,10 @@ const TicketController = (() => {
           detail: getIdx(["Detail", "รายละเอียด"]),
           action: getIdx(["Action", "การดำเนินการ"]),
           resDetail: getIdx(["Resolved detail", "รายละเอียดการแก้ไข"]),
+
+          // 👇 ใส่แค่บรรทัดนี้ใน block idx
           resp: getIdx(["Responsibility", "ผู้รับผิดชอบ"]),
+
           assign: getIdx(["Assign", "มอบหมาย"]),
           remark: getIdx(["Remark", "หมายเหตุ"]),
           createdDate: getIdx(["Created Date", "Created", "วันที่สร้าง"]),
@@ -81,6 +85,7 @@ const TicketController = (() => {
           const tid = (idx.id > -1) ? row[idx.id] : null;
           return tid && String(tid).trim() !== "";
         }).map(row => {
+          // ✅ จุดที่ 2: ดึงข้อมูลมาใส่ Object (อยู่ใน return)
           return {
             no: (idx.no > -1) ? row[idx.no] : "",
             date: (idx.date > -1) ? row[idx.date] : "",
@@ -94,7 +99,10 @@ const TicketController = (() => {
             detail: (idx.detail > -1) ? row[idx.detail] : "-",
             action: (idx.action > -1) ? row[idx.action] : "-",
             resolvedDetail: (idx.resDetail > -1) ? row[idx.resDetail] : "-",
+
+            // 👇 ใส่ logic ดึงค่าตรงนี้ (ห้ามไปใส่ข้างบน)
             responsibility: (idx.resp > -1) ? row[idx.resp] : "-",
+
             assign: (idx.assign > -1) ? row[idx.assign] : "-",
             remark: (idx.remark > -1) ? row[idx.remark] : "-",
             createdDate: (idx.createdDate > -1) ? row[idx.createdDate] : "",
@@ -708,42 +716,176 @@ const TicketController = (() => {
 
     createTicketAndDraft: function (payload) {
       const { ticket, email } = payload;
-      let res;
+      let resVal;
+      let ticketId = null;
 
-      // Determine if Create or Update
-      const allIds = this.getAllTicketIds();
-      const isUpdate = ticket.id && allIds.includes(String(ticket.id).trim().toUpperCase());
-
-      if (isUpdate) {
-        res = TicketController.updateTicket(ticket);
-      } else {
-        res = TicketController.createTicket(ticket);
-      }
-
-      if (!res.success) return res;
-
-      // Create Gmail Draft
       try {
+        // Determine if Create or Update
+        const allIds = this.getAllTicketIds();
+        const isUpdate = ticket.id && allIds.includes(String(ticket.id).trim().toUpperCase());
+
+        if (isUpdate) {
+          resVal = TicketController.updateTicket(ticket);
+        } else {
+          resVal = TicketController.createTicket(ticket);
+        }
+
+        // Parse response because createTicket returns JSON String via Response.success
+        let resObj = resVal;
+        if (typeof resVal === 'string') {
+          try { resObj = JSON.parse(resVal); } catch (e) { throw new Error("Invalid JSON details from Controller"); }
+        }
+
+        if (!resObj.success) {
+          return { success: false, message: resObj.message || "Failed to save ticket" };
+        }
+
+        // Capture ticketId for return
+        if (resObj.data && resObj.data.id) ticketId = resObj.data.id;
+
+        // Create Gmail Draft
+        const recipient = (email.to || "").trim();
+        if (!recipient) {
+          return { success: true, message: "Ticket saved, but skipped Draft (No Recipient)", ticketId: ticketId };
+        }
+
         const draft = GmailApp.createDraft(
-          email.to || "",
+          recipient,
           email.subject || "(No Subject)",
-          "", // Plain text body
+          "",
           {
             htmlBody: email.bodyHtml || "",
-            cc: email.cc || ""
+            cc: (email.cc || "").trim()
           }
         );
-        // Construct a link to open the draft
-        // Note: The ID returned by getId() is the message ID, draft ID might be different but usually works in URL
-        const draftId = draft.getId();
+
+        let draftId = "";
+        let threadId = "";
+
+        try {
+          const msg = draft.getMessage();
+          draftId = msg.getId();
+          threadId = msg.getThread().getId();
+        } catch (err) {
+          console.warn("Error getting Draft/Thread ID", err);
+          draftId = draft.getId();
+        }
+
+        // Update Ticket Remark with Thread ID
+        if (ticketId && threadId) {
+          this.appendThreadIdToRemark(ticketId, threadId);
+        }
+
         return {
           success: true,
           message: "Ticket saved & Draft created",
           draftId: draftId,
-          draftUrl: `https://mail.google.com/mail/u/0/#drafts/${draftId}`
+          draftUrl: `https://mail.google.com/mail/u/0/#drafts/${draftId}`,
+          threadId: threadId,
+          ticketId: ticketId
         };
       } catch (e) {
-        return { success: true, message: "Ticket saved but draft creation failed: " + e.message };
+        console.error("createTicketAndDraft Error", e);
+        return { success: false, message: "System Error: " + e.message, ticketId: ticketId };
+      }
+    },
+
+    getThreadIdMap: function () {
+      try {
+        const sheet = _getTicketSheet();
+        const data = sheet.getDataRange().getValues();
+        if (data.length < 2) return {};
+        const headers = data[0];
+        const idCol = _findColIndex(headers, ["Ticket Number", "ID"]);
+        const remarkCol = _findColIndex(headers, ["Remark", "หมายเหตุ"]);
+
+        if (idCol === -1 || remarkCol === -1) return {};
+
+        const map = {};
+        for (let i = 1; i < data.length; i++) {
+          const tid = String(data[i][idCol]).trim();
+          const remark = String(data[i][remarkCol]);
+          if (!tid) continue;
+
+          // Regex to extract [Thread ID: xxxxx]
+          const match = remark.match(/\[Thread ID:\s*([a-zA-Z0-9]+)\]/);
+          if (match && match[1]) {
+            map[match[1]] = tid;
+          }
+        }
+        return map;
+      } catch (e) {
+        console.warn("getThreadIdMap Error", e);
+        return {};
+      }
+    },
+
+    updateTicketIdOnly: function (oldId, newSvrId) {
+      const lock = LockService.getScriptLock();
+      if (lock.tryLock(10000)) {
+        try {
+          const sheet = _getTicketSheet();
+          const data = sheet.getDataRange().getValues();
+          const headers = data[0];
+          const idCol = _findColIndex(headers, ["Ticket Number", "ID"]);
+
+          if (idCol === -1) return { success: false, message: "ID Column not found" };
+
+          // [Check Duplicate] ป้องกันไม่ให้เปลี่ยนชื่อเป็น ID ที่มีอยู่แล้ว
+          const existingIds = data.slice(1).map(r => String(r[idCol]).trim().toUpperCase());
+          if (existingIds.includes(String(newSvrId).trim().toUpperCase())) {
+            return { success: false, message: `Duplicate: ID ${newSvrId} already exists.` };
+          }
+
+          let rowIdx = -1;
+          const target = String(oldId).trim();
+
+          for (let i = 1; i < data.length; i++) {
+            if (String(data[i][idCol]).trim() === target) {
+              rowIdx = i + 1;
+              break;
+            }
+          }
+
+          if (rowIdx === -1) return { success: false, message: "Old ID Not Found: " + oldId };
+
+          // Update Ticket Number
+          sheet.getRange(rowIdx, idCol + 1).setValue(newSvrId);
+          return { success: true, message: `Updated ID ${oldId} -> ${newSvrId}` };
+        } catch (e) { return { success: false, message: e.message }; }
+        finally { lock.releaseLock(); }
+      }
+      return { success: false, message: "System Busy" };
+    },
+
+    appendThreadIdToRemark: function (ticketId, threadId) {
+      const lock = LockService.getScriptLock();
+      if (lock.tryLock(5000)) {
+        try {
+          const sheet = _getTicketSheet();
+          const data = sheet.getDataRange().getValues();
+          const headers = data[0];
+          const idCol = _findColIndex(headers, ["Ticket Number", "ID"]);
+          const remarkCol = _findColIndex(headers, ["Remark", "หมายเหตุ"]);
+
+          if (idCol === -1 || remarkCol === -1) return;
+
+          for (let i = 1; i < data.length; i++) {
+            if (String(data[i][idCol]).trim() === String(ticketId).trim()) {
+              const currentRemark = String(data[i][remarkCol]);
+              // เช็คว่ามี Thread ID นี้อยู่แล้วหรือยัง
+              if (!currentRemark.includes(threadId)) {
+                const newRemark = currentRemark ? `${currentRemark}\n[Thread ID: ${threadId}]` : `[Thread ID: ${threadId}]`;
+                sheet.getRange(i + 1, remarkCol + 1).setValue(newRemark);
+              }
+              break;
+            }
+          }
+        } catch (e) {
+          console.error("appendThreadIdToRemark Failed", e);
+        } finally {
+          lock.releaseLock();
+        }
       }
     },
 

@@ -1,7 +1,7 @@
 /**
  * src/backend/controllers/MatchController.js
  * จัดการข้อมูลงาน (Matches) และปฏิทิน
- * Version: Final Stable (Flexible Date/Headers & Robust Upload)
+ * Version: Multi-Image Support (JSON Storage)
  */
 
 const MatchController = (() => {
@@ -9,21 +9,16 @@ const MatchController = (() => {
   const getDbId = () => (typeof CONFIG !== 'undefined') ? CONFIG.DB_ID : "";
   const getSheetName = () => (typeof CONFIG !== 'undefined') ? (CONFIG.MATCH_TAB || "DB_Matches") : "DB_Matches";
 
-  // ✅ Helper: แปลงวันที่ให้รองรับทุกรูปแบบ (Date, String, "7 February 2026")
+  // ✅ Helper: แปลงวันที่ให้รองรับทุกรูปแบบ
   function _parseDate(val) {
     if (!val) return "";
     const tz = (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok";
-
-    // กรณีเป็น Date Object อยู่แล้ว
     if (val instanceof Date) return Utilities.formatDate(val, tz, "yyyy-MM-dd");
-
     const strVal = String(val).trim();
-    // ลองแปลงจาก String (รองรับภาษาอังกฤษ เช่น "7 February 2026")
     const d = new Date(strVal);
     if (!isNaN(d.getTime())) {
       return Utilities.formatDate(d, tz, "yyyy-MM-dd");
     }
-    // Fallback: ตัด String เอาเฉพาะส่วนหน้า (กรณี yyyy-MM-dd HH:mm)
     return strVal.split(' ')[0];
   }
 
@@ -31,63 +26,43 @@ const MatchController = (() => {
   function _parseTime(val) {
     if (!val) return "00:00";
     const tz = (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok";
-
-    // 1. กรณีเป็น Date Object
     if (val instanceof Date) return Utilities.formatDate(val, tz, "HH:mm");
-
     const strVal = String(val).trim();
-
-    // 2. กรณีเป็น String Date (เช่น "1899-12-30T10:00:00.000Z" หรือ "Sat Dec 30 1899...")
-    // ถ้าขึ้นต้นด้วยปี 4 หลัก หรือ มีรูปแบบวันที่
     if (strVal.match(/^\d{4}-\d{2}-\d{2}/) || strVal.includes("1899")) {
       const d = new Date(strVal);
-      if (!isNaN(d.getTime())) {
-        return Utilities.formatDate(d, tz, "HH:mm");
-      }
+      if (!isNaN(d.getTime())) return Utilities.formatDate(d, tz, "HH:mm");
     }
-
-    // 3. กรณีเป็น Time String ทั่วไป (แปลงจุดเป็น colon เช่น 22.00 -> 22:00)
     let str = strVal.replace('.', ':');
-
-    // เติม 0 ข้างหน้าถ้าจำเป็น (เช่น 9:00 -> 09:00)
     if (str.indexOf(':') === 1) str = '0' + str;
-
-    // ตัดให้เหลือ 5 ตัวอักษร (HH:mm)
     return str.length > 5 ? str.substring(0, 5) : str;
   }
 
-  // ✅ Helper: จัดการ Folder ตามวันที่ (Year/Month/Day)
+  // ✅ Helper: จัดการ Folder ตามวันที่
   function _getOrCreateDateFolder(rootFolderId, dateObj) {
     try {
       if (!rootFolderId) return null;
       const root = DriveApp.getFolderById(rootFolderId);
       const timezone = (typeof CONFIG !== 'undefined' ? CONFIG.TIMEZONE : "Asia/Bangkok");
-
       const getSubFolder = (parent, name) => {
         const folders = parent.getFoldersByName(name);
         return folders.hasNext() ? folders.next() : parent.createFolder(name);
       };
-
       const yearFolder = getSubFolder(root, Utilities.formatDate(dateObj, timezone, "yyyy"));
       const monthFolder = getSubFolder(yearFolder, Utilities.formatDate(dateObj, timezone, "MM"));
-      const dayFolder = getSubFolder(monthFolder, Utilities.formatDate(dateObj, timezone, "dd"));
-      return dayFolder;
+      return getSubFolder(monthFolder, Utilities.formatDate(dateObj, timezone, "dd"));
     } catch (e) {
       console.error("Folder Error:", e);
-      // Fallback: ใช้ Root Folder แทนถ้าสร้างย่อยไม่ได้
       try { return DriveApp.getFolderById(rootFolderId); } catch (ex) { return null; }
     }
   }
 
-  // ✅ Helper: อัปโหลดรูปภาพ
+  // ✅ Helper: อัปโหลดรูปภาพเดี่ยว
   function _uploadImage(base64, mimeType, fileName, dateObj) {
     const imgFolderId = (typeof CONFIG !== 'undefined') ? CONFIG.IMG_FOLDER : "";
     if (!base64 || !imgFolderId) return "";
-
     try {
       const folder = _getOrCreateDateFolder(imgFolderId, dateObj);
       if (!folder) return "";
-
       const blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, fileName);
       const file = folder.createFile(blob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
@@ -96,6 +71,40 @@ const MatchController = (() => {
       console.error("Upload Error:", e);
       return "";
     }
+  }
+
+  // ✅ Helper: Process Image Array (Mix of Base64 and Existing URLs)
+  function _processImageArray(imageItems, id, suffix, dateObj) {
+    if (!Array.isArray(imageItems) || imageItems.length === 0) return [];
+    
+    return imageItems.map((item, index) => {
+      // 1. ถ้าเป็น URL เดิม ให้คืนค่ากลับไปเลย
+      if (item.type === 'url') return item.data;
+      
+      // 2. ถ้าเป็น Base64 ให้ทำการ Upload
+      if (item.type === 'base64') {
+        const timestamp = Utilities.formatDate(new Date(), (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok", "HHmmss");
+        const fileName = `Match_${id}_${suffix}_${index}_${timestamp}.jpg`;
+        return _uploadImage(item.data, "image/jpeg", fileName, dateObj);
+      }
+      return null;
+    }).filter(url => url && url !== ""); // กรองค่าว่างทิ้ง
+  }
+
+  // ✅ Helper: Safe JSON Parse for Image Columns
+  function _parseImageCell(cellValue) {
+    if (!cellValue) return "";
+    const str = String(cellValue).trim();
+    // ถ้าเริ่มด้วย [ แสดงว่าเป็น JSON Array (Multiple Images)
+    if (str.startsWith("[") && str.endsWith("]")) {
+      try {
+        return JSON.parse(str);
+      } catch (e) {
+        return str; // Parse Error -> Return string
+      }
+    }
+    // ถ้าไม่ใช่ JSON (Legacy Single Image)
+    return str;
   }
 
   return {
@@ -108,8 +117,6 @@ const MatchController = (() => {
         if (!rawData || rawData.length < 2) return Response.success([]);
 
         const headers = rawData[0];
-
-        // Dynamic Header Mapping (ค้นหาด้วย Keyword หลายแบบ)
         const getIdx = (keywords) => headers.findIndex(h => keywords.some(k => String(h).toLowerCase().includes(k.toLowerCase())));
 
         const idx = {
@@ -126,10 +133,7 @@ const MatchController = (() => {
         };
 
         const matches = rawData.slice(1).map((row, i) => {
-          // 1. แปลงวันที่
           const dateStr = _parseDate(row[idx.date]);
-
-          // 2. สร้าง Auto ID ถ้าไม่มี
           let rowId = (idx.id > -1 && row[idx.id]) ? row[idx.id] : "";
           if (!rowId && dateStr) {
             rowId = `AUTO_${dateStr.replace(/-/g, '')}_${i}`;
@@ -144,15 +148,13 @@ const MatchController = (() => {
             away: (idx.away > -1) ? (row[idx.away] || "?") : "?",
             channel: (idx.channel > -1) ? (row[idx.channel] || "-") : "-",
             status: (idx.status > -1) ? (row[idx.status] || "WAIT") : "WAIT",
-            start_img: (idx.startImg > -1) ? row[idx.startImg] : "",
-            stop_img: (idx.stopImg > -1) ? row[idx.stopImg] : ""
+            // Parse Image Columns to Array or String
+            start_img: (idx.startImg > -1) ? _parseImageCell(row[idx.startImg]) : "",
+            stop_img: (idx.stopImg > -1) ? _parseImageCell(row[idx.stopImg]) : ""
           };
         });
 
-        // Filter: เอาเฉพาะรายการที่มีวันที่ถูกต้อง (yyyy-MM-dd มี 10 ตัวอักษร)
         const validMatches = matches.filter(m => m.date && m.date.length === 10);
-
-        // Sort: เรียงตามวันที่ -> เวลา
         validMatches.sort((a, b) => {
           if (a.date !== b.date) return a.date.localeCompare(b.date);
           return a.time.localeCompare(b.time);
@@ -163,7 +165,7 @@ const MatchController = (() => {
     },
 
     // =================================================================
-    // ➕ CREATE WORK ITEM
+    // ➕ CREATE WORK ITEM (Support Multiple Images)
     // =================================================================
     apiCreateWorkItem: function (data) {
       try {
@@ -172,10 +174,15 @@ const MatchController = (() => {
         const tz = (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok";
         const dateStr = Utilities.formatDate(matchDate, tz, "yyyy-MM-dd");
 
-        let imageUrl = "";
-        if (data.imageBase64) {
-          const fileName = `Match_${newId}_START_${Utilities.formatDate(new Date(), tz, "HHmmss")}.jpg`;
-          imageUrl = _uploadImage(data.imageBase64, data.mimeType || "image/jpeg", fileName, matchDate);
+        // Logic: Support both Legacy (single) and New (array)
+        let imageUrls = [];
+        if (data.startImages && Array.isArray(data.startImages) && data.startImages.length > 0) {
+           imageUrls = _processImageArray(data.startImages, newId, "START", matchDate);
+        } else if (data.imageBase64) {
+           // Fallback for single image legacy
+           const fileName = `Match_${newId}_START_Legacy.jpg`;
+           const url = _uploadImage(data.imageBase64, data.mimeType || "image/jpeg", fileName, matchDate);
+           if (url) imageUrls.push(url);
         }
 
         const sheetName = getSheetName();
@@ -197,15 +204,16 @@ const MatchController = (() => {
         setVal(["Away"], data.away || "?");
         setVal(["Channel"], data.channel || "Manual");
 
-        // Logic: มีรูป -> LIVE, ไม่มีรูป -> WAIT
-        const status = imageUrl ? "LIVE" : "WAIT";
+        // Status Logic
+        const status = imageUrls.length > 0 ? "LIVE" : "WAIT";
         setVal(["Status", "สถานะ"], status);
 
-        if (imageUrl) {
-          setVal(["Start Image", "Image In", "Start"], imageUrl);
+        // Save Images: If multiple -> JSON String, If single -> String
+        if (imageUrls.length > 0) {
+          const valToSave = imageUrls.length > 1 ? JSON.stringify(imageUrls) : imageUrls[0];
+          setVal(["Start Image", "Image In", "Start"], valToSave);
         }
 
-        // Timestamp
         const tsIdx = headers.findIndex(h => h.toLowerCase().includes("timestamp"));
         if (tsIdx > -1) newRow[tsIdx] = new Date();
 
@@ -215,35 +223,38 @@ const MatchController = (() => {
     },
 
     // =================================================================
-    // ⏹️ STOP WORK ITEM
+    // ⏹️ STOP WORK ITEM (Support Multiple Images)
     // =================================================================
     apiStopWorkItem: function (data) {
       try {
         if (!data.id) return Response.error("Missing ID");
+        const today = new Date();
 
-        let imageUrl = "";
-        if (data.imageBase64 && !data.isSkipImage) {
-          const today = new Date();
-          const tz = (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok";
-          const fileName = `Match_${data.id}_STOP_${Utilities.formatDate(today, tz, "HHmmss")}.jpg`;
-          imageUrl = _uploadImage(data.imageBase64, data.mimeType || "image/jpeg", fileName, today);
+        let imageUrls = [];
+        if (data.stopImages && Array.isArray(data.stopImages) && !data.isSkipImage) {
+           imageUrls = _processImageArray(data.stopImages, data.id, "STOP", today);
+        } else if (data.imageBase64 && !data.isSkipImage) {
+           // Legacy Fallback
+           const fileName = `Match_${data.id}_STOP_Legacy.jpg`;
+           const url = _uploadImage(data.imageBase64, data.mimeType || "image/jpeg", fileName, today);
+           if (url) imageUrls.push(url);
         }
 
         const updateMap = { "Status": "DONE" };
 
-        // Update ทั้ง 2 ชื่อคอลัมน์เพื่อความชัวร์ (ถ้ามี)
-        if (imageUrl) {
-          updateMap["Stop Image"] = imageUrl;
-          updateMap["Image Out"] = imageUrl;
+        if (imageUrls.length > 0) {
+           const valToSave = imageUrls.length > 1 ? JSON.stringify(imageUrls) : imageUrls[0];
+           updateMap["Stop Image"] = valToSave;
+           updateMap["Image Out"] = valToSave;
         }
 
         const success = SheetService.update(getSheetName(), data.id, updateMap, "Match ID", getDbId());
-        return success ? Response.success({ message: "Stopped", url: imageUrl }) : Response.error("Update Failed");
+        return success ? Response.success({ message: "Stopped" }) : Response.error("Update Failed");
       } catch (e) { return Response.error("Stop Error: " + e.toString()); }
     },
 
     // =================================================================
-    // ✏️ UPDATE WORK ITEM
+    // ✏️ UPDATE WORK ITEM (Support Multiple Images)
     // =================================================================
     apiUpdateWorkItem: function (data) {
       try {
@@ -257,23 +268,49 @@ const MatchController = (() => {
 
         const targetDate = data.date ? new Date(data.date) : new Date();
 
-        if (data.startImageBase64) {
-          const fileName = `Match_${data.id}_START_Edit.jpg`;
-          const url = _uploadImage(data.startImageBase64, "image/jpeg", fileName, targetDate);
-          updateMap["Start Image"] = url;
-          updateMap["Image In"] = url;
+        // 1. Handle Start Images
+        if (data.startImages && Array.isArray(data.startImages)) {
+           const processed = _processImageArray(data.startImages, data.id, "START_Edit", targetDate);
+           if (processed.length > 0) {
+             const val = processed.length > 1 ? JSON.stringify(processed) : processed[0];
+             updateMap["Start Image"] = val;
+             updateMap["Image In"] = val;
+           } else {
+             // If array provided but empty -> User cleared all images
+             updateMap["Start Image"] = "";
+             updateMap["Image In"] = "";
+           }
         } else if (data.clearStartImage) {
-          updateMap["Start Image"] = "";
-          updateMap["Image In"] = "";
+           updateMap["Start Image"] = "";
+           updateMap["Image In"] = "";
+        } else if (data.startImageBase64) {
+           // Legacy single upload update
+           const fileName = `Match_${data.id}_START_Edit.jpg`;
+           const url = _uploadImage(data.startImageBase64, "image/jpeg", fileName, targetDate);
+           updateMap["Start Image"] = url;
+           updateMap["Image In"] = url;
         }
-        if (data.stopImageBase64) {
-          const fileName = `Match_${data.id}_STOP_Edit.jpg`;
-          const url = _uploadImage(data.stopImageBase64, "image/jpeg", fileName, targetDate);
-          updateMap["Stop Image"] = url;
-          updateMap["Image Out"] = url;
+
+        // 2. Handle Stop Images
+        if (data.stopImages && Array.isArray(data.stopImages)) {
+           const processed = _processImageArray(data.stopImages, data.id, "STOP_Edit", targetDate);
+           if (processed.length > 0) {
+             const val = processed.length > 1 ? JSON.stringify(processed) : processed[0];
+             updateMap["Stop Image"] = val;
+             updateMap["Image Out"] = val;
+           } else {
+             updateMap["Stop Image"] = "";
+             updateMap["Image Out"] = "";
+           }
         } else if (data.clearStopImage) {
-          updateMap["Stop Image"] = "";
-          updateMap["Image Out"] = "";
+           updateMap["Stop Image"] = "";
+           updateMap["Image Out"] = "";
+        } else if (data.stopImageBase64) {
+           // Legacy single upload update
+           const fileName = `Match_${data.id}_STOP_Edit.jpg`;
+           const url = _uploadImage(data.stopImageBase64, "image/jpeg", fileName, targetDate);
+           updateMap["Stop Image"] = url;
+           updateMap["Image Out"] = url;
         }
 
         const success = SheetService.update(getSheetName(), data.id, updateMap, "Match ID", getDbId());
@@ -295,14 +332,11 @@ const MatchController = (() => {
     // =================================================================
     // 📅 GET CALENDAR EVENTS
     // =================================================================
-    // =================================================================
-    // 📅 GET CALENDAR EVENTS
-    // =================================================================
     apiGetCalendarEvents: function (dateStr) {
       try {
         if (!dateStr) return Response.error("Missing Date");
 
-        // 1. ดึงข้อมูลงานที่มีอยู่แล้วในระบบ (เพื่อกันซ้ำ)
+        // 1. Check existing to prevent duplicates
         const sheetName = getSheetName();
         const dbId = getDbId();
         const rawData = SheetService.getAll(sheetName, 600, dbId);
@@ -319,14 +353,13 @@ const MatchController = (() => {
             const rDate = _parseDate(row[idxDate]);
             const rTime = _parseTime(row[idxTime]);
             const rHome = (row[idxHome] || "").trim().toLowerCase();
-            // Key: yyyy-MM-dd|HH:mm|home_team
             if (rDate === dateStr) {
               existingKeys.add(`${rDate}|${rTime}|${rHome}`);
             }
           });
         }
 
-        // 2. ดึงข้อมูลจาก Calendar
+        // 2. Fetch from Calendar
         let calendars = (typeof CONFIG !== 'undefined') ? CONFIG.GET_CALENDARS() : [];
         if (!calendars || calendars.length === 0) calendars = CalendarApp.getAllCalendars().map(c => ({ id: c.getId(), name: c.getName() }));
 
@@ -347,7 +380,6 @@ const MatchController = (() => {
               const desc = evt.getDescription() || "";
               let home = title, away = "", league = calConfig.name, channel = "N/A";
 
-              // Parse Description
               const chMatch = desc.match(/Channel\s*:\s*([^)\n]+)/i) || title.match(/Channel\s*:\s*([^)\n]+)/i);
               if (chMatch) channel = chMatch[1].trim();
 
@@ -357,9 +389,6 @@ const MatchController = (() => {
               }
 
               const timeStr = Utilities.formatDate(evtStart, tz, "HH:mm");
-
-              // 3. Filter Duplicates (Check against existing DB)
-              // Key: yyyy-MM-dd|HH:mm|home_team
               const eventKey = `${dateStr}|${timeStr}|${home.trim().toLowerCase()}`;
 
               if (!existingKeys.has(eventKey)) {

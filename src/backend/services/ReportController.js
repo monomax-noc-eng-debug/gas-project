@@ -19,9 +19,10 @@ const ReportController = {
 
       const ts = formData.ticketStats || {};
 
-      // 1. Process Images
+      // 1. Process Images (Get Blobs & Base64 for PDF)
       const imgData = ReportGenerator.processImages(formData);
 
+      // 🟢 Preview Mode
       if (formData.isDraft) {
         let chatBody = `สรุปรายงานผลการปฏิบัติงาน (Preview)\n`;
         chatBody += `ประจำวันที่: ${formData.date}\n`;
@@ -51,8 +52,9 @@ const ReportController = {
         return JSON.stringify({ success: true, isPreview: true, chatPreview: chatBody });
       }
 
-      // 2. Generate PDF
-      const pdfUrl = ReportGenerator.generateShiftReportPDF(formData, imgData.blobs);
+      // 2. Generate PDF (Updated: Pass pdfImages)
+      // 🔥 ส่ง base64 images ไปให้ PDF Generator
+      const pdfUrl = ReportGenerator.generateShiftReportPDF(formData, imgData.pdfImages);
 
       // 3. Save to Sheet
       const imgString = imgData.urls.join(",\n");
@@ -74,13 +76,13 @@ const ReportController = {
         formData.statusAis,
         formData.statusStart,
         imgString,
-        pdfUrl,
+        pdfUrl, // Link PDF ใหม่
         formData.chatTarget
       ];
 
       sheet.appendRow(rowData);
 
-      // 4. Send Chat
+      // 4. Send Chat (Webhook)
       if (formData.chatTarget && typeof CONFIG !== 'undefined' && CONFIG.WEBHOOKS && CONFIG.WEBHOOKS[formData.chatTarget]) {
         try {
           const cardPayload = ReportGenerator.buildChatCard(formData, pdfUrl);
@@ -89,6 +91,7 @@ const ReportController = {
         catch (e) { console.error("Webhook Error", e); }
       }
       return JSON.stringify({ success: true });
+
     } catch (e) { return JSON.stringify({ success: false, error: e.toString() }); }
   },
 
@@ -129,13 +132,49 @@ const ReportController = {
       const sheet = API_UTILS.getDbSheet();
       const data = sheet.getDataRange().getValues();
       const headerMap = API_UTILS.getHeaderMap(sheet);
-      const findCol = (keys) => keys.find(k => headerMap.hasOwnProperty(k.toLowerCase()));
+
+      // Helper function to safely find column index
+      const findCol = (keys) => {
+        if (!keys) return -1;
+        return keys.find(k => headerMap && headerMap.hasOwnProperty(k.toLowerCase()));
+      };
+
       const colDate = findCol(["date"]);
       const colTime = findCol(["time", "kickoff"]);
-      const colStart = findCol(["start image", "start"]);
+      const colStart = findCol(["start image", "start", "image in"]);
       const colHome = findCol(["home"]);
       const colAway = findCol(["away"]);
-      const colStop = findCol(["stop image", "stop"]);
+      const colStop = findCol(["stop image", "stop", "image out"]);
+
+      // Helper function to extract images
+      const extractImages = (cellValue, labelPrefix) => {
+        if (!cellValue) return [];
+        const val = String(cellValue).trim();
+        if (val === "") return [];
+
+        let urls = [];
+        // Check if it's a JSON array string
+        if (val.startsWith("[") && val.endsWith("]")) {
+          try {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) {
+              urls = parsed;
+            }
+          } catch (e) {
+            // Fallback to treating as single string if parsing fails
+            urls = [val];
+          }
+        } else {
+          // Treat as single string (legacy data)
+          urls = [val];
+        }
+
+        // Map to object format with labels
+        return urls.map((u, i) => ({
+          url: u,
+          label: urls.length > 1 ? `${labelPrefix} (${i + 1})` : labelPrefix
+        }));
+      };
 
       let proofData = { start: [], stop: [] };
       const targetDateObj = dateStr ? new Date(dateStr) : new Date();
@@ -144,21 +183,44 @@ const ReportController = {
       const prevDateObj = new Date(targetDateObj); prevDateObj.setDate(targetDateObj.getDate() - 1);
       const prevDateStr = Utilities.formatDate(prevDateObj, tz, "yyyy-MM-dd");
 
+      // Check if critical columns exist
+      if (!colDate || !colTime) {
+        console.warn("Missing Date or Time columns");
+        return API_UTILS.createRes(true, proofData);
+      }
+
       for (let i = 1; i < data.length; i++) {
         const row = data[i];
-        const rDateStr = API_UTILS.formatDateTime(row[headerMap[colDate]], 'date');
-        const rTimeStr = API_UTILS.formatDateTime(row[headerMap[colTime]], 'time');
+        // Safely access row data using column names from headerMap
+        const rawDate = row[headerMap[colDate]];
+        const rawTime = row[headerMap[colTime]];
+
+        const rDateStr = API_UTILS.formatDateTime(rawDate, 'date');
+        const rTimeStr = API_UTILS.formatDateTime(rawTime, 'time');
+
         let matchFound = false;
+        // Logic for shift spanning two days (10:00 previous day to 10:00 target day)
         if (rDateStr === prevDateStr && rTimeStr >= "10:00") matchFound = true;
         else if (rDateStr === targetDateStr && rTimeStr < "10:00") matchFound = true;
 
         if (matchFound) {
-          const home = row[headerMap[colHome]] || "?";
-          const away = row[headerMap[colAway]] || "?";
-          const sUrl = colStart ? row[headerMap[colStart]] : "";
-          if (sUrl && String(sUrl).includes("http")) proofData.start.push({ url: sUrl, label: `${home} vs ${away}` });
-          const eUrl = colStop ? row[headerMap[colStop]] : "";
-          if (eUrl && String(eUrl).includes("http")) proofData.stop.push({ url: eUrl, label: `${home} vs ${away}` });
+          const home = (colHome && row[headerMap[colHome]]) ? row[headerMap[colHome]] : "?";
+          const away = (colAway && row[headerMap[colAway]]) ? row[headerMap[colAway]] : "?";
+          const matchLabel = `${home} vs ${away}`;
+
+          // Extract Start Images
+          if (colStart) {
+            const startVal = row[headerMap[colStart]];
+            const startImgs = extractImages(startVal, matchLabel);
+            proofData.start = proofData.start.concat(startImgs);
+          }
+
+          // Extract Stop Images
+          if (colStop) {
+            const stopVal = row[headerMap[colStop]];
+            const stopImgs = extractImages(stopVal, matchLabel);
+            proofData.stop = proofData.stop.concat(stopImgs);
+          }
         }
       }
       return API_UTILS.createRes(true, proofData);

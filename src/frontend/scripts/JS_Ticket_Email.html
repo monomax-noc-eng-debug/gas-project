@@ -1,130 +1,154 @@
 <script>
-/**
- * ==========================================
- * MODULE: TICKET EMAIL
- * หน้าที่: จัดการ Subject, Preview HTML, และรวบรวมข้อมูลอีเมล
- * ==========================================
- */
-const TicketEmail = (() => {
-    // --- Helpers ---
-    const getEl = (id) => document.getElementById(id);
-    const getVal = (id) => (getEl(id) || {}).value || '-';
-    
-    // Severity Mapping for Display
-    const SEVERITY_MAP = {
-        'low': 'P4 - Low',
-        'medium': 'P3 - Medium',
-        'high': 'P2 - High',
-        'critical': 'P1 - Critical',
-        'normal': 'P4 - Normal'
-    };
+    /**
+     * ==========================================
+     * MODULE: TICKET EMAIL
+     * หน้าที่: จัดการ Subject, Preview HTML, และรวบรวมข้อมูลอีเมล
+     * ==========================================
+     */
+    const TicketEmail = (() => {
+        // --- Helpers ---
+        const getEl = (id) => document.getElementById(id);
+        const getVal = (id) => (getEl(id) || {}).value || '-';
 
-    const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        // Severity Mapping for Display
+        const SEVERITY_MAP = {
+            'low': 'P4 - Low',
+            'medium': 'P3 - Medium',
+            'high': 'P2 - High',
+            'critical': 'P1 - Critical',
+            'normal': 'P4 - Normal'
+        };
 
-    return {
-        /**
-         * 1. สร้างหัวข้ออีเมล (Subject Builder)
-         * Pattern: Mono Max | Type | Severity | Category | SubCategory | Subject | Date
-         */
-        generateSubject: () => {
-             const type = getVal('sel-ticket-type');
-             const sev = getVal('sel-ticket-severity');
-             const cat = getVal('sel-ticket-category');
-             const sub = getVal('sel-ticket-subcategory');
-             const subj = getVal('inp-ticket-subject');
-             
-             // Convert Date YYYY-MM-DD -> DD-MMM-YY
-             let dateDisplay = '-';
-             const dRaw = getVal('inp-ticket-date');
-             if(dRaw && dRaw !== '-') {
-                 const parts = dRaw.split('-'); 
-                 if(parts.length === 3) {
-                     const year = parts[0].slice(2); // YY
-                     const monthIdx = parseInt(parts[1]) - 1;
-                     const day = parts[2];
-                     dateDisplay = `${day}-${MONTH_NAMES[monthIdx] || parts[1]}-${year}`;
-                 }
-             }
+        const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-             const sevDisplay = SEVERITY_MAP[sev.toLowerCase()] || sev;
+        return {
+            /**
+             * 1. สร้างหัวข้ออีเมล (Subject Builder)
+             * Pattern: Mono Max | Type | Severity | Category | SubCategory | Subject | Date
+             */
+            generateSubject: () => {
+                const type = getVal('sel-ticket-type');
+                const sev = getVal('sel-ticket-severity');
+                const cat = getVal('sel-ticket-category');
+                const sub = getVal('sel-ticket-subcategory');
+                let subj = getVal('inp-ticket-subject');
 
-             return `Mono Max | ${type} | ${sevDisplay} | ${cat} | ${sub} | ${subj} | ${dateDisplay}`;
-        },
+                // --- FIX: Prevent Duplicate Subject ---
+                // Check if subject already follows the pattern "Mono Max | ... | ... | Real Subject | Date"
+                // Pattern: Mono Max | Type | Severity | Category | SubCategory | Subject | Date
+                if (subj && subj.trim().startsWith("Mono Max |")) {
+                    const parts = subj.split('|');
+                    // If we have at least 6-7 parts, assume the Subject is at index 5
+                    if (parts.length >= 6) {
+                        // Extract the 6th element (index 5)
+                        subj = parts[5].trim();
+                    }
+                }
 
-        /**
-         * 2. รวบรวมข้อมูลจาก Form อีเมลทั้งหมด
-         */
-        collectData: () => {
-             const isChecked = (id) => { const el = getEl(id); return el ? el.checked : true; };
+                // Convert Date YYYY-MM-DD -> DD-MMM-YY
+                let dateDisplay = '-';
+                const dRaw = getVal('inp-ticket-date');
+                if (dRaw && dRaw !== '-') {
+                    const parts = dRaw.split('-');
+                    if (parts.length === 3) {
+                        const year = parts[0].slice(2); // YY
+                        const monthIdx = parseInt(parts[1]) - 1;
+                        const day = parts[2];
+                        dateDisplay = `${day}-${MONTH_NAMES[monthIdx] || parts[1]}-${year}`;
+                    }
+                }
 
-             return {
-                 // Meta
-                 id: getVal('inp-ticket-id'),
-                 
-                 // Email Meta
-                 to: getVal('email-to'),
-                 cc: getVal('email-cc'),
-                 
-                 // Toggle States
-                 showGreeting: isChecked('chk-show-greeting'),
-                 showNote: isChecked('chk-show-note'),
-                 
-                 // Content Fields
-                 greeting: getVal('email-greeting'),
-                 note: getVal('email-note'),
-                 
-                 company: getVal('email-company'),
-                 contactName: getVal('email-contact-name'),
-                 contactNum: getVal('email-contact-num'),
-                 
-                 siteName: getVal('email-site-name'),
-                 siteNum: getVal('email-site-num'),
-                 siteEmail: getVal('email-site-email'),
-                 siteAddr: getVal('email-site-addr'),
-                 
-                 detail: getVal('txt-ticket-detail'), // ดึงจาก Main Form
-                 rootCause: getVal('email-root-cause'),
-                 action: getVal('email-action'),
-                 status: getVal('sel-ticket-status'),
-                 type: getVal('sel-ticket-type'),
-                 severity: getVal('sel-ticket-severity'),
-                 impact: getVal('email-impact'),
-                 schedule: getVal('email-schedule')
-             };
-        },
+                const sevDisplay = SEVERITY_MAP[sev.toLowerCase()] || sev;
 
-        /**
-         * 3. สร้าง HTML Preview (ใช้แสดงผลและส่งเมลจริง)
-         * @param {Object} data - ข้อมูล (ถ้าไม่ส่งมาจะไปดึงจาก Form เอง)
-         */
-        renderPreview: (data = null) => {
-             if(!data) data = TicketEmail.collectData();
+                return `Mono Max | ${type} | ${sevDisplay} | ${cat} | ${sub} | ${subj} | ${dateDisplay}`;
+            },
 
-             // Styles (Inline styles are best for Email clients)
-             const s = {
-                 container: "font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.5;",
-                 table: "width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;",
-                 th: "background-color: #0033cc; color: white; font-weight: bold; padding: 6px 10px; border: 1px solid #fff; text-align: left; width: 30%; vertical-align: top;",
-                 td: "background-color: #dbe4f7; color: black; padding: 6px 10px; border: 1px solid #fff; vertical-align: top;",
-                 link: "color: #0033cc; text-decoration: underline;",
-                 footer: "margin-top: 20px; color: #555; font-size: 13px; border-top: 1px solid #eee; padding-top: 10px;"
-             };
+            /**
+             * 2. รวบรวมข้อมูลจาก Form อีเมลทั้งหมด
+             */
+            collectData: () => {
+                const isChecked = (id) => { const el = getEl(id); return el ? el.checked : true; };
 
-             // Helper Row Builder
-             const row = (label, val) => `
+                return {
+                    // Meta
+                    id: getVal('inp-ticket-id'),
+
+                    // Email Meta
+                    to: getVal('email-to'),
+                    cc: getVal('email-cc'),
+
+                    // Toggle States
+                    showGreeting: isChecked('chk-show-greeting'),
+                    showNote: isChecked('chk-show-note'),
+                    showSignature: isChecked('chk-show-signature'), // New
+
+                    // Content Fields
+                    greeting: getVal('email-greeting'),
+                    note: getVal('email-note'),
+                    signature: getVal('inp-email-signature'), // New
+
+                    company: getVal('email-company'),
+                    contactName: getVal('email-contact-name'),
+                    contactNum: getVal('email-contact-num'),
+
+                    siteName: getVal('email-site-name'),
+                    siteNum: getVal('email-site-num'),
+                    siteEmail: getVal('email-site-email'),
+                    siteAddr: getVal('email-site-addr'),
+
+                    detail: getVal('txt-ticket-detail'), // ดึงจาก Main Form
+                    rootCause: getVal('email-root-cause'),
+                    action: getVal('email-action'),
+                    status: getVal('sel-ticket-status'),
+                    type: getVal('sel-ticket-type'),
+                    severity: getVal('sel-ticket-severity'),
+                    impact: getVal('email-impact'),
+                    schedule: getVal('email-schedule')
+                };
+            },
+
+            /**
+             * 3. สร้าง HTML Preview (ใช้แสดงผลและส่งเมลจริง)
+             * @param {Object} data - ข้อมูล (ถ้าไม่ส่งมาจะไปดึงจาก Form เอง)
+             */
+            renderPreview: (data = null) => {
+                if (!data) data = TicketEmail.collectData();
+
+                // Styles (Inline styles are best for Email clients)
+                const s = {
+                    container: "font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.5;",
+                    table: "width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;",
+                    th: "background-color: #0033cc; color: white; font-weight: bold; padding: 6px 10px; border: 1px solid #fff; text-align: left; width: 30%; vertical-align: top;",
+                    td: "background-color: #dbe4f7; color: black; padding: 6px 10px; border: 1px solid #fff; vertical-align: top;",
+                    link: "color: #0033cc; text-decoration: underline;",
+                    footer: "margin-top: 20px; color: #555; font-size: 13px; border-top: 1px solid #eee; padding-top: 10px;"
+                };
+
+                // Helper Row Builder
+                const row = (label, val) => `
                  <tr>
                      <td style="${s.th}">${label}</td>
                      <td style="${s.td}">${val || '-'}</td>
                  </tr>
              `;
 
-             const sevDisplay = SEVERITY_MAP[(data.severity || '').toLowerCase()] || data.severity;
+                const sevDisplay = SEVERITY_MAP[(data.severity || '').toLowerCase()] || data.severity;
 
-             // Conditional Blocks
-             const greetingHtml = data.showGreeting ? `<p style="margin-bottom: 10px;"><b>${data.greeting || ''}</b></p>` : '';
-             const noteHtml = data.showNote ? `<p style="margin-bottom: 15px;"><b>${data.note || ''}</b></p>` : '';
+                // Conditional Blocks
+                const greetingHtml = data.showGreeting ? `<p style="margin-bottom: 10px;"><b>${data.greeting || ''}</b></p>` : '';
+                const noteHtml = data.showNote ? `<p style="margin-bottom: 15px;"><b>${data.note || ''}</b></p>` : '';
 
-             return `
+                // Signature Block
+                const sigText = data.signature || 'MONO MAX Sport NOC';
+                const sigHtml = (data.showSignature !== false) ?
+                    `<div style="${s.footer}">
+                        <p>
+                            Best Regards,<br>
+                            <b>${sigText.replace(/\n/g, '<br>')}</b>
+                        </p>
+                </div>` : '';
+
+                return `
                 <div style="${s.container}">
                     ${greetingHtml}
                     ${noteHtml}
@@ -155,15 +179,10 @@ const TicketEmail = (() => {
                         </tbody>
                     </table>
 
-                    <div style="${s.footer}">
-                        <p>
-                            Best Regards,<br>
-                            <b>MONO MAX Sport NOC</b><br>
-                            </p>
-                    </div>
+                    ${sigHtml}
                 </div>
              `;
-        }
-    };
-})();
+            }
+        };
+    })();
 </script>

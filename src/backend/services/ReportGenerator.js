@@ -1,57 +1,84 @@
 const ReportGenerator = {
-  // 1. Process Images (Blobs & URLs)
+  // 1. Process Images (Blobs, URLs & Base64 for PDF)
   processImages: function (formData) {
-    const imgFolderId = (typeof CONFIG !== 'undefined') ? CONFIG.IMG_FOLDER : "";
-    const imgFolder = imgFolderId ? DriveApp.getFolderById(imgFolderId) : null;
-    let uploadedUrls = [];
-    let blobs = { mono: [], ais: [], start: [] };
+    console.time("ProcessImages"); // ⏱️ จับเวลาประมวลผลรูป
+    try {
+      const imgFolderId = (typeof CONFIG !== 'undefined') ? CONFIG.IMG_FOLDER : "";
+      const imgFolder = imgFolderId ? DriveApp.getFolderById(imgFolderId) : null;
 
-    const handleUpload = (imgArray, prefix, targetBlobArr) => {
-      if (!imgArray || !Array.isArray(imgArray)) return;
-      imgArray.forEach((imgItem, idx) => {
-        try {
-          // Case: Object { data: "base64" }
-          if (imgItem && typeof imgItem === 'object' && imgItem.data) {
-            const blob = Utilities.newBlob(Utilities.base64Decode(imgItem.data), imgItem.mimeType || 'image/jpeg', `${prefix}_${idx}.jpg`);
-            targetBlobArr.push(blob);
-            if (imgFolder && !formData.isDraft) {
-              const file = imgFolder.createFile(blob);
-              uploadedUrls.push(file.getUrl());
-            }
-          }
-          // Case: Raw Base64 String
-          else if (typeof imgItem === 'string' && !imgItem.startsWith('http')) {
-            const blob = Utilities.newBlob(Utilities.base64Decode(imgItem), 'image/jpeg', `${prefix}_${idx}.jpg`);
-            targetBlobArr.push(blob);
-            if (imgFolder && !formData.isDraft) {
-              const file = imgFolder.createFile(blob);
-              uploadedUrls.push(file.getUrl());
-            }
-          }
-          // Case: Existing URL
-          else if (typeof imgItem === 'string' && imgItem.startsWith('http')) {
-            let id = null;
-            if (imgItem.includes('/d/')) id = imgItem.match(/\/d\/(.+?)(\/|$)/)[1];
-            else if (imgItem.includes('id=')) id = imgItem.match(/id=([^&]+)/)[1];
-            if (id) {
-              const file = DriveApp.getFileById(id);
-              targetBlobArr.push(file.getBlob());
-              uploadedUrls.push(imgItem);
-            }
-          }
-        } catch (e) { console.warn("Img Process Error", e); }
-      });
-    };
+      let uploadedUrls = [];
+      let blobs = { mono: [], ais: [], start: [] };
+      let pdfImages = []; // เก็บ Base64 ไว้ส่งเข้า PDF
 
-    if (formData.proofImages) {
-      handleUpload(formData.proofImages.mono, "Mono", blobs.mono);
-      handleUpload(formData.proofImages.ais, "AIS", blobs.ais);
-      handleUpload(formData.proofImages.start, "Start", blobs.start);
+      const handleUpload = (imgArray, prefix, targetBlobArr) => {
+        if (!imgArray || !Array.isArray(imgArray)) return;
+        imgArray.forEach((imgItem, idx) => {
+          try {
+            let blob = null;
+            let fileUrl = null;
+
+            // Case A: Object { data: "base64" } (จาก Frontend Upload)
+            if (imgItem && typeof imgItem === 'object' && imgItem.data) {
+              blob = Utilities.newBlob(Utilities.base64Decode(imgItem.data), imgItem.mimeType || 'image/jpeg', `${prefix}_${idx}.jpg`);
+              if (imgFolder && !formData.isDraft) {
+                const file = imgFolder.createFile(blob);
+                fileUrl = file.getUrl();
+                uploadedUrls.push(fileUrl);
+              }
+            }
+            // Case B: Raw Base64 String
+            else if (typeof imgItem === 'string' && !imgItem.startsWith('http')) {
+              blob = Utilities.newBlob(Utilities.base64Decode(imgItem), 'image/jpeg', `${prefix}_${idx}.jpg`);
+              if (imgFolder && !formData.isDraft) {
+                const file = imgFolder.createFile(blob);
+                fileUrl = file.getUrl();
+                uploadedUrls.push(fileUrl);
+              }
+            }
+            // Case C: Existing URL (Drive Link)
+            else if (typeof imgItem === 'string' && imgItem.startsWith('http')) {
+              let id = null;
+              if (imgItem.includes('/d/')) id = imgItem.match(/\/d\/(.+?)(\/|$)/)[1];
+              else if (imgItem.includes('id=')) id = imgItem.match(/id=([^&]+)/)[1];
+
+              if (id) {
+                const file = DriveApp.getFileById(id);
+                blob = file.getBlob();
+                fileUrl = imgItem;
+                uploadedUrls.push(imgItem);
+              }
+            }
+
+            if (blob) {
+              targetBlobArr.push(blob);
+              // 🔥 แปลงเป็น Base64 เก็บไว้สำหรับ PDF
+              pdfImages.push({
+                label: prefix, // ใช้ prefix เช่น "Start", "Mono" ในการค้นหาทีหลัง
+                base64: Utilities.base64Encode(blob.getBytes())
+              });
+            }
+
+          } catch (e) { console.warn("Img Process Error", e); }
+        });
+      };
+
+      // Process all groups
+      if (formData.proofImages) {
+        handleUpload(formData.proofImages.mono, "Mono", blobs.mono);
+        handleUpload(formData.proofImages.ais, "AIS", blobs.ais);
+        handleUpload(formData.proofImages.start, "Start", blobs.start);
+      }
+      handleUpload(formData.autoStartUrls, "Start", blobs.start);
+      handleUpload(formData.autoMonoUrls, "Mono", blobs.mono);
+
+      console.timeEnd("ProcessImages"); // 🏁 จบเวลา
+      return { blobs, urls: uploadedUrls, pdfImages };
+
+    } catch (e) {
+      console.error("ProcessImages Failed:", e);
+      if (typeof console.timeEnd === 'function') try { console.timeEnd("ProcessImages"); } catch(ex){}
+      return { blobs: {}, urls: [], pdfImages: [] };
     }
-    handleUpload(formData.autoStartUrls, "AutoStart", blobs.start);
-    handleUpload(formData.autoMonoUrls, "AutoMono", blobs.mono);
-
-    return { blobs, urls: uploadedUrls };
   },
 
   // 2. Build Chat Card
@@ -87,128 +114,151 @@ const ReportGenerator = {
     };
   },
 
-  // 3. Generate PDF
-  generateShiftReportPDF: function (formData, blobData) {
-    try {
-      const templateId = (typeof CONFIG !== 'undefined') ? CONFIG.TEMPLATE_ID : "";
-      const rootFolderId = (typeof CONFIG !== 'undefined') ? CONFIG.PDF_FOLDER : "";
-      if (!templateId || !rootFolderId) throw new Error("Missing TEMPLATE_ID or PDF_FOLDER in Config");
+  // 3. Generate PDF (Fixed & Robust Version with Timer)
+  generateShiftReportPDF: function (formData, pdfImages) {
+    console.log("🚀 Starting PDF Generation...");
+    console.time("TotalPDFTime"); // ⏱️ จับเวลาภาพรวม
 
+    try {
+      const rootFolderId = (typeof CONFIG !== 'undefined') ? CONFIG.PDF_FOLDER : "";
+      if (!rootFolderId) throw new Error("❌ ไม่พบ CONFIG.PDF_FOLDER");
+
+      const findImg = (keyword) => {
+        if (!pdfImages || !Array.isArray(pdfImages)) return null;
+        const found = pdfImages.find(img => img.label === keyword);
+        return found ? found.base64 : null;
+      };
+
+      // --- 1. Fetch Ticket Data ---
+      console.time("FetchTickets"); // ⏱️ จับเวลาดึงข้อมูล Ticket
+      let ticketList = [];
+      try {
+        if (typeof TicketService !== 'undefined') {
+            const detailsJson = TicketService.getTicketDetails(formData.date);
+            const details = JSON.parse(detailsJson);
+            if (details.success && details.list) {
+                ticketList = details.list; 
+            }
+        }
+      } catch (err) {
+        console.warn("⚠️ Error fetching ticket list for PDF:", err);
+      }
+      console.timeEnd("FetchTickets"); // 🏁 จบเวลา Ticket
+
+      // --- 2. Load Template ---
+      console.time("LoadTemplate"); // ⏱️ จับเวลาโหลดไฟล์ HTML
+      let htmlTemplate;
+      // 🔥 ใช้ Path ที่เคยเทสผ่านเป็นหลัก
+      const primaryPath = 'frontend/templates/HTML_ShiftReport';
+
+      try {
+        htmlTemplate = HtmlService.createTemplateFromFile(primaryPath);
+        console.log(`✅ Loaded Template: ${primaryPath}`);
+      } catch (e) {
+        console.warn(`⚠️ Path '${primaryPath}' not found, trying fallback 'HTML_ShiftReport'...`);
+        try {
+            // ลองหาจากชื่อไฟล์โดดๆ (Fallback)
+            htmlTemplate = HtmlService.createTemplateFromFile('HTML_ShiftReport');
+        } catch(ex) {
+            try {
+               htmlTemplate = HtmlService.createTemplateFromFile('PDFTemplate');
+            } catch(ex2) {
+               throw new Error("❌ หาไฟล์ HTML Template ไม่เจอเลย (ตรวจสอบชื่อไฟล์)");
+            }
+        }
+      }
+      console.timeEnd("LoadTemplate"); // 🏁 จบเวลา Template
+
+      // Prepare Data
+      const templateData = {
+        date: formData.date,
+        shift: formData.shift,
+        reporter: formData.reporter,
+        stats: formData.ticketStats || {},
+        ticketSummary: formData.ticketSummary,
+        ticketList: ticketList, 
+        topics: [
+          {
+            title: "Start Channel (เปิดสัญญาณ)",
+            status: formData.statusStart,
+            description: "ตรวจสอบสัญญาณภาพจาก MONO & JAS",
+            image: findImg("Start"),
+            caption: "ภาพยืนยันการเปิดสัญญาณ"
+          },
+          {
+            title: "Stop Channel (Mono)",
+            status: formData.statusMono,
+            description: "ตรวจสอบการปิดสัญญาณช่อง Mono",
+            image: findImg("Mono"),
+            caption: "ภาพยืนยันจากการปิดช่อง Mono"
+          },
+          {
+            title: "Stop Channel (AIS)",
+            status: formData.statusAis,
+            description: "ตรวจสอบการปิดสัญญาณช่อง AIS",
+            image: findImg("AIS"),
+            caption: "ภาพยืนยันจากการปิดช่อง AIS"
+          },
+          {
+            title: "สรุปจำนวน Match",
+            status: null,
+            // 🔥 แก้ไขตรงนี้: ตัดส่วน "จบแล้ว" ออก เหลือแค่ Match รวม
+            description: `Match รวม: ${formData.matchTotal || 0} คู่\n\n${formData.matchSummary || "ไม่มีรายการแข่งขัน"}`,
+            image: null
+          },
+          {
+            title: "สิ่งที่ฝากต่อ (Handover)",
+            status: null,
+            description: formData.transferReport || "ไม่มีข้อมูลเพิ่มเติม",
+            image: null
+          }
+        ]
+      };
+      htmlTemplate.data = templateData;
+
+      // --- 3. Evaluate & Convert ---
+      console.time("EvaluateHTML"); // ⏱️ จับเวลาแทนค่าตัวแปรลง HTML
+      const htmlContent = htmlTemplate.evaluate().getContent();
+      console.timeEnd("EvaluateHTML");
+
+      console.time("ConvertToPDF"); // ⏱️ จับเวลาแปลงเป็น PDF (ส่วนนี้มักจะนานสุดถ้าไฟล์ใหญ่)
+      console.log("⏳ Converting HTML to PDF...");
+      const pdfBlob = Utilities.newBlob(htmlContent, MimeType.HTML)
+        .setName(`Report_${formData.date}.pdf`)
+        .getAs(MimeType.PDF);
+      console.timeEnd("ConvertToPDF");
+
+      // --- 4. Save to Drive ---
+      console.time("SaveToDrive"); // ⏱️ จับเวลาบันทึกลง Drive
+      console.log("💾 Saving to Drive...");
+      const rootFolder = DriveApp.getFolderById(rootFolderId);
+      
       const reportDate = new Date(formData.date);
       const tz = (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok";
       const yearStr = Utilities.formatDate(reportDate, tz, "yyyy");
       const monthStr = Utilities.formatDate(reportDate, tz, "MM");
 
-      const rootFolder = DriveApp.getFolderById(rootFolderId);
       let yearFolder = rootFolder.getFoldersByName(yearStr).hasNext() ? rootFolder.getFoldersByName(yearStr).next() : rootFolder.createFolder(yearStr);
       let targetFolder = yearFolder.getFoldersByName(monthStr).hasNext() ? yearFolder.getFoldersByName(monthStr).next() : yearFolder.createFolder(monthStr);
 
-      const filePrefix = formData.isDraft ? "[PREVIEW] " : "";
-      const fileName = `${filePrefix}Report_${formData.date}_${formData.shift}_${formData.reporter.replace(/\s/g, '_')}`;
-      const docFile = DriveApp.getFileById(templateId).makeCopy(fileName, targetFolder);
-      const doc = DocumentApp.openById(docFile.getId());
-      const body = doc.getBody();
+      const fileName = `Report_${formData.date}_${formData.reporter.replace(/\s/g, '_')}.pdf`;
+      const pdfFile = targetFolder.createFile(pdfBlob).setName(fileName);
+      
+      try { pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+      console.timeEnd("SaveToDrive");
 
-      body.replaceText("{{Date}}", formData.date);
-      body.replaceText("{{Reporter}}", `${formData.reporter} (${formData.shift})`);
+      const finalUrl = pdfFile.getUrl();
+      console.log("✅ PDF Created:", finalUrl);
+      
+      console.timeEnd("TotalPDFTime"); // 🏁 จบเวลาทั้งหมด
+      return finalUrl;
 
-      const insertStyledTable = (placeholder, data) => {
-        const range = body.findText(placeholder);
-        if (!range) return null;
-        const element = range.getElement();
-        // Fix: หาตำแหน่งจาก Body Index ที่แท้จริง
-        let parent = element.getParent();
-        while (parent.getParent().getType() !== DocumentApp.ElementType.BODY_SECTION && parent.getParent().getType() !== DocumentApp.ElementType.DOCUMENT) {
-          parent = parent.getParent();
-          if (!parent) return null;
-        }
-        const index = body.getChildIndex(parent);
-
-        const table = body.insertTable(index + 1, data);
-        table.setBorderWidth(1).setBorderColor("#cbd5e1");
-        const headerRow = table.getRow(0);
-        for (let i = 0; i < data[0].length; i++) {
-          headerRow.getCell(i).setBackgroundColor("#1e293b").getChild(0).asParagraph().setBold(true).setForegroundColor("#ffffff");
-        }
-        body.removeChild(parent); // ลบ Placeholder
-
-        try {
-          if (index > 0) {
-            const prev = body.getChild(index - 1);
-            if (prev.getType() === DocumentApp.ElementType.PARAGRAPH) prev.setAttributes({ [DocumentApp.Attribute.KEEP_WITH_NEXT]: true });
-          }
-        } catch (e) { }
-        return table;
-      };
-
-      // Ticket Table
-      const ts = formData.ticketStats || { total: 0, open: 0, pending: 0, resolved: 0, closed: 0, new: 0, backlog: 0 };
-      const resolvedTotal = (Number(ts.resolved) || 0) + (Number(ts.closed) || 0);
-      const backlogTotal = ts.backlog || ts.open || 0;
-      insertStyledTable("{{Ticket_Table}}", [
-        ["Operational Category", "Amount (Cases)"],
-        ["🟢 รายการเข้าใหม่ (New)", String(ts.new || 0)],
-        ["🔵 ปิดได้วันนี้ (Resolved/Closed)", String(resolvedTotal)],
-        ["🔴 งานค้าง (Backlog)", String(backlogTotal)],
-        ["รวมรายการทั้งหมด (Total)", String(ts.total || 0)]
-      ]);
-
-      // Match Table
-      const matchRes = JSON.parse(MatchService.getMatchesByDate(formData.date));
-      const leagueData = matchRes.data || {};
-      const matchTableData = [["League / Tournament", "Summary"]];
-      let totalCount = 0;
-      for (const [league, count] of Object.entries(leagueData)) {
-        matchTableData.push([league, String(count)]);
-        totalCount += count;
+    } catch (e) {
+      console.error("❌ PDF GENERATION FAILED:", e.message);
+      if (typeof console.timeEnd === 'function') {
+          try { console.timeEnd("TotalPDFTime"); } catch(ex){}
       }
-      if (matchTableData.length === 1) matchTableData.push(["-", "-"]);
-      insertStyledTable("{{Match_Table}}", matchTableData);
-
-      // Status & Handover
-      insertStyledTable("{{Status_Table}}", [
-        ["System / Channel Check", "Current Status"],
-        ["Mono ปิด Channel", formData.statusMono || "-"],
-        ["AIS ปิด + Clear cache", formData.statusAis || "-"],
-        ["Start Channel (เปิดสัญญาณ)", formData.statusStart || "-"]
-      ]);
-
-      const handoverLines = (formData.transferReport || "ไม่มีข้อมูลเพิ่มเติม").split('\n');
-      const handoverData = [["#", "Handover / Issue Details"]];
-      handoverLines.forEach((l, i) => handoverData.push([(i + 1).toString(), l.trim()]));
-      const hTable = insertStyledTable("{{Handover_Table}}", handoverData);
-      if (hTable) { hTable.setColumnWidth(0, 40); hTable.setColumnWidth(1, 410); }
-
-      // Proof Images
-      if (blobData.mono.length > 0 || blobData.ais.length > 0 || blobData.start.length > 0) {
-        body.appendPageBreak();
-        body.appendParagraph("5. รายงานหลักฐานการปฏิบัติงาน (Proof of Work)").setHeading(DocumentApp.ParagraphHeading.HEADING2);
-
-        const appendImages = (title, blobs) => {
-          if (!blobs || blobs.length === 0) return;
-          body.appendParagraph(title).setHeading(DocumentApp.ParagraphHeading.HEADING3).setSpacingBefore(15);
-          blobs.forEach(blob => {
-            try {
-              const img = body.appendImage(blob);
-              const ratio = 480 / img.getWidth();
-              img.setWidth(480).setHeight(img.getHeight() * ratio);
-              img.getParent().asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-              body.appendParagraph("");
-            } catch (e) { console.warn("Insert img err", e); }
-          });
-        };
-        appendImages("5.1 Mono Proof of Work:", blobData.mono);
-        appendImages("5.2 AIS Proof of Work:", blobData.ais);
-        appendImages("5.3 Start Channel Proof of Work:", blobData.start);
-      }
-
-      doc.saveAndClose();
-      const pdfBlob = docFile.getAs(MimeType.PDF);
-      const pdfFile = targetFolder.createFile(pdfBlob);
-      docFile.setTrashed(true);
-      pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-      return pdfFile.getUrl();
-    } catch (e) { console.error("PDF Error", e); return null; }
+      return null;
+    }
   }
 };

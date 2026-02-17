@@ -1,8 +1,8 @@
 <script>
     /**
-         * JS_Report.html
-         * Version: Final Shift Logic + Safe Mode
-         */
+       * JS_Report.html
+       * Version: Final Fix (Index 0 Bug, Hard Refresh, Display Logic)
+       */
     window.ReportManager = (function () {
         // --- State Variables ---
         var _files = { mono: [], ais: [], start: [] };
@@ -92,6 +92,8 @@
                     }
                 }
                 this.fetchReporters();
+                // Setup paste handlers initially
+                setTimeout(() => { if (this.setupPasteHandlers) this.setupPasteHandlers(); }, 1000);
             },
 
             autoFetchAll: function () {
@@ -132,11 +134,11 @@
             fetchTickets: function () {
                 var selectedDate = el('inputDate').value; // YYYY-MM-DD
 
-                // 🔍 Safe Element Selector: หา ID ทั้ง 2 แบบ กันพลาด
+                // 🔍 Safe Element Selector
                 var tbody = el('disp-ticket-tbody') || el('ticket-table-body');
                 if (!tbody) {
                     console.error("❌ ไม่พบตาราง Ticket (ID: disp-ticket-tbody หรือ ticket-table-body)");
-                    return Promise.resolve(); // ออกจากฟังก์ชันเพื่อไม่ให้ค้าง
+                    return Promise.resolve();
                 }
 
                 show('loader-ticket', true);
@@ -159,35 +161,33 @@
                             let listForTable = [];
 
                             allTickets.forEach(r => {
-                                // Named object keys from Backend
                                 const createdObj = smartParse(r.date);
                                 const resolvedObj = smartParse(r.resolvedDate);
 
                                 const status = String(r.status || '').toLowerCase();
                                 const isClosed = (status.includes('close') || status.includes('resolved') || status.includes('fix'));
 
-                                // 🟢 1. งานเข้าใหม่ (นับจากวันที่แจ้งเหตุ)
+                                // 🟢 1. งานเข้าใหม่
                                 if (createdObj.date === selectedDate) {
                                     stats.newToday++;
                                 }
 
-                                // 🔵 2. ปิดได้ในกะ (นับจากวันที่ปิดงาน)
+                                // 🔵 2. ปิดได้ในกะ
                                 if (isClosed) {
                                     if (resolvedObj.date === selectedDate) {
                                         stats.closedToday++;
                                     }
-                                    // Fallback: ถ้าไม่มีวันที่ปิด แต่สถานะปิดและสร้างวันนี้ ให้ถือว่าปิดวันนี้
+                                    // Fallback
                                     else if (!resolvedObj.date && createdObj.date === selectedDate) {
                                         stats.closedToday++;
                                     }
                                 }
-                                // 🔴 3. งานค้าง (สถานะยังไม่ปิด)
+                                // 🔴 3. งานค้าง
                                 else {
                                     stats.pending++;
                                 }
 
                                 // 📝 4. Filter แสดงในตาราง
-                                // เงื่อนไข: (สร้างวันนี้) OR (ปิดวันนี้) OR (ยังค้างอยู่)
                                 let showRow = false;
                                 let tag = '';
 
@@ -202,8 +202,7 @@
                                     tag = 'BACKLOG';
                                 }
 
-                                // 🎯 Date Logic for Display (Yesterday/Today)
-                                // Use the robustly parsed Date object from smartParse
+                                // 🎯 Date Logic
                                 const ticketDate = createdObj.nativeObj || new Date(r.date);
                                 const selectedDateObj = new Date(selectedDate);
                                 const yesterdayObj = new Date(selectedDate);
@@ -213,7 +212,7 @@
                                     d1.getMonth() === d2.getMonth() &&
                                     d1.getDate() === d2.getDate();
 
-                                let dateDisplay = createdObj.display; // Default
+                                let dateDisplay = createdObj.display;
                                 if (!isNaN(ticketDate.getTime())) {
                                     const hh = String(ticketDate.getHours()).padStart(2, '0');
                                     const mm = String(ticketDate.getMinutes()).padStart(2, '0');
@@ -235,18 +234,17 @@
                                         status: r.status || '-',
                                         subject: r.subject || '-',
                                         tag: tag,
-                                        sortKey: tag === 'NEW' ? 3 : (tag === 'RESOLVED' ? 2 : 1) // Sort Priority
+                                        sortKey: tag === 'NEW' ? 3 : (tag === 'RESOLVED' ? 2 : 1)
                                     });
                                 }
                             });
 
-                            // Update UI Stats (ใช้ || 0 กันเหนียว)
+                            // Update UI Stats
                             if (el('disp-ticket-total')) el('disp-ticket-total').innerText = stats.filteredCount || 0;
                             if (el('disp-ticket-new')) el('disp-ticket-new').innerText = stats.newToday || 0;
                             if (el('disp-ticket-resolved')) el('disp-ticket-resolved').innerText = stats.closedToday || 0;
                             if (el('disp-ticket-backlog')) el('disp-ticket-backlog').innerText = stats.pending || 0;
 
-                            // Update Textarea
                             if (el('ticketSummary')) el('ticketSummary').value = `งานวันนี้: ${stats.newToday}, ปิดได้: ${stats.closedToday}, ค้าง: ${stats.pending}`;
 
                             // Render Table
@@ -254,7 +252,6 @@
 
                             if (listForTable.length > 0) {
                                 var html = listForTable.map(function (t) {
-                                    // 🎨 Color Coding
                                     var st = String(t.status || '').toLowerCase();
                                     var badgeClass = 'badge-ghost bg-gray-100 text-gray-500 border-none';
 
@@ -262,7 +259,6 @@
                                     else if (st.includes('pending') || st.includes('wait')) badgeClass = 'badge-warning text-white shadow-sm';
                                     else if (st.includes('resolved') || st.includes('close')) badgeClass = 'badge-success text-white shadow-sm';
 
-                                    // Mini Tag
                                     var miniTag = '';
                                     if (t.tag === 'NEW') miniTag = '<span class="text-[9px] text-blue-500 font-bold ml-1 tracking-tighter">✨NEW</span>';
                                     else if (t.tag === 'RESOLVED') miniTag = '<span class="text-[9px] text-green-500 font-bold ml-1 tracking-tighter">✓DONE</span>';
@@ -297,7 +293,6 @@
                     .finally(() => show('loader-ticket', false));
             },
 
-            // --- ส่วนอื่นๆ (Match, Images, Upload) คงเดิม ---
             fetchMatches: function () {
                 var dateVal = el('inputDate').value;
                 show('verify-loader', true);
@@ -351,8 +346,8 @@
                                         : `<span class="text-gray-500 flex items-center gap-1"><i class="fas fa-moon text-indigo-400"></i> ก่อนเที่ยงคืน (เมื่อวาน)</span>`;
 
                                     html += `<tr class="bg-gray-50/80 border-b border-gray-200">
-                                        <td colspan="5" class="px-3 py-1.5 font-bold text-[10px] uppercase">${label}</td>
-                                    </tr>`;
+                                            <td colspan="5" class="px-3 py-1.5 font-bold text-[10px] uppercase">${label}</td>
+                                        </tr>`;
                                 }
 
                                 var hasEvidence = !!(db.startImg || db.stopImg);
@@ -365,15 +360,15 @@
                                     : `<span class="text-gray-300 text-[10px]">-</span>`;
 
                                 html += `<tr class="border-b border-gray-100 hover:bg-white transition-colors">
-                                    <td class="text-center font-mono text-[10px] text-gray-500">${db.time}</td>
-                                    <td class="text-xs py-2">
-                                        <div class="font-bold text-slate-700">${db.home} v ${db.away}</div>
-                                        <div class="text-[9px] text-slate-400">${db.league}</div>
-                                    </td>
-                                    <td class="text-center">${imgBtn(db.startImg, 'fa-play-circle', 'success')}</td>
-                                    <td class="text-center">${imgBtn(db.stopImg, 'fa-stop-circle', 'error')}</td>
-                                    <td class="text-center">${badge}</td>
-                                </tr>`;
+                                        <td class="text-center font-mono text-[10px] text-gray-500">${db.time}</td>
+                                        <td class="text-xs py-2">
+                                            <div class="font-bold text-slate-700">${db.home} v ${db.away}</div>
+                                            <div class="text-[9px] text-slate-400">${db.league}</div>
+                                        </td>
+                                        <td class="text-center">${imgBtn(db.startImg, 'fa-play-circle', 'success')}</td>
+                                        <td class="text-center">${imgBtn(db.stopImg, 'fa-stop-circle', 'error')}</td>
+                                        <td class="text-center">${badge}</td>
+                                    </tr>`;
                             });
                             el('verification-tbody').innerHTML = html;
                         }
@@ -392,7 +387,7 @@
                 var autoMonoList = el('auto-mono-list');
                 if (autoMonoList) autoMonoList.innerHTML = '';
                 show('auto-mono-images', false);
-                ReportManager._autoMonoUrls = [];
+                _autoMonoUrls = [];
 
                 return Server.call({ func: 'getDailyProofImages', silent: true }, dateVal).then(res => {
                     if (res.success) {
@@ -400,11 +395,12 @@
                             show('auto-start-images', true);
                             res.data.start.forEach(img => ReportManager._renderAutoImage(img, autoStartList, _autoStartUrls));
                         }
-                        if (el('statusStart')) el('statusStart').value = (res.data.start && res.data.start.length > 0) ? 'เรียบร้อย' : 'ไม่มี';
+                        // Force update status (should default to None, but area check will show images)
+                        ReportManager._updateStartStatus();
 
                         if (res.data.stop && res.data.stop.length > 0) {
                             show('auto-mono-images', true);
-                            res.data.stop.forEach(img => ReportManager._renderAutoImage(img, autoMonoList, ReportManager._autoMonoUrls));
+                            res.data.stop.forEach(img => ReportManager._renderAutoImage(img, autoMonoList, _autoMonoUrls));
                         }
                     }
                 });
@@ -423,11 +419,31 @@
                         });
                         html += '<option value="OTHER">อื่นๆ</option>';
                         select.innerHTML = html;
-                        if (currentVal) select.value = currentVal; // Restore selection if exists
+                        if (currentVal) select.value = currentVal;
                     }
                 }).catch(function (err) { console.error("Fetch Reporters Error", err); });
             },
 
+            // ✅ บังคับเปลี่ยนสถานะ Start Channel ตามการเลือกรูป
+            _updateStartStatus: function () {
+                var hasImages = (_autoStartUrls.length > 0) || (_files.start && _files.start.length > 0);
+                var statusEl = el('statusStart');
+
+                // 1. ถ้ามีรูปให้เป็น 'เรียบร้อย'
+                if (statusEl) {
+                    if (hasImages) {
+                        statusEl.value = 'เรียบร้อย';
+                    }
+                    // 2. ถ้าไม่มีรูป แต่ค่าเดิมเป็น 'เรียบร้อย' -> ให้กลับเป็น 'ไม่มี'
+                    // (แต่ถ้า user เลือก 'ติดปัญหา' ค้างไว้ เราไม่ควรไปเปลี่ยน)
+                    else if (statusEl.value === 'เรียบร้อย') {
+                        statusEl.value = 'ไม่มี';
+                    }
+                    ReportManager.toggleStartArea(statusEl.value);
+                }
+            },
+
+            // ✅ แก้บั๊กรูป Index 0 ไม่แสดง และการเลือกรูป
             _renderAutoImage: function (img, container, urlArray) {
                 var div = document.createElement('div');
                 div.className = "relative group cursor-pointer border-2 border-slate-200 rounded-lg overflow-hidden w-14 h-14 flex-shrink-0 transition-all hover:shadow-md";
@@ -439,25 +455,43 @@
                 div.onclick = () => {
                     var checkEl = div.querySelector('.auto-check');
                     if (div.classList.contains('ring-2')) {
+                        // Uncheck
                         div.classList.remove('ring-2', 'ring-green-500', 'border-green-400');
                         div.classList.add('border-slate-200');
                         checkEl.classList.add('hidden');
                         var idx = urlArray.indexOf(img.url);
                         if (idx > -1) urlArray.splice(idx, 1);
                     } else {
+                        // Check
                         div.classList.add('ring-2', 'ring-green-500', 'border-green-400');
                         div.classList.remove('border-slate-200');
                         checkEl.classList.remove('hidden');
                         urlArray.push(img.url);
                     }
+                    // Update Counts (Optional UI feedback)
+                    ReportManager.updateImageCounts();
+
+                    // 🔥 Auto Update Status for Start Channel
+                    if (container.id === 'auto-start-list') {
+                        ReportManager._updateStartStatus();
+                    }
                 };
                 container.appendChild(div);
+            },
+
+            updateImageCounts: function () {
+                var startBadge = el('auto-start-count');
+                if (startBadge) startBadge.innerText = _autoStartUrls.length + ' เลือก';
+
+                var monoBadge = el('auto-mono-count');
+                if (monoBadge) monoBadge.innerText = _autoMonoUrls.length + ' เลือก';
             },
 
             handleFileUpload: function (input, type) {
                 if (input.files.length > 0) {
                     _files[type] = _files[type].concat(Array.from(input.files));
                     this.renderFileList(type);
+                    if (type === 'start') ReportManager._updateStartStatus();
                 }
             },
 
@@ -468,8 +502,12 @@
                 dropzone.innerHTML = '';
 
                 if (files.length === 0) {
-                    dropzone.className = `border-2 border-dashed border-gray-300 p-2 text-center rounded-lg text-xs text-gray-400`;
-                    dropzone.innerHTML = `<i class="fas fa-cloud-upload-alt"></i> Upload`;
+                    var color = (type === 'start') ? 'amber' : (type === 'mono' ? 'indigo' : 'green');
+                    dropzone.className = `border-2 border-dashed border-${color}-300 hover:border-${color}-400 bg-${color}-50/30 hover:bg-${color}-50 rounded-lg p-2.5 cursor-pointer transition-all group text-center focus:ring-2 focus:ring-${color}-300 focus:outline-none`;
+                    dropzone.innerHTML = `<div class="flex items-center justify-center gap-2 text-${color}-400 group-hover:text-${color}-500 transition-colors">
+                                            <i class="fas fa-cloud-upload-alt text-sm"></i>
+                                            <span class="text-[10px] font-semibold">คลิกอัปโหลด หรือ Ctrl+V วางรูป</span>
+                                          </div>`;
                 } else {
                     dropzone.className = `border border-gray-200 p-2 rounded-lg bg-white`;
                     var grid = document.createElement('div');
@@ -489,15 +527,25 @@
             removeFile: function (type, index) {
                 _files[type].splice(index, 1);
                 this.renderFileList(type);
+                if (type === 'start') this._updateStartStatus();
             },
 
             submitForm: function (mode) {
+                // 1. Validation
                 var reporter = _isCustomReporter ? el('reporterOther').value : el('reporterSelect').value;
                 if (!reporter) return UIManager.showToast("ระบุชื่อผู้รายงาน", "warning");
 
+                // ตรวจสอบหลักฐาน Mono (ปรับ Logic ให้ยืดหยุ่น: ต้องมีอย่างน้อย 1 อย่าง ไม่ว่าจะ Auto หรือ Upload เอง)
+                // ถ้าต้องการบังคับทั้งคู่ ให้แยก if เหมือนเดิม แต่ถ้าเอาแค่อย่างใดอย่างหนึ่ง ให้ใช้แบบนี้:
+                if (_autoMonoUrls.length === 0 && _files.mono.length === 0) {
+                     return UIManager.showToast("กรุณามีรูปหลักฐาน Mono (เลือกจากรายการ หรือ อัปโหลดเพิ่ม)", "warning");
+                }
+
+                // 2. Prepare UI
                 var btn = el('btn-submit-report');
                 btn.disabled = true; el('spin-btn-send').classList.remove('hidden');
 
+                // 3. Gather Data
                 var formData = {
                     date: el('inputDate').value,
                     reporter: reporter,
@@ -508,9 +556,9 @@
                     matchTotal: el('matchTotalValue').value,
                     matchEnded: el('matchEndedValue').value,
                     transferReport: el('transferReport').value,
-                    statusMono: "เรียบร้อย",
-                    statusAis: el('statusAis').value,
-                    statusStart: el('statusStart').value,
+                    statusMono: el('statusMono') ? el('statusMono').value : "เรียบร้อย", // ใช้ค่าจาก Dropdown หรือ Default
+                    statusAis: el('statusAis') ? el('statusAis').value : "ไม่มี",
+                    statusStart: el('statusStart') ? el('statusStart').value : "ไม่มี",
                     ticketStats: {
                         total: el('disp-ticket-total').innerText,
                         new: el('disp-ticket-new').innerText,
@@ -526,7 +574,7 @@
                     isDraft: (mode === 'preview')
                 };
 
-                // Compress & Send...
+                // 4. Image Compression Helper
                 var compress = (file) => new Promise(res => {
                     var r = new FileReader(); r.readAsDataURL(file);
                     r.onload = e => {
@@ -541,6 +589,7 @@
                     }
                 });
 
+                // 5. Process & Send
                 (async () => {
                     try {
                         if (mode !== 'preview') {
@@ -548,23 +597,72 @@
                             if (_files.ais.length) formData.proofImages.ais = await Promise.all(_files.ais.map(compress));
                             if (_files.start.length) formData.proofImages.start = await Promise.all(_files.start.map(compress));
                         }
+                        
                         var res = await Server.call({ func: 'processShiftReport' }, formData);
+                        
                         if (res && res.success) {
                             if (res.isPreview) {
                                 el('chatPreviewText').innerText = res.chatPreview;
                                 el('preview_modal').showModal();
                             } else {
-                                UIManager.showToast("ส่งรายงานสำเร็จ", "success");
-                                // Reset...
-                                _files = { mono: [], ais: [], start: [] };
-                                _autoStartUrls = [];
-                                _autoMonoUrls = [];
-                                this.renderFileList('mono');
-                                this.renderFileList('ais');
-                                this.renderFileList('start');
-                                el('auto-start-list').innerHTML = ''; show('auto-start-images', false);
-                                el('auto-mono-list').innerHTML = ''; show('auto-mono-images', false);
-                                el('transferReport').value = "";
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'บันทึกสำเร็จ',
+                                    text: 'ระบบได้ส่งรายงานเรียบร้อยแล้ว',
+                                    timer: 1500,
+                                    showConfirmButton: false
+                                }).then(() => {
+                                    // 🔥 FULL RESET LOGIC Starts Here 🔥
+                                    
+                                    // 1. Reset วันที่เป็นปัจจุบัน (เผื่อ User ลืมเปลี่ยนกลับ)
+                                    var today = new Date();
+                                    var yyyy = today.getFullYear();
+                                    var mm = String(today.getMonth() + 1).padStart(2, '0');
+                                    var dd = String(today.getDate()).padStart(2, '0');
+                                    if(el('inputDate')) {
+                                        el('inputDate').value = `${yyyy}-${mm}-${dd}`;
+                                        if(typeof _picker !== 'undefined') _picker.setDate(today);
+                                    }
+
+                                    // 2. Clear Text Inputs
+                                    if (el('transferReport')) el('transferReport').value = "";
+                                    
+                                    // 3. Reset Status Dropdowns to Default
+                                    if (el('statusMono')) el('statusMono').value = "เรียบร้อย";
+                                    if (el('statusAis')) el('statusAis').value = "ไม่มี";
+                                    if (el('statusStart')) el('statusStart').value = "ไม่มี";
+
+                                    // 4. 🔥 สำคัญ: สั่งซ่อนกล่องอัปโหลดตามสถานะใหม่ (Clean UI)
+                                    ReportManager.toggleStartArea('ไม่มี');
+                                    ReportManager.toggleAisActions('ไม่มี');
+
+                                    // 5. Reset File Arrays & Variables
+                                    _files = { mono: [], ais: [], start: [] };
+                                    _autoStartUrls = [];
+                                    _autoMonoUrls = [];
+
+                                    // 6. Clear Rendered Lists (หน้าจอ)
+                                    ReportManager.renderFileList('mono');
+                                    ReportManager.renderFileList('ais');
+                                    ReportManager.renderFileList('start');
+
+                                    if (el('auto-start-list')) el('auto-start-list').innerHTML = '';
+                                    show('auto-start-images', false);
+
+                                    if (el('auto-mono-list')) el('auto-mono-list').innerHTML = '';
+                                    show('auto-mono-images', false);
+                                    
+                                    // อัปเดตตัวเลขจำนวนรูป (ถ้ามีฟังก์ชันนี้)
+                                    if (typeof ReportManager.updateImageCounts === 'function') {
+                                        ReportManager.updateImageCounts();
+                                    }
+
+                                    // 7. Close Preview Modal (ถ้าเปิดค้างไว้)
+                                    if (el('preview_modal')) el('preview_modal').close();
+
+                                    // 8. ดึงข้อมูล Ticket/Match ใหม่ของ "วันนี้" มาแสดง
+                                    ReportManager.autoFetchAll();
+                                });
                             }
                         } else UIManager.showToast(res ? res.error : "Unknown Error", "error");
                     } catch (e) { UIManager.showToast(e.message, "error"); }
@@ -618,7 +716,10 @@
                 if (isO) setTimeout(() => el('reporterOther').focus(), 100);
             },
             resetReporter: function () { el('reporterSelect').value = ''; el('reporterOther').value = ''; show('wrapper-reporter-other', false); },
-            toggleStartArea: function (v) { show('start-upload-area', v !== 'ไม่มี'); },
+            toggleStartArea: function (v) {
+                var hasCandidates = el('auto-start-list') && el('auto-start-list').children.length > 0;
+                show('start-upload-area', v !== 'ไม่มี' || hasCandidates);
+            },
             toggleAisActions: function (v) { show('proof-ais-box', v !== 'ไม่มี'); },
             confirmSend: function () { el('preview_modal').close(); this.submitForm('send'); },
             setupPasteHandlers: function () {
@@ -647,6 +748,5 @@
 
     if (window.ReportManager) {
         window.ReportManager.init();
-        setTimeout(() => { if (window.ReportManager.setupPasteHandlers) window.ReportManager.setupPasteHandlers(); }, 1000);
     }
 </script>

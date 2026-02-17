@@ -1,5 +1,5 @@
 <script>
-/**
+  /**
  * ==========================================
  * MODULE: TICKET VIEW (UI Layer)
  * หน้าที่: จัดการ HTML, Render ตาราง, DaisyUI Components
@@ -60,7 +60,8 @@ const TicketView = (() => {
             tbody.innerHTML = data.map((row, i) => {
                 const id = row.ticketNumber;
                 const subject = row.subject || '(ไม่มีหัวข้อ)';
-                const assign = row.assign || '-';
+                //const assign = row.assign || '-';
+                const resp = row.responsibility || '-';
                 
                 let severityDot = '';
                 if(row.severity === 'Critical') severityDot = '<div class="w-2 h-2 rounded-full bg-error mx-auto tooltip" data-tip="Critical"></div>';
@@ -87,7 +88,9 @@ const TicketView = (() => {
                     <td class="text-center hidden md:table-cell"><span class="badge badge-ghost badge-xs font-normal text-[10px]">${row.type || '-'}</span></td>
                     <td class="text-center hidden md:table-cell">${severityDot}</td>
                     <td class="text-center">${_getStatusBadge(row.status)}</td>
-                    <td class="hidden lg:table-cell text-xs opacity-70 truncate max-w-[100px]">${assign.split(' ')[0]}</td>
+                    
+                    <td class="hidden lg:table-cell text-xs opacity-70 truncate max-w-[100px]">${resp}</td>
+                    
                     <td class="text-right pr-2">
                         <div class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onclick="event.stopPropagation(); TicketManager.openModal('EMAIL', '${id}')" class="btn btn-square btn-xs btn-ghost text-slate-400 hover:text-indigo-600 tooltip tooltip-left" data-tip="ส่งอีเมล"><i class="fas fa-envelope"></i></button>

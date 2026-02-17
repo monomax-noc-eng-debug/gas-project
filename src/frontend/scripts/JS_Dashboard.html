@@ -1,8 +1,7 @@
 <script>
-    /**
+  /**
      * JS_Dashboard.html
-     * Logic: Show matches exactly on the selected date (00:00 - 23:59)
-     * Version: Optimized for Stability
+     * Version: Multi-Image Support & Grid Preview
      */
     const Dashboard = (function () {
         // --- Helpers ---
@@ -10,11 +9,16 @@
         let _currentDate = new Date();
         let _allWorkData = [];
         let _pickers = {};
-        let _currentBlobs = { start: null, stop: null, 'stop-quick': null };
-        let _clearedDbImages = { start: false, stop: false };
+        
+        // ✨ NEW: Store array of images objects: { type: 'url'|'file', source: string|File }
+        let _workImages = { start: [], stop: [], 'stop-quick': [] }; 
+        
         let _editMode = 'all'; // 'new', 'all', 'start', 'stop'
-        let _isLoaded = false; // Cache Flag
-        let _lastCalendarFetchDate = null; // Calendar Fetch Cache
+        let _isLoaded = false;
+        let _lastCalendarFetchDate = null;
+
+        let _galleryList = [];
+        let _galleryIndex = 0;
 
         // --- Date Helpers ---
         const toDisplayDate = (date) => {
@@ -102,7 +106,7 @@
                 _pickers.main = createPicker('dash-date-input', (date) => {
                     _currentDate = date;
                     Dashboard.updateDateDisplay();
-                    Dashboard.loadWorkList(true); // Date changed, must reload
+                    Dashboard.loadWorkList(true);
                 });
                 this.updateDateDisplay();
             },
@@ -119,17 +123,9 @@
             },
 
             loadWorkList: function (forceRefresh) {
-                if (!forceRefresh && _isLoaded) {
-                    console.log("🚀 Dashboard Cache Hit");
-                    return;
-                }
-
+                if (!forceRefresh && _isLoaded) { return; }
                 var btn = getEl('btn-refresh-dashboard');
-                if (btn) {
-                    btn.classList.add('is-loading');
-                    btn.disabled = true;
-                }
-
+                if (btn) { btn.classList.add('is-loading'); btn.disabled = true; }
                 var empty = getEl('dash-empty');
                 if (empty) empty.classList.add('hidden');
 
@@ -145,25 +141,14 @@
                     })
                     .catch(function (err) { console.error(err); })
                     .finally(function () {
-
-                        if (btn) {
-                            btn.classList.remove('is-loading');
-                            btn.disabled = false;
-                        }
+                        if (btn) { btn.classList.remove('is-loading'); btn.disabled = false; }
                     });
             },
 
             renderFilteredList: function () {
                 var curDateStr = toInputDate(_currentDate);
-
-                var filtered = _allWorkData.filter(item => {
-                    return item.date === curDateStr;
-                });
-
-                filtered.sort((a, b) => {
-                    return a.time.localeCompare(b.time);
-                });
-
+                var filtered = _allWorkData.filter(item => item.date === curDateStr);
+                filtered.sort((a, b) => a.time.localeCompare(b.time));
                 this.renderTable(filtered);
                 this.updateStats(filtered);
             },
@@ -175,6 +160,7 @@
                 return str.substring(0, 5);
             },
 
+            // --- Updated Logic: Handle Multiple Images in Table (Show first one or count) ---
             renderTable: function (data) {
                 var tbody = getEl('work-list-body');
                 var empty = getEl('dash-empty');
@@ -193,62 +179,63 @@
                     var now = new Date();
                     var matchTimeStr = item.date + 'T' + item.time + ':00';
                     var matchDate = new Date(matchTimeStr);
-                    var matchEndDate = new Date(matchDate.getTime() + 120 * 60 * 1000); // 2 Hours duration
+                    var matchEndDate = new Date(matchDate.getTime() + 120 * 60 * 1000);
                     var isTimeReached = now >= matchDate;
                     var isMatchEnded = now >= matchEndDate;
-                    var hasStart = !!item.start_img;
-
-                    // 1. Status Widget Calculation
+                    var hasStart = !!item.start_img && (Array.isArray(item.start_img) ? item.start_img.length > 0 : true);
+                    
+                    // Status Widget
                     var statusWidget = '';
-                    if (isDone) {
-                        statusWidget = '<div class="flex flex-col items-center justify-center opacity-70"><div class="w-6 h-6 rounded-full bg-success text-white flex items-center justify-center mb-1 shadow-sm"><i class="fas fa-check text-[10px]"></i></div><span class="text-[9px] font-bold text-success tracking-wider">DONE</span></div>';
-                    } else if (hasStart) {
-                        if (isMatchEnded) {
-                            // ENDED (Need Stop)
-                            statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-warning badge-sm text-white font-bold tracking-wider shadow-sm">ENDED</span><span class="text-[9px] text-warning/70">จบการแข่ง</span></div>';
-                        } else if (isTimeReached) {
-                            // ON AIR
-                            statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><div class="flex items-center gap-1 animate-pulse"><span class="w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.6)]"></span><span class="text-[9px] font-black text-red-500 tracking-wider">ON AIR</span></div></div>';
-                        } else {
-                            // READY
-                            statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-success badge-sm text-white font-bold tracking-wider shadow-sm">READY</span><span class="text-[9px] text-success/70">รอเวลาเริ่ม</span></div>';
-                        }
+                    if (isDone) statusWidget = '<div class="flex flex-col items-center justify-center opacity-70"><div class="w-6 h-6 rounded-full bg-success text-white flex items-center justify-center mb-1 shadow-sm"><i class="fas fa-check text-[10px]"></i></div><span class="text-[9px] font-bold text-success tracking-wider">DONE</span></div>';
+                    else if (hasStart) {
+                        if (isMatchEnded) statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-warning badge-sm text-white font-bold tracking-wider shadow-sm">ENDED</span><span class="text-[9px] text-warning/70">จบการแข่ง</span></div>';
+                        else if (isTimeReached) statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><div class="flex items-center gap-1 animate-pulse"><span class="w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.6)]"></span><span class="text-[9px] font-black text-red-500 tracking-wider">ON AIR</span></div></div>';
+                        else statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-success badge-sm text-white font-bold tracking-wider shadow-sm">READY</span><span class="text-[9px] text-success/70">รอเวลาเริ่ม</span></div>';
                     } else {
-                        if (isTimeReached) {
-                            // LATE (Time passed but no start image)
-                            statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-error badge-sm text-white font-bold tracking-wider shadow-sm">LATE</span><span class="text-[9px] text-error/70">เลยเวลาแข่ง</span></div>';
-                        } else {
-                            // WAIT
-                            statusWidget = '<span class="badge badge-ghost badge-sm text-[10px] opacity-50">WAIT</span>';
-                        }
+                        if (isTimeReached) statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-error badge-sm text-white font-bold tracking-wider shadow-sm">LATE</span><span class="text-[9px] text-error/70">เลยเวลาแข่ง</span></div>';
+                        else statusWidget = '<span class="badge badge-ghost badge-sm text-[10px] opacity-50">WAIT</span>';
                     }
 
-                    // 2. Action Widget Calculation
                     var itemJson = encodeURIComponent(JSON.stringify(item));
                     var actionWidget = '<div class="flex flex-col items-center gap-1">';
-
-                    // Stop Button (Only if Started and Not Done)
                     if (hasStart && !isDone) {
-                        var stopBtnClass = isTimeReached ? 'btn-error' : 'btn-success'; // Red for On Air, Green for Ready
+                        var stopBtnClass = isTimeReached ? 'btn-error' : 'btn-success';
                         actionWidget += '<button onclick="Dashboard.openStopModal(\'' + item.id + '\')" class="btn btn-xs btn-outline ' + stopBtnClass + ' bg-white hover:text-white transition-all shadow-sm w-full max-w-[80px] gap-1"><i class="fas fa-stop"></i> จบงาน</button>';
                     }
-
-                    // Edit Button (Always visible)
                     actionWidget += '<button onclick="Dashboard.openEditModal(\'' + itemJson + '\', \'all\')" class="btn btn-ghost btn-xs text-base-content/40 hover:text-primary hover:bg-base-200 gap-1 w-full max-w-[80px]"><i class="fas fa-pencil-alt"></i> แก้ไข</button>';
                     actionWidget += '</div>';
 
-                    var btnProof = function (url, label, itemId) {
-                        var itemJson = encodeURIComponent(JSON.stringify(item));
-                        if (!url) {
+                    // --- Proof Button Logic (View Work Images) ---
+                    // ✅ Updated: Call viewWorkImages with ID and Type
+                    var btnProof = function (imgData, label) {
+                        var count = 0;
+                        var firstUrl = '';
+
+                        if (Array.isArray(imgData)) {
+                            count = imgData.length;
+                            if (count > 0) firstUrl = imgData[0];
+                        } else if (imgData) {
+                            count = 1;
+                            firstUrl = imgData;
+                        }
+
+                        if (count === 0) {
                             return '<div onclick="Dashboard.openEditModal(\'' + itemJson + '\', \'' + label.toLowerCase() + '\')" class="tooltip cursor-pointer w-10 h-10 rounded-lg bg-warning/10 border border-warning/30 flex items-center justify-center mx-auto hover:bg-warning/20 transition-colors animate-pulse" data-tip="ยังไม่ใส่รูป ' + label + ' (คลิกเพื่อเพิ่ม)">' +
                                 '<i class="fas fa-exclamation text-warning text-xs"></i>' +
                                 '</div>';
                         }
-                        var validUrl = formatDriveUrl(url);
-                        return '<div onclick="Dashboard.viewImage(\'' + validUrl + '\')" class="tooltip cursor-pointer hover:scale-110 transition-transform bg-white rounded-lg shadow-sm border border-base-200 p-0.5 inline-block" data-tip="ดูรูป ' + label + '"><img src="' + validUrl + '" class="h-10 w-10 object-cover rounded-md" onerror="this.onerror=null;this.src=\'https://placehold.co/40x40?text=Err\'"></div>';
+                        
+                        var validUrl = formatDriveUrl(firstUrl);
+                        var badge = count > 1 ? '<span class="absolute -top-1 -right-1 bg-black text-white text-[8px] font-bold px-1 rounded-full shadow-md border border-white">+' + (count - 1) + '</span>' : '';
+                        
+                        // ✅ Use viewWorkImages to lookup array
+                        return '<div onclick="Dashboard.viewWorkImages(\'' + item.id + '\', \'' + label.toLowerCase() + '\')" class="tooltip cursor-pointer hover:scale-110 transition-transform bg-white rounded-lg shadow-sm border border-base-200 p-0.5 inline-block relative group" data-tip="ดูรูป ' + label + ' (' + count + ')">' +
+                            '<img src="' + validUrl + '" class="h-10 w-10 object-cover rounded-md" onerror="this.onerror=null;this.src=\'https://placehold.co/40x40?text=Err\'">' +
+                            badge +
+                            '</div>';
                     };
 
-                    html += '<tr class="hover:bg-base-50 transition-colors border-b border-base-100 last:border-none h-16"><td class="text-center font-mono font-bold text-base-content/70">' + Dashboard.formatTime(item.time) + '</td><td class="pl-4 align-middle"><div class="flex flex-col justify-center h-full"><span class="text-[9px] font-bold text-base-content/40 uppercase tracking-widest mb-0.5 truncate max-w-[200px]">' + (item.league || '-') + '</span><div class="font-bold text-sm text-base-content/90 flex items-center gap-1 truncate"><div class="truncate max-w-[150px]">' + (hasStart ? '<span class="text-primary">' + item.home + '</span>' : item.home) + '</div><span class="text-[10px] text-base-content/30 px-1 font-normal">vs</span><div class="truncate max-w-[150px]">' + (hasStart ? '<span class="text-primary">' + item.away + '</span>' : item.away) + '</div></div></div></td><td class="text-center"><span class="badge badge-ghost badge-sm font-mono text-[10px]">' + (item.channel || '-') + '</span></td><td class="text-center align-middle">' + btnProof(item.start_img, 'Start', item.id) + '</td><td class="text-center align-middle">' + btnProof(item.stop_img, 'Stop', item.id) + '</td><td class="text-center align-middle bg-base-50/50 h-16">' + statusWidget + '</td><td class="text-center align-middle">' + actionWidget + '</td></tr>';
+                    html += '<tr class="hover:bg-base-50 transition-colors border-b border-base-100 last:border-none h-16"><td class="text-center font-mono font-bold text-base-content/70">' + Dashboard.formatTime(item.time) + '</td><td class="pl-4 align-middle"><div class="flex flex-col justify-center h-full"><span class="text-[9px] font-bold text-base-content/40 uppercase tracking-widest mb-0.5 truncate max-w-[200px]">' + (item.league || '-') + '</span><div class="font-bold text-sm text-base-content/90 flex items-center gap-1 truncate"><div class="truncate max-w-[150px]">' + (hasStart ? '<span class="text-primary">' + item.home + '</span>' : item.home) + '</div><span class="text-[10px] text-base-content/30 px-1 font-normal">vs</span><div class="truncate max-w-[150px]">' + (hasStart ? '<span class="text-primary">' + item.away + '</span>' : item.away) + '</div></div></div></td><td class="text-center"><span class="badge badge-ghost badge-sm font-mono text-[10px]">' + (item.channel || '-') + '</span></td><td class="text-center align-middle">' + btnProof(item.start_img, 'Start') + '</td><td class="text-center align-middle">' + btnProof(item.stop_img, 'Stop') + '</td><td class="text-center align-middle bg-base-50/50 h-16">' + statusWidget + '</td><td class="text-center align-middle">' + actionWidget + '</td></tr>';
                 });
                 tbody.innerHTML = html;
             },
@@ -260,263 +247,149 @@
                 var doneEl = getEl('stat-done'); if (doneEl) doneEl.innerText = done;
             },
 
-            openAddModal: function () {
-                this._editMode = 'new';
-                getEl('form-add-work').reset();
-                getEl('input-edit-id').value = "";
-                getEl('modal-title-work').innerText = "เริ่มงานใหม่ (New Work)";
+            // --- ✨ NEW: Image Management Functions ---
 
-                // Ensure grid is 3 columns for new work
-                getEl('section-import').classList.remove('hidden');
-                getEl('form-add-work').classList.remove('lg:grid-cols-2');
-                getEl('form-add-work').classList.add('lg:grid-cols-3');
-
-                getEl('section-img-stop').classList.add('hidden');
-                getEl('btn-delete-work').classList.add('hidden');
-
-                getEl('btn-submit-start').innerHTML = '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกและเริ่มงาน</span>';
-
-                var now = new Date();
-                var inputDate = toInputDate(now);
-                getEl('input-date').value = inputDate;
-
-                var HH = String(now.getHours()).padStart(2, '0');
-                var ii = String(now.getMinutes()).padStart(2, '0');
-                getEl('input-time').value = HH + ':' + ii;
-
-                this.clearImage('start');
-                this.clearImage('stop');
-
-                // Auto fetch calendar only if date changed
-                getEl('import-date-picker').value = inputDate;
-                if (_lastCalendarFetchDate !== inputDate) {
-                    this.fetchCalendarEvents();
-                } else {
-                    var list = getEl('calendar-picker-list');
-                    if (!list || list.children.length === 0) {
-                        this.fetchCalendarEvents();
-                    }
-                }
-
-                getEl('modal-add-work').showModal();
-
-                this.checkUploadState();
+            // Clear all images for a mode
+            resetImages: function(mode) {
+                _workImages[mode] = [];
+                this.renderGallery(mode);
             },
 
-            openEditModal: function (itemEncoded, mode) {
-                this._editMode = mode || 'all';
-                var item = JSON.parse(decodeURIComponent(itemEncoded));
-                getEl('input-edit-id').value = item.id;
-                getEl('input-date').value = item.date;
-                getEl('input-time').value = item.time;
-                getEl('input-league').value = item.league;
-                getEl('input-home').value = item.home;
-                getEl('input-away').value = item.away;
-                getEl('input-channel').value = item.channel;
-
-                getEl('modal-title-work').innerText = "แก้ไขข้อมูล (Edit)";
-
-                // Hide or Disable Calendar column in Edit Mode? 
-                // Requirement says "Start Work" (New Work) needs it. For Edit, it might be distracting or useful.
-                // Usually Edit is focused on the item. Let's hide it for clarity or make it insensitive.
-                // Converting to 3 column makes hiding one column leave a gap if using grid-cols-3.
-                // If we hide section-import, we have 2 columns left.
-                // We should update the grid class on the form if we hide the column, OR just hide the content.
-                // Simpler: Add 'hidden' to the div, and the grid will auto-adjust if we change grid-cols.
-                // But grid-cols-3 assumes 3 children. If one is hidden, it leaves a gap.
-                // Tailwind grid: if child is hidden, it doesn't take space? No, it doesn't take space in flow, but grid-cols-3 enforces 3 columns?
-                // Actually if a child is hidden (display:none), it does not occupy a grid cell.
-                // However, we need to span the remaining columns or change the grid definition.
-                // Let's just hide it and let the other 2 columns take their place, but we might want them to expand.
-                // If we change class to 'grid-cols-1 lg:grid-cols-2' when in edit mode.
-
-                getEl('section-import').classList.add('hidden');
-                getEl('form-add-work').classList.remove('lg:grid-cols-3');
-                getEl('form-add-work').classList.add('lg:grid-cols-2');
-
-                // getEl('section-img-stop').classList.remove('hidden'); // Let checkUploadState handle this
-                getEl('btn-delete-work').classList.remove('hidden');
-                getEl('btn-submit-start').innerHTML = '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกการแก้ไข</span>';
-
-                this.clearImage('start');
-                this.clearImage('stop');
-                _clearedDbImages = { start: false, stop: false }; // Reset flags for new edit session
-
-                if (item.start_img) {
-                    getEl('preview-start-img').src = formatDriveUrl(item.start_img);
-                    getEl('wrapper-preview-start').classList.remove('hidden');
-                }
-                if (item.stop_img) {
-                    getEl('preview-stop-img').src = formatDriveUrl(item.stop_img);
-                    getEl('wrapper-preview-stop').classList.remove('hidden');
-                }
-                getEl('modal-add-work').showModal();
-
-                this.checkUploadState();
+            // Add images (from file input or DB URLs)
+            addImages: function(mode, items) {
+                // items can be array of Files or Strings (URLs)
+                if (!items || items.length === 0) return;
+                
+                Array.from(items).forEach(item => {
+                    if (item instanceof File) {
+                        _workImages[mode].push({ type: 'file', source: item });
+                    } else if (typeof item === 'string') {
+                        _workImages[mode].push({ type: 'url', source: item });
+                    }
+                });
+                this.renderGallery(mode);
             },
 
-            handleDeleteWork: function () {
-                var id = getEl('input-edit-id').value;
-                if (!id) return;
+// --- Updated Gallery Render (Click to View Gallery) ---
+            renderGallery: function(mode) {
+                const container = getEl('gallery-' + mode);
+                const countEl = getEl(mode === 'stop-quick' ? '' : 'count-' + mode);
+                const images = _workImages[mode];
+                if (countEl) countEl.innerText = images.length + " รูป";
+                if (!container) return;
+                container.innerHTML = '';
+                if (images.length === 0) return;
 
-                Swal.fire({
-                    title: 'ยืนยันการลบ?',
-                    text: "คุณต้องการลบรายการนี้ใช่หรือไม่",
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#3085d6',
-                    confirmButtonText: 'ใช่, ลบรายการ',
-                    cancelButtonText: 'ยกเลิก',
-                    target: getEl('modal-add-work')
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        var btn = getEl('btn-delete-work');
-                        var btnTxt = btn.innerHTML;
-                        btn.disabled = true;
-                        btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> กำลังลบ...';
+                images.forEach((imgObj, index) => {
+                    const div = document.createElement('div');
+                    div.className = "relative group w-full aspect-square bg-gray-100 rounded-lg border border-gray-200 overflow-hidden";
+                    let src = (imgObj.type === 'file') ? URL.createObjectURL(imgObj.source) : formatDriveUrl(imgObj.source);
 
-                        Server.call({ func: 'apiDeleteWorkItem', silent: true }, id)
-                            .then(res => {
-                                if (res && res.success) {
-                                    showToastInModal("ลบรายการเรียบร้อย", "success", "modal-add-work");
-                                    setTimeout(() => {
-                                        getEl('modal-add-work').close();
-                                        Dashboard.loadWorkList(true);
-                                    }, 1000);
-                                } else { throw new Error(res ? res.message : "Unknown Error"); }
-                            })
-                            .catch(e => Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-add-work') }))
-                            .finally(() => { btn.disabled = false; btn.innerHTML = btnTxt; });
-                    }
+                    // ✅ Click to open gallery at specific index
+                    // We need to resolve all URLs first to pass to viewImage
+                    div.innerHTML = `
+                        <img src="${src}" class="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity" onclick="Dashboard.viewGalleryFromEdit('${mode}', ${index})">
+                        <button type="button" onclick="Dashboard.removeImage('${mode}', ${index})" class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-md hover:bg-red-600 transition-colors z-10">
+                            <i class="fas fa-times text-[10px]"></i>
+                        </button>
+                    `;
+                    container.appendChild(div);
                 });
             },
 
-            handleSubmitWork: function () {
-                var form = getEl('form-add-work');
-                if (!form.checkValidity()) { form.reportValidity(); return; }
+            // --- ✨ NEW: View Image & Gallery Functions ---
 
-                var id = getEl('input-edit-id').value;
-                var isEdit = !!id;
+            // 1. Helper to open gallery from Edit Modal (where we have mixed File/URL objects)
+            viewGalleryFromEdit: function(mode, startIndex) {
+                const images = _workImages[mode];
+                if (!images || images.length === 0) return;
+                
+                // Convert all to URLs
+                const urlList = images.map(img => (img.type === 'file') ? URL.createObjectURL(img.source) : img.source);
+                this.viewImage(urlList, startIndex);
+            },
 
-                var rawDate = getEl('input-date').value;
-                var rawTime = getEl('input-time').value;
+            // 2. Helper to open gallery from Dashboard Table (lookup by ID)
+            viewWorkImages: function(id, type) { // type = 'start' or 'stop'
+                const item = _allWorkData.find(d => d.id === id);
+                if (!item) return;
+                
+                let rawData = (type === 'start') ? item.start_img : item.stop_img;
+                let list = [];
+                
+                if (Array.isArray(rawData)) list = rawData;
+                else if (rawData) list = [rawData];
+                
+                if (list.length > 0) this.viewImage(list, 0);
+            },
 
-                var payload = {
-                    id: id,
-                    date: rawDate,
-                    time: rawTime,
-                    league: getEl('input-league').value,
-                    home: getEl('input-home').value,
-                    away: getEl('input-away').value,
-                    channel: getEl('input-channel').value
-                };
+            // 3. Core Viewer Function (Accepts Array or String)
+            viewImage: function (source, startIndex = 0) {
+                if (!source) return;
+                
+                // Reset State
+                _galleryList = Array.isArray(source) ? source : [source];
+                _galleryIndex = startIndex;
+                
+                if (_galleryList.length === 0) return;
 
-                var btn = getEl('btn-submit-start');
-                var spinner = getEl('spinner-submit-start');
-                btn.disabled = true; spinner.classList.remove('hidden');
+                // Initial Render
+                this.updatePreviewUI();
+                getEl('modal-view-image').showModal();
+            },
 
-                const sendData = (finalPayload, apiFunc) => {
-                    Server.call({ func: apiFunc, silent: true }, finalPayload)
-                        .then(res => {
-                            if (res && res.success) {
-                                showToastInModal(isEdit ? "แก้ไขข้อมูลสำเร็จ" : "เริ่มงานสำเร็จ", "success", "modal-add-work");
-                                setTimeout(() => {
-                                    getEl('modal-add-work').close();
-                                    Dashboard.loadWorkList(true);
-                                }, 1000);
-                            } else { throw new Error(res ? res.message : "Unknown Error"); }
-                        })
-                        .catch(e => {
-                            Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-add-work') });
-                        })
-                        .finally(() => { btn.disabled = false; spinner.classList.add('hidden'); });
-                };
+            // 4. Update UI (Image, Arrows, Counter)
+            updatePreviewUI: function() {
+                const imgEl = getEl('img-preview-target');
+                const prevBtn = getEl('btn-gallery-prev');
+                const nextBtn = getEl('btn-gallery-next');
+                const counter = getEl('gallery-counter');
+                
+                // Set Image
+                const currentUrl = _galleryList[_galleryIndex];
+                imgEl.src = formatDriveUrl(currentUrl);
 
-                if (isEdit) {
-                    const promises = [];
-                    if (_currentBlobs['start']) promises.push(compressImage(_currentBlobs['start']).then(b64 => payload.startImageBase64 = b64));
-                    if (_currentBlobs['stop']) promises.push(compressImage(_currentBlobs['stop']).then(b64 => payload.stopImageBase64 = b64));
-
-                    // ✅ Send clear flags if user removed existing DB images
-                    if (_clearedDbImages.start && !_currentBlobs['start']) payload.clearStartImage = true;
-                    if (_clearedDbImages.stop && !_currentBlobs['stop']) payload.clearStopImage = true;
-
-                    Promise.all(promises).then(() => { sendData(payload, 'apiUpdateWorkItem'); });
+                // Handle Arrows
+                if (_galleryList.length > 1) {
+                    prevBtn.classList.remove('hidden');
+                    nextBtn.classList.remove('hidden');
+                    counter.classList.remove('hidden');
+                    counter.innerText = `${_galleryIndex + 1} / ${_galleryList.length}`;
                 } else {
-                    if (_currentBlobs['start']) {
-                        compressImage(_currentBlobs['start']).then(base64 => {
-                            payload.imageBase64 = base64;
-                            payload.mimeType = 'image/jpeg';
-                            sendData(payload, 'apiCreateWorkItem');
-                        });
-                    } else {
-                        payload.imageBase64 = null;
-                        sendData(payload, 'apiCreateWorkItem');
-                    }
+                    prevBtn.classList.add('hidden');
+                    nextBtn.classList.add('hidden');
+                    counter.classList.add('hidden');
                 }
             },
 
-            openStopModal: function (id) {
-                getEl('inp-stop-id-quick').value = id;
-                this.clearImage('stop-quick');
-                getEl('modal-stop-work').showModal();
+            // 5. Navigation Logic
+            navGallery: function(direction) {
+                let newIndex = _galleryIndex + direction;
+                // Loop functionality
+                if (newIndex < 0) newIndex = _galleryList.length - 1;
+                if (newIndex >= _galleryList.length) newIndex = 0;
+                
+                _galleryIndex = newIndex;
+                this.updatePreviewUI();
             },
 
-            submitStopWork: function (skipImage) {
-                var id = getEl('inp-stop-id-quick').value;
-                var blob = _currentBlobs['stop-quick'];
+            removeImage: function(mode, index) {
+                _workImages[mode].splice(index, 1);
+                this.renderGallery(mode);
+            },
 
-                if (!skipImage && !blob) {
-                    // Allowed optional stop image
-                }
-
-                var btn = getEl('btn-submit-stop');
-                var btnSkip = getEl('btn-submit-stop-skip');
-                var spinner = getEl('spinner-submit-stop');
-
-                if (btn) btn.disabled = true;
-                if (btnSkip) btnSkip.disabled = true;
-                if (spinner) spinner.classList.remove('hidden');
-
-                const sendStop = (base64) => {
-                    Server.call({ func: 'apiStopWorkItem', silent: true }, {
-                        id: id,
-                        imageBase64: base64,
-                        mimeType: 'image/jpeg',
-                        isSkipImage: skipImage
-                    })
-                        .then(function (res) {
-                            if (res && res.success) {
-                                showToastInModal("จบงานเรียบร้อย!", "success", "modal-stop-work");
-                                setTimeout(() => {
-                                    getEl('modal-stop-work').close();
-                                    Dashboard.loadWorkList(true);
-                                }, 1000);
-                            } else { throw new Error(res ? res.message : "Unknown Error"); }
-                        })
-                        .catch(function (e) {
-                            Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-stop-work') });
-                        })
-                        .finally(() => {
-                            if (btn) btn.disabled = false;
-                            if (btnSkip) btnSkip.disabled = false;
-                            if (spinner) spinner.classList.add('hidden');
-                        });
-                };
-
-                if (skipImage) {
-                    sendStop(null);
-                } else {
-                    compressImage(blob).then(sendStop);
+            handleFileSelect: function(input, mode) {
+                if (input.files && input.files.length > 0) {
+                    this.addImages(mode, input.files);
+                    input.value = ''; // Reset input to allow re-selecting same file
                 }
             },
 
-            triggerPaste: async function (mode) {
+            triggerPaste: async function(mode) {
                 var modalId = mode === 'stop-quick' ? 'modal-stop-work' : 'modal-add-work';
-                var areaId = mode === 'stop-quick' ? 'paste-area-stop-quick' : 'paste-area-' + mode;
+                var areaId = 'paste-area-' + mode;
                 var area = getEl(areaId);
-
+                
                 if (area) {
                     area.style.width = '1px'; area.style.height = '1px'; area.style.opacity = '0';
                     area.style.position = 'fixed'; area.focus();
@@ -533,7 +406,9 @@
                         const imageTypes = item.types.filter(type => type.startsWith('image/'));
                         for (const type of imageTypes) {
                             const blob = await item.getType(type);
-                            this.setPreview(mode, blob);
+                            // Convert Blob to File for consistency
+                            const file = new File([blob], "pasted_image.png", { type: "image/png" });
+                            this.addImages(mode, [file]);
                             showToastInModal("วางรูปสำเร็จ", "success", modalId);
                             imageFound = true;
                             break;
@@ -547,12 +422,12 @@
                 }
             },
 
-            handlePasteEvent: function (e, mode) {
+            handlePasteEvent: function(e, mode) {
                 var items = (e.clipboardData || e.originalEvent.clipboardData).items;
                 for (var i = 0; i < items.length; i++) {
                     if (items[i].type.indexOf("image") !== -1) {
                         var blob = items[i].getAsFile();
-                        this.setPreview(mode, blob);
+                        this.addImages(mode, [blob]);
                         e.preventDefault();
                         var modalId = mode === 'stop-quick' ? 'modal-stop-work' : 'modal-add-work';
                         showToastInModal("วางรูปเรียบร้อย", "success", modalId);
@@ -561,49 +436,270 @@
                 }
             },
 
-            toggleCalendar: function () {
-                // Function removed as calendar is always visible
+            // --- Form Logic ---
+
+            openAddModal: function () {
+                this._editMode = 'new';
+                getEl('form-add-work').reset();
+                getEl('input-edit-id').value = "";
+                getEl('modal-title-work').innerText = "เริ่มงานใหม่ (New Work)";
+
+                getEl('section-import').classList.remove('hidden');
+                getEl('form-add-work').classList.remove('lg:grid-cols-2');
+                getEl('form-add-work').classList.add('lg:grid-cols-3');
+
+                getEl('section-img-stop').classList.add('hidden');
+                getEl('btn-delete-work').classList.add('hidden');
+                getEl('btn-submit-start').innerHTML = '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกและเริ่มงาน</span>';
+
+                var now = new Date();
+                getEl('input-date').value = toInputDate(now);
+                var HH = String(now.getHours()).padStart(2, '0');
+                var ii = String(now.getMinutes()).padStart(2, '0');
+                getEl('input-time').value = HH + ':' + ii;
+
+                // Reset Images
+                this.resetImages('start');
+                this.resetImages('stop');
+
+                // Calendar Logic
+                getEl('import-date-picker').value = toInputDate(now);
+                if (_lastCalendarFetchDate !== toInputDate(now)) {
+                    this.fetchCalendarEvents();
+                } else {
+                    var list = getEl('calendar-picker-list');
+                    if (!list || list.children.length === 0) this.fetchCalendarEvents();
+                }
+
+                getEl('modal-add-work').showModal();
+                this.checkFormInput(); // Initial visibility check
             },
 
-            fetchCalendarEvents: function () {
-                var dateVal = getEl('import-date-picker').value;
-                if (!dateVal) dateVal = getEl('input-date').value;
-                if (!dateVal) return;
+            openEditModal: function (itemEncoded, mode) {
+                this._editMode = mode || 'all';
+                var item = JSON.parse(decodeURIComponent(itemEncoded));
+                getEl('input-edit-id').value = item.id;
+                getEl('input-date').value = item.date;
+                getEl('input-time').value = item.time;
+                getEl('input-league').value = item.league;
+                getEl('input-home').value = item.home;
+                getEl('input-away').value = item.away;
+                getEl('input-channel').value = item.channel;
 
+                getEl('modal-title-work').innerText = "แก้ไขข้อมูล (Edit)";
+                getEl('section-import').classList.add('hidden');
+                getEl('form-add-work').classList.remove('lg:grid-cols-3');
+                getEl('form-add-work').classList.add('lg:grid-cols-2');
+                getEl('btn-delete-work').classList.remove('hidden');
+                getEl('btn-submit-start').innerHTML = '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกการแก้ไข</span>';
+
+                // Reset & Load Existing Images
+                this.resetImages('start');
+                this.resetImages('stop');
+
+                // Helper to push images (array or single string)
+                const pushToGallery = (mode, data) => {
+                    if (Array.isArray(data)) {
+                        this.addImages(mode, data);
+                    } else if (data) {
+                        this.addImages(mode, [data]); // Convert single URL to array
+                    }
+                };
+
+                pushToGallery('start', item.start_img);
+                pushToGallery('stop', item.stop_img);
+
+                // Visibility logic based on mode
+                var startSection = getEl('section-img-start');
+                var stopSection = getEl('section-img-stop');
+                
+                if (startSection) startSection.classList.remove('hidden');
+                if (stopSection) stopSection.classList.remove('hidden');
+
+                if (mode === 'start') stopSection.classList.add('hidden');
+                if (mode === 'stop') startSection.classList.add('hidden');
+
+                getEl('modal-add-work').showModal();
+            },
+
+            checkFormInput: function () {
+                var home = getEl('input-home').value.trim();
+                var away = getEl('input-away').value.trim();
+                var sectionStart = getEl('section-img-start');
+                if (!sectionStart) return;
+                
+                if (this._editMode === 'new') {
+                    if (home && away) sectionStart.classList.remove('hidden');
+                    else sectionStart.classList.add('hidden');
+                }
+            },
+
+            handleDeleteWork: function () {
+                var id = getEl('input-edit-id').value;
+                if (!id) return;
+                Swal.fire({
+                    title: 'ยืนยันการลบ?',
+                    text: "คุณต้องการลบรายการนี้ใช่หรือไม่",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'ใช่, ลบรายการ',
+                    cancelButtonText: 'ยกเลิก',
+                    target: getEl('modal-add-work')
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        var btn = getEl('btn-delete-work');
+                        var btnTxt = btn.innerHTML;
+                        btn.disabled = true;
+                        btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> กำลังลบ...';
+                        Server.call({ func: 'apiDeleteWorkItem', silent: true }, id)
+                            .then(res => {
+                                if (res && res.success) {
+                                    showToastInModal("ลบรายการเรียบร้อย", "success", "modal-add-work");
+                                    setTimeout(() => { getEl('modal-add-work').close(); Dashboard.loadWorkList(true); }, 1000);
+                                } else { throw new Error(res ? res.message : "Unknown Error"); }
+                            })
+                            .catch(e => Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-add-work') }))
+                            .finally(() => { btn.disabled = false; btn.innerHTML = btnTxt; });
+                    }
+                });
+            },
+
+            handleSubmitWork: function () {
+                var form = getEl('form-add-work');
+                if (!form.checkValidity()) { form.reportValidity(); return; }
+
+                var id = getEl('input-edit-id').value;
+                var isEdit = !!id;
+                var payload = {
+                    id: id,
+                    date: getEl('input-date').value,
+                    time: getEl('input-time').value,
+                    league: getEl('input-league').value,
+                    home: getEl('input-home').value,
+                    away: getEl('input-away').value,
+                    channel: getEl('input-channel').value,
+                    startImages: [], // For Backend Array
+                    stopImages: []   // For Backend Array
+                };
+
+                var btn = getEl('btn-submit-start');
+                var spinner = getEl('spinner-submit-start');
+                btn.disabled = true; spinner.classList.remove('hidden');
+
+                // ✨ PROCESS IMAGES (Compress Files, Keep URLs)
+                const processImages = async (mode) => {
+                    const results = [];
+                    for (const item of _workImages[mode]) {
+                        if (item.type === 'file') {
+                            const b64 = await compressImage(item.source);
+                            results.push({ type: 'base64', data: b64 });
+                        } else {
+                            results.push({ type: 'url', data: item.source });
+                        }
+                    }
+                    return results;
+                };
+
+                Promise.all([processImages('start'), processImages('stop')])
+                    .then(([startRes, stopRes]) => {
+                        payload.startImages = startRes;
+                        payload.stopImages = stopRes;
+
+                        // Compatibility with old backend (Send first Base64 if exists, for legacy support)
+                        // Note: Backend SHOULD be updated to use payload.startImages array.
+                        const startB64 = startRes.find(x => x.type === 'base64');
+                        if (startB64) payload.imageBase64 = startB64.data; 
+
+                        const apiFunc = isEdit ? 'apiUpdateWorkItem' : 'apiCreateWorkItem';
+                        return Server.call({ func: apiFunc, silent: true }, payload);
+                    })
+                    .then(res => {
+                        if (res && res.success) {
+                            showToastInModal(isEdit ? "แก้ไขข้อมูลสำเร็จ" : "เริ่มงานสำเร็จ", "success", "modal-add-work");
+                            setTimeout(() => { getEl('modal-add-work').close(); Dashboard.loadWorkList(true); }, 1000);
+                        } else { throw new Error(res ? res.message : "Unknown Error"); }
+                    })
+                    .catch(e => { Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-add-work') }); })
+                    .finally(() => { btn.disabled = false; spinner.classList.add('hidden'); });
+            },
+
+            openStopModal: function (id) {
+                getEl('inp-stop-id-quick').value = id;
+                this.resetImages('stop-quick');
+                getEl('modal-stop-work').showModal();
+            },
+
+            submitStopWork: function (skipImage) {
+                var id = getEl('inp-stop-id-quick').value;
+                var btn = getEl('btn-submit-stop');
+                var btnSkip = getEl('btn-submit-stop-skip');
+                var spinner = getEl('spinner-submit-stop');
+
+                if (btn) btn.disabled = true;
+                if (btnSkip) btnSkip.disabled = true;
+                if (spinner) spinner.classList.remove('hidden');
+
+                const processQuickStop = async () => {
+                    const results = [];
+                    if (!skipImage) {
+                        for (const item of _workImages['stop-quick']) {
+                            if (item.type === 'file') {
+                                const b64 = await compressImage(item.source);
+                                results.push({ type: 'base64', data: b64 });
+                            }
+                        }
+                    }
+                    return results;
+                };
+
+                processQuickStop().then(images => {
+                    Server.call({ func: 'apiStopWorkItem', silent: true }, {
+                        id: id,
+                        stopImages: images, // Array of {type:'base64', data: '...'}
+                        isSkipImage: skipImage
+                    })
+                    .then(res => {
+                        if (res && res.success) {
+                            showToastInModal("จบงานเรียบร้อย!", "success", "modal-stop-work");
+                            setTimeout(() => { getEl('modal-stop-work').close(); Dashboard.loadWorkList(true); }, 1000);
+                        } else { throw new Error(res ? res.message : "Unknown Error"); }
+                    })
+                    .catch(e => { Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-stop-work') }); })
+                    .finally(() => {
+                        if (btn) btn.disabled = false;
+                        if (btnSkip) btnSkip.disabled = false;
+                        if (spinner) spinner.classList.add('hidden');
+                    });
+                });
+            },
+
+            // --- Other Helpers ---
+            fetchCalendarEvents: function () {
+                var dateVal = getEl('import-date-picker').value || getEl('input-date').value;
+                if (!dateVal) return;
                 var loader = getEl('cal-loader');
                 var list = getEl('calendar-picker-list');
-                loader.classList.remove('hidden');
-                list.innerHTML = '';
+                loader.classList.remove('hidden'); list.innerHTML = '';
 
                 Server.call({ func: 'apiGetCalendarEvents', silent: true }, dateVal)
-                    .then(function (res) {
+                    .then(res => {
                         loader.classList.add('hidden');
-                        if (res && res.success) {
-                            Dashboard.renderImportList(res.data);
-                            _lastCalendarFetchDate = dateVal;
-                        }
+                        if (res && res.success) { Dashboard.renderImportList(res.data); _lastCalendarFetchDate = dateVal; }
                         else list.innerHTML = '<div class="text-error text-center text-xs p-4">' + (res ? (res.error || res.message || "No Data") : "No Data") + '</div>';
                     })
-                    .catch(function (err) {
-                        loader.classList.add('hidden');
-                        list.innerHTML = '<div class="text-error text-center text-xs p-4">Connection failed</div>';
-                    });
+                    .catch(err => { loader.classList.add('hidden'); list.innerHTML = '<div class="text-error text-center text-xs p-4">Connection failed</div>'; });
             },
 
             renderImportList: function (events) {
                 var list = getEl('calendar-picker-list');
-                if (!events || events.length === 0) {
-                    list.innerHTML = '<div class="text-center text-xs text-base-content/40 py-6">ไม่พบรายการแข่งขัน</div>';
-                    return;
-                }
-
+                if (!events || events.length === 0) { list.innerHTML = '<div class="text-center text-xs text-base-content/40 py-6">ไม่พบรายการแข่งขัน</div>'; return; }
                 var html = '';
                 events.forEach(function (evt) {
                     var evtJson = encodeURIComponent(JSON.stringify(evt));
-                    var isPrev = evt.isPreviousDay;
-                    var timeBadgeClass = isPrev ? 'badge-error text-white border-none' : 'badge-neutral';
-                    var timeLabel = evt.time + (isPrev ? '<span class="ml-1 text-[9px] opacity-90 font-normal">(ข้ามวัน)</span>' : '');
-
+                    var timeBadgeClass = evt.isPreviousDay ? 'badge-error text-white border-none' : 'badge-neutral';
+                    var timeLabel = evt.time + (evt.isPreviousDay ? '<span class="ml-1 text-[9px] opacity-90 font-normal">(ข้ามวัน)</span>' : '');
                     html += '<div onclick="Dashboard.selectImportEvent(\'' + evtJson + '\')" class="p-2 bg-white hover:bg-primary/5 border border-base-200 rounded-lg cursor-pointer transition-all hover:shadow-sm group mb-1"><div class="flex items-center gap-3"><div class="badge ' + timeBadgeClass + ' font-mono font-bold h-6 whitespace-nowrap">' + timeLabel + '</div><div class="flex-1 min-w-0"><div class="text-[10px] font-bold text-primary/70 uppercase tracking-wider truncate">' + (evt.league || 'Unknown') + '</div><div class="text-sm font-bold text-base-content/80 truncate group-hover:text-primary transition-colors">' + evt.home + ' <span class="text-xs text-base-content/40 font-normal px-1">vs</span> ' + evt.away + '</div></div><i class="fas fa-plus-circle text-base-content/10 group-hover:text-primary text-xl transition-colors"></i></div></div>';
                 });
                 list.innerHTML = html;
@@ -617,152 +713,13 @@
                     getEl('input-home').value = evt.home;
                     getEl('input-away').value = evt.away;
                     getEl('input-channel').value = evt.channel || 'N/A';
-
                     var importDate = getEl('import-date-picker') ? getEl('import-date-picker').value : '';
                     if (importDate) getEl('input-date').value = importDate;
-
-                    // this.toggleCalendar(); // Removed
                     showToastInModal("นำเข้าข้อมูลเรียบร้อย", "success", "modal-add-work");
                     this.checkFormInput();
                 } catch (e) { console.error(e); }
             },
 
-            checkFormInput: function () {
-                var home = getEl('input-home').value.trim();
-                var away = getEl('input-away').value.trim();
-                var sectionStart = getEl('section-img-start');
-
-                if (!sectionStart) return;
-
-                if (this._editMode === 'new') {
-                    if (home && away) {
-                        sectionStart.classList.remove('hidden');
-                    } else {
-                        sectionStart.classList.add('hidden');
-                    }
-                }
-            },
-
-            checkUploadState: function () {
-                // 1. Determine State
-                var hasStartDb = !getEl('wrapper-preview-start').classList.contains('hidden') && !getEl('preview-start-img').src.endsWith('undefined');
-                var hasStartNew = !!_currentBlobs['start'];
-                var hasStart = hasStartDb || hasStartNew;
-
-                var hasStopDb = !getEl('wrapper-preview-stop').classList.contains('hidden') && !getEl('preview-stop-img').src.endsWith('undefined');
-                var hasStopNew = !!_currentBlobs['stop'];
-                // Stop considered present if DB has it OR new upload exists
-                var hasStop = hasStopDb || hasStopNew;
-
-                // Elements
-                var startUpload = getEl('box-upload-start');
-                var startSection = getEl('section-img-start');
-                var stopSection = getEl('section-img-stop');
-                var stopUpload = getEl('box-upload-stop');
-                var btnSubmit = getEl('btn-submit-start');
-
-                // 2. Mode-Based Visibility Control (The "Macro" View)
-                if (this._editMode === 'new') {
-                    // Start Section: Controlled by checkFormInput (called separately or via event)
-                    this.checkFormInput();
-                    // Stop Section: Always Hidden
-                    if (stopSection) stopSection.classList.add('hidden');
-                    // Submit: Always Visible
-                    if (btnSubmit) btnSubmit.classList.remove('hidden');
-
-                } else if (this._editMode === 'start') {
-                    // Start Section: Always Visible
-                    if (startSection) startSection.classList.remove('hidden');
-                    // Stop Section: Always Hidden
-                    if (stopSection) stopSection.classList.add('hidden');
-                    // Submit: Always Visible
-                    if (btnSubmit) btnSubmit.classList.remove('hidden');
-
-                } else if (this._editMode === 'stop') {
-                    // Start Section: Always Hidden
-                    if (startSection) startSection.classList.add('hidden');
-                    // Stop Section: Always Visible
-                    if (stopSection) stopSection.classList.remove('hidden');
-                    // Submit: Always Visible
-                    if (btnSubmit) btnSubmit.classList.remove('hidden');
-
-                } else { // 'all' (Regular Edit)
-                    // Start Section: Always Visible
-                    if (startSection) startSection.classList.remove('hidden');
-                    // Stop Section: Always Visible
-                    if (stopSection) stopSection.classList.remove('hidden');
-                    // Submit: Always Visible
-                    if (btnSubmit) btnSubmit.classList.remove('hidden');
-                }
-
-                // 3. Upload Box vs Preview Control (The "Micro" View)
-                // If image exists (DB or New), hide upload button, show preview wrapper (handled in setPreview/openModal)
-                // Here we just ensure upload box is hidden if image exists
-
-                if (hasStart) {
-                    if (startUpload) startUpload.classList.add('hidden');
-                } else {
-                    if (startUpload) startUpload.classList.remove('hidden');
-                }
-
-                if (hasStop) {
-                    if (stopUpload) stopUpload.classList.add('hidden');
-                } else {
-                    if (stopUpload) stopUpload.classList.remove('hidden');
-                }
-            },
-
-            clearImage: function (mode) {
-                // Track if user is removing an existing DB image (not just clearing a new upload)
-                if (mode === 'start' || mode === 'stop') {
-                    var wrapperId = 'wrapper-preview-' + mode;
-                    var w = getEl(wrapperId);
-                    var imgEl = getEl('preview-' + mode + '-img');
-                    // If preview was visible and had a real src (DB image), mark as cleared
-                    if (w && !w.classList.contains('hidden') && imgEl && imgEl.src && !imgEl.src.endsWith('undefined') && imgEl.src !== '' && imgEl.src !== window.location.href) {
-                        _clearedDbImages[mode] = true;
-                    }
-                }
-
-                _currentBlobs[mode] = null;
-                if (mode === 'start') getEl('input-start-img').value = '';
-                if (mode === 'stop') getEl('inp-file-stop').value = '';
-                if (mode === 'stop-quick') getEl('inp-file-stop-quick').value = '';
-
-                var wrapperId2 = mode === 'stop-quick' ? 'wrapper-preview-stop-quick' : 'wrapper-preview-' + mode;
-                var w2 = getEl(wrapperId2);
-                if (w2) w2.classList.add('hidden');
-
-                var imgId = mode === 'stop-quick' ? 'preview-stop-quick-img' : 'preview-' + mode + '-img';
-                var img = getEl(imgId);
-                if (img) img.src = '';
-
-                this.checkUploadState();
-            },
-
-            setPreview: function (mode, blob) {
-                var url = URL.createObjectURL(blob);
-                var wrapperId = mode === 'stop-quick' ? 'wrapper-preview-stop-quick' : 'wrapper-preview-' + mode;
-                var imgId = mode === 'stop-quick' ? 'preview-stop-quick-img' : 'preview-' + mode + '-img';
-                var wrapper = getEl(wrapperId);
-                var img = getEl(imgId);
-
-                if (img) img.src = url;
-                if (wrapper) wrapper.classList.remove('hidden');
-                _currentBlobs[mode] = blob;
-
-                this.checkUploadState();
-            },
-
-            handleFileSelect: function (input, mode) {
-                if (input.files && input.files[0]) this.setPreview(mode, input.files[0]);
-            },
-
-            viewImage: function (url) {
-                if (!url) return;
-                getEl('img-preview-target').src = formatDriveUrl(url);
-                getEl('modal-view-image').showModal();
-            }
         };
     })();
 

@@ -419,8 +419,9 @@
           setVal('sel-ticket-severity', row.severity);
 
           setVal('sel-ticket-category', row.category);
-          TicketManager.handleCategoryChange(); // Trigger subcat update
-          setVal('sel-ticket-subcategory', row.subCategory);
+          // Pass subcategory as argument to restore it
+          TicketManager.handleCategoryChange(row.subCategory);
+          // setVal('sel-ticket-subcategory', row.subCategory); // No longer needed here as handleCategoryChange does it
 
           setVal('txt-ticket-action', row.action);
           setVal('txt-ticket-resolved-detail', row.resolvedDetail);
@@ -578,7 +579,7 @@
       //  5. UI INTERACTION HELPERS
       // ============================================================
 
-      handleCategoryChange: () => {
+      handleCategoryChange: (selectedSub = null) => {
         const cat = getEl('sel-ticket-category').value;
         const subEl = getEl('sel-ticket-subcategory');
         if (!subEl) return;
@@ -587,10 +588,15 @@
           const subs = _config.categories[cat];
           subEl.innerHTML = '<option value="">เลือก...</option>' +
             subs.map(s => `<option value="${s}">${s}</option>`).join('');
+
+          if (selectedSub) {
+            subEl.value = selectedSub;
+          }
         } else {
           subEl.innerHTML = '<option value="">-</option>';
         }
-        TicketManager.updateEmailPreview();
+        // Force update preview after change
+        setTimeout(() => TicketManager.updateEmailPreview(), 50);
       },
 
       addAssigneeTag: (val) => {
@@ -682,19 +688,66 @@
           setVal('email-site-addr', p.siteAddr);
           setVal('email-greeting', p.greeting);
           setVal('email-note', p.note);
+          setVal('inp-email-signature', p.signature); // New
 
           // Toggles
           if (getEl('chk-show-greeting')) getEl('chk-show-greeting').checked = p.showGreeting !== false;
           if (getEl('chk-show-note')) getEl('chk-show-note').checked = p.showNote !== false;
+          if (getEl('chk-show-signature')) getEl('chk-show-signature').checked = p.showSignature !== false; // New
 
           TicketManager.updateEmailPreview();
           UIManager.showToast(`โหลดข้อมูล: ${p.name}`, "success");
         }
       },
 
-      // โหลด Saved Draft
+      // --- New: Backup Logic ---
+      _backupFormState: null,
+
       applyDraft: (idx) => {
-        if (idx === '' || idx === null) return;
+        // CASE: Restore Backup (Empty Selection)
+        if (idx === '' || idx === null) {
+          if (TicketManager._backupFormState) {
+            const b = TicketManager._backupFormState;
+            const setVal = (id, v) => { if (getEl(id)) getEl(id).value = v || ''; };
+
+            setVal('email-to', b.to);
+            setVal('email-cc', b.cc);
+            setVal('email-greeting', b.greeting);
+            setVal('email-note', b.note);
+
+            // Restore Site Info
+            setVal('email-company', b.company);
+            setVal('email-contact-name', b.contactName);
+            setVal('email-contact-num', b.contactNum);
+            setVal('email-site-name', b.siteName);
+            setVal('email-site-num', b.siteNum);
+            setVal('email-site-email', b.siteEmail);
+            setVal('email-site-addr', b.siteAddr);
+
+            // Restore Details
+            setVal('email-root-cause', b.rootCause);
+            setVal('email-action', b.action);
+            setVal('email-impact', b.impact);
+            setVal('email-schedule', b.schedule);
+            setVal('inp-email-signature', b.signature);
+
+            if (getEl('chk-show-greeting')) getEl('chk-show-greeting').checked = b.showGreeting;
+            if (getEl('chk-show-note')) getEl('chk-show-note').checked = b.showNote;
+            if (getEl('chk-show-signature')) getEl('chk-show-signature').checked = b.showSignature;
+
+            TicketManager.updateEmailPreview();
+            UIManager.showToast("คืนค่าข้อมูลเดิม", "info");
+            TicketManager._backupFormState = null; // Clear backup after restore
+          }
+          return;
+        }
+
+        // CASE: Apply Draft (Save Backup First)
+        // Only backup if we haven't already (to preserve original user input)
+        if (!TicketManager._backupFormState) {
+          TicketManager._backupFormState = TicketEmail.collectData();
+        }
+
         const d = _profiles.drafts[idx];
         if (d) {
           const setVal = (id, v) => { if (getEl(id)) getEl(id).value = v || ''; };
@@ -714,9 +767,11 @@
           setVal('email-action', d.action);
           setVal('email-impact', d.impact);
           setVal('email-schedule', d.schedule);
+          setVal('inp-email-signature', d.signature);
 
           if (getEl('chk-show-greeting')) getEl('chk-show-greeting').checked = d.showGreeting !== false;
           if (getEl('chk-show-note')) getEl('chk-show-note').checked = d.showNote !== false;
+          if (getEl('chk-show-signature')) getEl('chk-show-signature').checked = d.showSignature !== false;
 
           TicketManager.updateEmailPreview();
           UIManager.showToast(`โหลด Draft: ${d.name}`, "success");
