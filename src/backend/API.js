@@ -81,7 +81,7 @@ function apiHandler(request) {
     'saveBatchTickets': (d) => GmailService.saveBatchTickets(d),
 
     // Match Core
-    'apiGetWorkList': () => MatchController.apiGetWorkList(),
+    'apiGetWorkList': (d) => MatchController.apiGetWorkList(d),
     'apiCreateWorkItem': (d) => MatchController.apiCreateWorkItem(d),
     'apiUpdateWorkItem': (d) => MatchController.apiUpdateWorkItem(d),
     'apiDeleteWorkItem': (d) => MatchController.apiDeleteWorkItem(d),
@@ -128,11 +128,11 @@ function saveMailDrafts(d) { return TicketController.saveMailDrafts(d); }
 function getStaffAndAssignees() { return TicketController.getStaffAndAssignees(); }
 function saveStaffAndAssignees(d) { return TicketController.saveStaffAndAssignees(d); }
 function createTicketAndDraft(d) { return TicketController.createTicketAndDraft(d); }
-function apiGetWorkList() { return MatchController.apiGetWorkList(); }
+function apiGetWorkList(d) { return MatchController.apiGetWorkList(d); }
 function apiCreateWorkItem(d) { return MatchController.apiCreateWorkItem(d); }
 function apiUpdateWorkItem(d) { return MatchController.apiUpdateWorkItem(d); }
 function apiDeleteWorkItem(d) { return MatchController.apiDeleteWorkItem(d); }
 function apiStopWorkItem(d) { return MatchController.apiStopWorkItem(d); }
 function apiGetCalendarEvents(d) { return MatchController.apiGetCalendarEvents(d); }
-function getMatches() { return MatchController.apiGetWorkList(); }
+function getMatches(d) { return MatchController.apiGetWorkList(d); }
 function getUserSettings() { return JSON.stringify({ theme: "light", profile: { email: Session.getActiveUser().getEmail(), role: "Admin" } }); }

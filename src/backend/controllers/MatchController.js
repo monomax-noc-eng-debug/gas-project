@@ -76,11 +76,11 @@ const MatchController = (() => {
   // ✅ Helper: Process Image Array (Mix of Base64 and Existing URLs)
   function _processImageArray(imageItems, id, suffix, dateObj) {
     if (!Array.isArray(imageItems) || imageItems.length === 0) return [];
-    
+
     return imageItems.map((item, index) => {
       // 1. ถ้าเป็น URL เดิม ให้คืนค่ากลับไปเลย
       if (item.type === 'url') return item.data;
-      
+
       // 2. ถ้าเป็น Base64 ให้ทำการ Upload
       if (item.type === 'base64') {
         const timestamp = Utilities.formatDate(new Date(), (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok", "HHmmss");
@@ -111,9 +111,9 @@ const MatchController = (() => {
     // =================================================================
     // 📋 GET WORK LIST (Dashboard Data)
     // =================================================================
-    apiGetWorkList: function () {
+    apiGetWorkList: function (forceRefresh) {
       try {
-        const rawData = SheetService.getAll(getSheetName(), 600, getDbId());
+        const rawData = SheetService.getAll(getSheetName(), 600, getDbId(), forceRefresh);
         if (!rawData || rawData.length < 2) return Response.success([]);
 
         const headers = rawData[0];
@@ -177,12 +177,12 @@ const MatchController = (() => {
         // Logic: Support both Legacy (single) and New (array)
         let imageUrls = [];
         if (data.startImages && Array.isArray(data.startImages) && data.startImages.length > 0) {
-           imageUrls = _processImageArray(data.startImages, newId, "START", matchDate);
+          imageUrls = _processImageArray(data.startImages, newId, "START", matchDate);
         } else if (data.imageBase64) {
-           // Fallback for single image legacy
-           const fileName = `Match_${newId}_START_Legacy.jpg`;
-           const url = _uploadImage(data.imageBase64, data.mimeType || "image/jpeg", fileName, matchDate);
-           if (url) imageUrls.push(url);
+          // Fallback for single image legacy
+          const fileName = `Match_${newId}_START_Legacy.jpg`;
+          const url = _uploadImage(data.imageBase64, data.mimeType || "image/jpeg", fileName, matchDate);
+          if (url) imageUrls.push(url);
         }
 
         const sheetName = getSheetName();
@@ -232,20 +232,20 @@ const MatchController = (() => {
 
         let imageUrls = [];
         if (data.stopImages && Array.isArray(data.stopImages) && !data.isSkipImage) {
-           imageUrls = _processImageArray(data.stopImages, data.id, "STOP", today);
+          imageUrls = _processImageArray(data.stopImages, data.id, "STOP", today);
         } else if (data.imageBase64 && !data.isSkipImage) {
-           // Legacy Fallback
-           const fileName = `Match_${data.id}_STOP_Legacy.jpg`;
-           const url = _uploadImage(data.imageBase64, data.mimeType || "image/jpeg", fileName, today);
-           if (url) imageUrls.push(url);
+          // Legacy Fallback
+          const fileName = `Match_${data.id}_STOP_Legacy.jpg`;
+          const url = _uploadImage(data.imageBase64, data.mimeType || "image/jpeg", fileName, today);
+          if (url) imageUrls.push(url);
         }
 
         const updateMap = { "Status": "DONE" };
 
         if (imageUrls.length > 0) {
-           const valToSave = imageUrls.length > 1 ? JSON.stringify(imageUrls) : imageUrls[0];
-           updateMap["Stop Image"] = valToSave;
-           updateMap["Image Out"] = valToSave;
+          const valToSave = imageUrls.length > 1 ? JSON.stringify(imageUrls) : imageUrls[0];
+          updateMap["Stop Image"] = valToSave;
+          updateMap["Image Out"] = valToSave;
         }
 
         const success = SheetService.update(getSheetName(), data.id, updateMap, "Match ID", getDbId());
@@ -270,47 +270,47 @@ const MatchController = (() => {
 
         // 1. Handle Start Images
         if (data.startImages && Array.isArray(data.startImages)) {
-           const processed = _processImageArray(data.startImages, data.id, "START_Edit", targetDate);
-           if (processed.length > 0) {
-             const val = processed.length > 1 ? JSON.stringify(processed) : processed[0];
-             updateMap["Start Image"] = val;
-             updateMap["Image In"] = val;
-           } else {
-             // If array provided but empty -> User cleared all images
-             updateMap["Start Image"] = "";
-             updateMap["Image In"] = "";
-           }
+          const processed = _processImageArray(data.startImages, data.id, "START_Edit", targetDate);
+          if (processed.length > 0) {
+            const val = processed.length > 1 ? JSON.stringify(processed) : processed[0];
+            updateMap["Start Image"] = val;
+            updateMap["Image In"] = val;
+          } else {
+            // If array provided but empty -> User cleared all images
+            updateMap["Start Image"] = "";
+            updateMap["Image In"] = "";
+          }
         } else if (data.clearStartImage) {
-           updateMap["Start Image"] = "";
-           updateMap["Image In"] = "";
+          updateMap["Start Image"] = "";
+          updateMap["Image In"] = "";
         } else if (data.startImageBase64) {
-           // Legacy single upload update
-           const fileName = `Match_${data.id}_START_Edit.jpg`;
-           const url = _uploadImage(data.startImageBase64, "image/jpeg", fileName, targetDate);
-           updateMap["Start Image"] = url;
-           updateMap["Image In"] = url;
+          // Legacy single upload update
+          const fileName = `Match_${data.id}_START_Edit.jpg`;
+          const url = _uploadImage(data.startImageBase64, "image/jpeg", fileName, targetDate);
+          updateMap["Start Image"] = url;
+          updateMap["Image In"] = url;
         }
 
         // 2. Handle Stop Images
         if (data.stopImages && Array.isArray(data.stopImages)) {
-           const processed = _processImageArray(data.stopImages, data.id, "STOP_Edit", targetDate);
-           if (processed.length > 0) {
-             const val = processed.length > 1 ? JSON.stringify(processed) : processed[0];
-             updateMap["Stop Image"] = val;
-             updateMap["Image Out"] = val;
-           } else {
-             updateMap["Stop Image"] = "";
-             updateMap["Image Out"] = "";
-           }
+          const processed = _processImageArray(data.stopImages, data.id, "STOP_Edit", targetDate);
+          if (processed.length > 0) {
+            const val = processed.length > 1 ? JSON.stringify(processed) : processed[0];
+            updateMap["Stop Image"] = val;
+            updateMap["Image Out"] = val;
+          } else {
+            updateMap["Stop Image"] = "";
+            updateMap["Image Out"] = "";
+          }
         } else if (data.clearStopImage) {
-           updateMap["Stop Image"] = "";
-           updateMap["Image Out"] = "";
+          updateMap["Stop Image"] = "";
+          updateMap["Image Out"] = "";
         } else if (data.stopImageBase64) {
-           // Legacy single upload update
-           const fileName = `Match_${data.id}_STOP_Edit.jpg`;
-           const url = _uploadImage(data.stopImageBase64, "image/jpeg", fileName, targetDate);
-           updateMap["Stop Image"] = url;
-           updateMap["Image Out"] = url;
+          // Legacy single upload update
+          const fileName = `Match_${data.id}_STOP_Edit.jpg`;
+          const url = _uploadImage(data.stopImageBase64, "image/jpeg", fileName, targetDate);
+          updateMap["Stop Image"] = url;
+          updateMap["Image Out"] = url;
         }
 
         const success = SheetService.update(getSheetName(), data.id, updateMap, "Match ID", getDbId());

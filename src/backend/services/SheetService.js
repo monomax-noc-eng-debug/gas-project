@@ -88,19 +88,21 @@ const SheetService = (() => {
      * @param {string} spreadsheetId (Optional) Specific spreadsheet ID to use
      * @return {Array<Array<any>>}
      */
-    getAll: function (sheetName, cacheTime = 1200, spreadsheetId = null) {
+    getAll: function (sheetName, cacheTime = 1200, spreadsheetId = null, skipCache = false) {
       const ssId = spreadsheetId || _getDbId();
       const cache = CacheService.getScriptCache();
       const CACHE_KEY = `SHEET_DATA_${ssId}_${sheetName}`;
 
-      // Try Cache
-      const cached = _getChunkedCache(cache, CACHE_KEY);
-      if (cached) {
-        console.log(`⚡ Cache Hit: ${sheetName} (SS: ${ssId})`);
-        return JSON.parse(cached);
+      // Try Cache (unless skipped)
+      if (!skipCache) {
+        const cached = _getChunkedCache(cache, CACHE_KEY);
+        if (cached) {
+          console.log(`⚡ Cache Hit: ${sheetName} (SS: ${ssId})`);
+          return JSON.parse(cached);
+        }
       }
 
-      console.log(`💤 Cache Miss: Reading ${sheetName} (SS: ${ssId})`);
+      console.log(`💤 Cache Miss (Skip=${skipCache}): Reading ${sheetName} (SS: ${ssId})`);
       const sheet = _getSheet(sheetName, spreadsheetId);
       const data = sheet.getDataRange().getValues();
 

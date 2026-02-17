@@ -1,18 +1,18 @@
 <script>
-  /**
-     * JS_Dashboard.html
-     * Version: Multi-Image Support & Grid Preview
-     */
+    /**
+       * JS_Dashboard.html
+       * Version: Multi-Image Support & Grid Preview
+       */
     const Dashboard = (function () {
         // --- Helpers ---
         const getEl = function (id) { return document.getElementById(id); };
         let _currentDate = new Date();
         let _allWorkData = [];
         let _pickers = {};
-        
+
         // ✨ NEW: Store array of images objects: { type: 'url'|'file', source: string|File }
-        let _workImages = { start: [], stop: [], 'stop-quick': [] }; 
-        
+        let _workImages = { start: [], stop: [], 'stop-quick': [] };
+
         let _editMode = 'all'; // 'new', 'all', 'start', 'stop'
         let _isLoaded = false;
         let _lastCalendarFetchDate = null;
@@ -129,7 +129,7 @@
                 var empty = getEl('dash-empty');
                 if (empty) empty.classList.add('hidden');
 
-                Server.call({ func: 'apiGetWorkList', silent: true })
+                Server.call({ func: 'apiGetWorkList', silent: true }, forceRefresh)
                     .then(function (res) {
                         if (res && res.success) {
                             _allWorkData = res.data || [];
@@ -183,7 +183,7 @@
                     var isTimeReached = now >= matchDate;
                     var isMatchEnded = now >= matchEndDate;
                     var hasStart = !!item.start_img && (Array.isArray(item.start_img) ? item.start_img.length > 0 : true);
-                    
+
                     // Status Widget
                     var statusWidget = '';
                     if (isDone) statusWidget = '<div class="flex flex-col items-center justify-center opacity-70"><div class="w-6 h-6 rounded-full bg-success text-white flex items-center justify-center mb-1 shadow-sm"><i class="fas fa-check text-[10px]"></i></div><span class="text-[9px] font-bold text-success tracking-wider">DONE</span></div>';
@@ -220,16 +220,17 @@
                         }
 
                         if (count === 0) {
-                            return '<div onclick="Dashboard.openEditModal(\'' + itemJson + '\', \'' + label.toLowerCase() + '\')" class="tooltip cursor-pointer w-10 h-10 rounded-lg bg-warning/10 border border-warning/30 flex items-center justify-center mx-auto hover:bg-warning/20 transition-colors animate-pulse" data-tip="ยังไม่ใส่รูป ' + label + ' (คลิกเพื่อเพิ่ม)">' +
-                                '<i class="fas fa-exclamation text-warning text-xs"></i>' +
+                            // 🟡 No Image: Use "No Img" thumbnail, No Animation
+                            return '<div onclick="Dashboard.openEditModal(\'' + itemJson + '\', \'' + label.toLowerCase() + '\')" class="tooltip cursor-pointer w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto hover:bg-slate-200 transition-colors" data-tip="ยังไม่ใส่รูป ' + label + ' (คลิกเพื่อเพิ่ม)">' +
+                                '<span class="text-[9px] text-slate-400 font-bold leading-tight">No<br>Img</span>' +
                                 '</div>';
                         }
-                        
+
                         var validUrl = formatDriveUrl(firstUrl);
                         var badge = count > 1 ? '<span class="absolute -top-1 -right-1 bg-black text-white text-[8px] font-bold px-1 rounded-full shadow-md border border-white">+' + (count - 1) + '</span>' : '';
-                        
-                        // ✅ Use viewWorkImages to lookup array
-                        return '<div onclick="Dashboard.viewWorkImages(\'' + item.id + '\', \'' + label.toLowerCase() + '\')" class="tooltip cursor-pointer hover:scale-110 transition-transform bg-white rounded-lg shadow-sm border border-base-200 p-0.5 inline-block relative group" data-tip="ดูรูป ' + label + ' (' + count + ')">' +
+
+                        // ✅ Use viewWorkImages to lookup array (No Animation)
+                        return '<div onclick="Dashboard.viewWorkImages(\'' + item.id + '\', \'' + label.toLowerCase() + '\')" class="tooltip cursor-pointer bg-white rounded-lg shadow-sm border border-base-200 p-0.5 inline-block relative group" data-tip="ดูรูป ' + label + ' (' + count + ')">' +
                             '<img src="' + validUrl + '" class="h-10 w-10 object-cover rounded-md" onerror="this.onerror=null;this.src=\'https://placehold.co/40x40?text=Err\'">' +
                             badge +
                             '</div>';
@@ -250,16 +251,16 @@
             // --- ✨ NEW: Image Management Functions ---
 
             // Clear all images for a mode
-            resetImages: function(mode) {
+            resetImages: function (mode) {
                 _workImages[mode] = [];
                 this.renderGallery(mode);
             },
 
             // Add images (from file input or DB URLs)
-            addImages: function(mode, items) {
+            addImages: function (mode, items) {
                 // items can be array of Files or Strings (URLs)
                 if (!items || items.length === 0) return;
-                
+
                 Array.from(items).forEach(item => {
                     if (item instanceof File) {
                         _workImages[mode].push({ type: 'file', source: item });
@@ -270,8 +271,8 @@
                 this.renderGallery(mode);
             },
 
-// --- Updated Gallery Render (Click to View Gallery) ---
-            renderGallery: function(mode) {
+            // --- Updated Gallery Render (Click to View Gallery) ---
+            renderGallery: function (mode) {
                 const container = getEl('gallery-' + mode);
                 const countEl = getEl(mode === 'stop-quick' ? '' : 'count-' + mode);
                 const images = _workImages[mode];
@@ -300,37 +301,37 @@
             // --- ✨ NEW: View Image & Gallery Functions ---
 
             // 1. Helper to open gallery from Edit Modal (where we have mixed File/URL objects)
-            viewGalleryFromEdit: function(mode, startIndex) {
+            viewGalleryFromEdit: function (mode, startIndex) {
                 const images = _workImages[mode];
                 if (!images || images.length === 0) return;
-                
+
                 // Convert all to URLs
                 const urlList = images.map(img => (img.type === 'file') ? URL.createObjectURL(img.source) : img.source);
                 this.viewImage(urlList, startIndex);
             },
 
             // 2. Helper to open gallery from Dashboard Table (lookup by ID)
-            viewWorkImages: function(id, type) { // type = 'start' or 'stop'
+            viewWorkImages: function (id, type) { // type = 'start' or 'stop'
                 const item = _allWorkData.find(d => d.id === id);
                 if (!item) return;
-                
+
                 let rawData = (type === 'start') ? item.start_img : item.stop_img;
                 let list = [];
-                
+
                 if (Array.isArray(rawData)) list = rawData;
                 else if (rawData) list = [rawData];
-                
+
                 if (list.length > 0) this.viewImage(list, 0);
             },
 
             // 3. Core Viewer Function (Accepts Array or String)
             viewImage: function (source, startIndex = 0) {
                 if (!source) return;
-                
+
                 // Reset State
                 _galleryList = Array.isArray(source) ? source : [source];
                 _galleryIndex = startIndex;
-                
+
                 if (_galleryList.length === 0) return;
 
                 // Initial Render
@@ -339,12 +340,12 @@
             },
 
             // 4. Update UI (Image, Arrows, Counter)
-            updatePreviewUI: function() {
+            updatePreviewUI: function () {
                 const imgEl = getEl('img-preview-target');
                 const prevBtn = getEl('btn-gallery-prev');
                 const nextBtn = getEl('btn-gallery-next');
                 const counter = getEl('gallery-counter');
-                
+
                 // Set Image
                 const currentUrl = _galleryList[_galleryIndex];
                 imgEl.src = formatDriveUrl(currentUrl);
@@ -363,33 +364,33 @@
             },
 
             // 5. Navigation Logic
-            navGallery: function(direction) {
+            navGallery: function (direction) {
                 let newIndex = _galleryIndex + direction;
                 // Loop functionality
                 if (newIndex < 0) newIndex = _galleryList.length - 1;
                 if (newIndex >= _galleryList.length) newIndex = 0;
-                
+
                 _galleryIndex = newIndex;
                 this.updatePreviewUI();
             },
 
-            removeImage: function(mode, index) {
+            removeImage: function (mode, index) {
                 _workImages[mode].splice(index, 1);
                 this.renderGallery(mode);
             },
 
-            handleFileSelect: function(input, mode) {
+            handleFileSelect: function (input, mode) {
                 if (input.files && input.files.length > 0) {
                     this.addImages(mode, input.files);
                     input.value = ''; // Reset input to allow re-selecting same file
                 }
             },
 
-            triggerPaste: async function(mode) {
+            triggerPaste: async function (mode) {
                 var modalId = mode === 'stop-quick' ? 'modal-stop-work' : 'modal-add-work';
                 var areaId = 'paste-area-' + mode;
                 var area = getEl(areaId);
-                
+
                 if (area) {
                     area.style.width = '1px'; area.style.height = '1px'; area.style.opacity = '0';
                     area.style.position = 'fixed'; area.focus();
@@ -422,7 +423,7 @@
                 }
             },
 
-            handlePasteEvent: function(e, mode) {
+            handlePasteEvent: function (e, mode) {
                 var items = (e.clipboardData || e.originalEvent.clipboardData).items;
                 for (var i = 0; i < items.length; i++) {
                     if (items[i].type.indexOf("image") !== -1) {
@@ -512,7 +513,7 @@
                 // Visibility logic based on mode
                 var startSection = getEl('section-img-start');
                 var stopSection = getEl('section-img-stop');
-                
+
                 if (startSection) startSection.classList.remove('hidden');
                 if (stopSection) stopSection.classList.remove('hidden');
 
@@ -527,7 +528,7 @@
                 var away = getEl('input-away').value.trim();
                 var sectionStart = getEl('section-img-start');
                 if (!sectionStart) return;
-                
+
                 if (this._editMode === 'new') {
                     if (home && away) sectionStart.classList.remove('hidden');
                     else sectionStart.classList.add('hidden');
@@ -610,7 +611,7 @@
                         // Compatibility with old backend (Send first Base64 if exists, for legacy support)
                         // Note: Backend SHOULD be updated to use payload.startImages array.
                         const startB64 = startRes.find(x => x.type === 'base64');
-                        if (startB64) payload.imageBase64 = startB64.data; 
+                        if (startB64) payload.imageBase64 = startB64.data;
 
                         const apiFunc = isEdit ? 'apiUpdateWorkItem' : 'apiCreateWorkItem';
                         return Server.call({ func: apiFunc, silent: true }, payload);
@@ -660,18 +661,18 @@
                         stopImages: images, // Array of {type:'base64', data: '...'}
                         isSkipImage: skipImage
                     })
-                    .then(res => {
-                        if (res && res.success) {
-                            showToastInModal("จบงานเรียบร้อย!", "success", "modal-stop-work");
-                            setTimeout(() => { getEl('modal-stop-work').close(); Dashboard.loadWorkList(true); }, 1000);
-                        } else { throw new Error(res ? res.message : "Unknown Error"); }
-                    })
-                    .catch(e => { Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-stop-work') }); })
-                    .finally(() => {
-                        if (btn) btn.disabled = false;
-                        if (btnSkip) btnSkip.disabled = false;
-                        if (spinner) spinner.classList.add('hidden');
-                    });
+                        .then(res => {
+                            if (res && res.success) {
+                                showToastInModal("จบงานเรียบร้อย!", "success", "modal-stop-work");
+                                setTimeout(() => { getEl('modal-stop-work').close(); Dashboard.loadWorkList(true); }, 1000);
+                            } else { throw new Error(res ? res.message : "Unknown Error"); }
+                        })
+                        .catch(e => { Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-stop-work') }); })
+                        .finally(() => {
+                            if (btn) btn.disabled = false;
+                            if (btnSkip) btnSkip.disabled = false;
+                            if (spinner) spinner.classList.add('hidden');
+                        });
                 });
             },
 
