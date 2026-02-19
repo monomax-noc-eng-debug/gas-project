@@ -1,692 +1,717 @@
 <script>
-    /**
-     * Settings Manager Module
-     * จัดการ Configuration ของระบบ Ticket: Types, Statuses, Severities, Categories & SubCategories
-     * + Email Profiles (To/CC)
-     */
-    const SettingsManager = (() => {
-        let _config = { types: [], statuses: [], severities: [], categories: {}, staff: [], assignees: [] };
-        let _emailProfiles = [];
-        let _emailDrafts = []; // Now Site Profiles
-        let _mailDrafts = []; // Managed here only for deletion
-        let _editContext = null;
-        let _editProfileIdx = -1;
-        let _editDraftIdx = -1;
-        let _isLoaded = false; // Cache Flag
-        const getEl = (id) => document.getElementById(id);
+  /**
+   * Settings Manager Module
+   * จัดการ Configuration ของระบบ Ticket: Types, Statuses, Severities, Categories & SubCategories
+   * + Email Profiles (To/CC)
+   */
+  const SettingsManager = (() => {
+    let _config = {
+      types: [],
+      statuses: [],
+      severities: [],
+      categories: {},
+      staff: [],
+      assignees: [],
+    };
+    let _emailProfiles = [];
+    let _emailDrafts = []; // Now Site Profiles
+    let _mailDrafts = []; // Managed here only for deletion
+    let _editContext = null;
+    let _editProfileIdx = -1;
+    let _editDraftIdx = -1;
+    let _isLoaded = false; // Cache Flag
+    const getEl = (id) => document.getElementById(id);
 
-        return {
-            init: function () {
-                console.log("⚙️ SettingsManager Initialized");
-            },
+    return {
+      init: function () {
+        console.log("⚙️ SettingsManager Initialized");
+      },
 
-            onShow: function () {
-                this.loadAll(false);
-            },
+      onShow: function () {
+        this.loadAll(false);
+      },
 
-            loadAll: function (force = false) {
-                if (!force && _isLoaded) {
-                    console.log("⚙️ Settings Cache Hit");
-                    return;
-                }
+      loadAll: function (force = false) {
+        if (!force && _isLoaded) {
+          console.log("⚙️ Settings Cache Hit");
+          return;
+        }
+        this.loadSettings(force);
+        this.loadEmailProfiles();
+        this.loadEmailDrafts();
+        this.loadMailDrafts();
+        _isLoaded = true;
+      },
 
-                // Show loading state implies one of the loaders will show it, 
-                // but let's just trigger them. Each has its own UI/silent mode logic?
-                // Actually loadSettings shows a loader. Others are silent.
+      // ===================== Ticket Config =====================
+      loadSettings: function (force) {
+        const loader = getEl("sett-loader");
+        if (loader) loader.classList.remove("hidden");
 
-                this.loadSettings(force);
-                this.loadEmailProfiles();
-                this.loadEmailDrafts();
-                this.loadMailDrafts();
+        const p1 = Server.call({ func: "getTicketConfig", silent: true });
+        const p2 = Server.call({ func: "getStaffAndAssignees", silent: true });
 
-                _isLoaded = true;
-            },
+        Promise.all([p1, p2])
+          .then(([resConfig, resStaff]) => {
+            if (resConfig.success) {
+              const data = resConfig.data || {};
+              _config.types = data.types || [];
+              _config.statuses = data.statuses || [];
+              _config.severities = data.severities || [];
+              _config.categories = data.categories || {};
+            }
+            if (resStaff.success && resStaff.data) {
+              _config.staff = resStaff.data.leaders || [];
+              _config.assignees = resStaff.data.operators || [];
+            } else {
+              _config.staff = _config.staff || [];
+              _config.assignees = _config.assignees || [];
+            }
+            this.renderAll();
+            if (force) UIManager.showToast("โหลดข้อมูลสำเร็จ", "success");
+          })
+          .catch((err) => {
+            console.error(err);
+            UIManager.showToast("Connection Error", "error");
+          })
+          .finally(() => {
+            if (loader) loader.classList.add("hidden");
+          });
+      },
 
-            // ===================== Ticket Config (Statuses, Types, Severities, Categories) =====================
-            loadSettings: function (force) {
-                const loader = getEl('sett-loader');
-                if (loader) loader.classList.remove('hidden');
+      renderAll: function () {
+        this.renderList("statuses");
+        this.renderList("types");
+        this.renderList("severities");
+        this.renderList("staff");
+        this.renderList("assignees");
+        this.renderCategories();
+      },
 
-                const p1 = Server.call({ func: 'getTicketConfig', silent: true });
-                const p2 = Server.call({ func: 'getStaffAndAssignees', silent: true });
+      renderList: function (listName) {
+        const container = getEl("list-" + listName);
+        const counter = getEl("count-" + listName);
+        const items = _config[listName] || [];
 
-                Promise.all([p1, p2])
-                    .then(([resConfig, resStaff]) => {
-                        console.log("[loadSettings] Config:", resConfig);
-                        console.log("[loadSettings] Staff:", resStaff);
+        if (counter) counter.innerText = items.length;
+        if (!container) return;
 
-                        if (resConfig.success) {
-                            // Merge config carefully
-                            const data = resConfig.data || {};
-                            _config.types = data.types || [];
-                            _config.statuses = data.statuses || [];
-                            _config.severities = data.severities || [];
-                            _config.categories = data.categories || {};
-                        } else {
-                            console.error("Config Load Error:", resConfig.message);
-                        }
+        if (items.length === 0) {
+          container.innerHTML =
+            '<div class="text-center text-xs text-gray-300 py-4">ยังไม่มีข้อมูล</div>';
+          return;
+        }
 
-                        if (resStaff.success && resStaff.data) {
-                            _config.staff = resStaff.data.leaders || [];
-                            _config.assignees = resStaff.data.operators || [];
-                        } else {
-                            // Fallback if load failed, keep existing or empty
-                            _config.staff = _config.staff || [];
-                            _config.assignees = _config.assignees || [];
-                        }
-
-                        this.renderAll();
-                        if (force) UIManager.showToast("โหลดข้อมูลสำเร็จ", "success");
-                    })
-                    .catch(err => {
-                        console.error(err);
-                        UIManager.showToast("Connection Error", "error");
-                    })
-                    .finally(() => {
-                        if (loader) loader.classList.add('hidden');
-                    });
-            },
-
-            renderAll: function () {
-                this.renderList('statuses');
-                this.renderList('types');
-                this.renderList('severities');
-                this.renderList('staff');
-                this.renderList('assignees');
-                this.renderCategories();
-            },
-
-            renderList: function (listName) {
-                const container = getEl('list-' + listName);
-                const counter = getEl('count-' + listName);
-                const items = _config[listName] || [];
-
-                if (counter) counter.innerText = items.length;
-                if (!container) return;
-
-                if (items.length === 0) {
-                    container.innerHTML = '<div class="text-center text-xs text-gray-300 py-4">ยังไม่มีข้อมูล</div>';
-                    return;
-                }
-
-                container.innerHTML = items.map((item, i) => `
-          <div class="flex items-center justify-between group bg-base-100 hover:bg-base-200/50 px-3 py-2 rounded-lg transition-all">
-            <span class="text-xs font-medium text-gray-700">${item}</span>
-            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onclick="SettingsManager.editItem('${listName}', ${i})" 
-                class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-primary">
-                <i class="fas fa-pen text-[10px]"></i>
-              </button>
-              <button onclick="SettingsManager.removeItem('${listName}', ${i})" 
-                class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500">
-                <i class="fas fa-trash text-[10px]"></i>
-              </button>
-            </div>
-          </div>
-        `).join('');
-            },
-
-            renderCategories: function () {
-                const container = getEl('container-categories');
-                if (!container) return;
-
-                const cats = Object.keys(_config.categories);
-                if (cats.length === 0) {
-                    container.innerHTML = '<div class="text-center text-sm text-gray-300 py-10"><i class="fas fa-folder-open text-2xl mb-2"></i><p>ยังไม่มีหมวดหมู่</p></div>';
-                    return;
-                }
-
-                container.innerHTML = cats.map(cat => {
-                    const subs = _config.categories[cat] || [];
-                    return `
-            <div class="collapse collapse-arrow bg-base-100 border border-base-200 rounded-xl shadow-sm">
-              <input type="checkbox" checked>
-              <div class="collapse-title py-3 px-4 min-h-0">
-                <div class="flex items-center justify-between">
-                  <span class="text-sm font-bold text-gray-700 flex items-center gap-2">
-                    <i class="fas fa-folder text-warning text-xs"></i> ${cat}
-                    <span class="badge badge-ghost badge-xs font-mono">${subs.length}</span>
-                  </span>
-                  <div class="flex items-center gap-1 z-10">
-                    <button onclick="event.stopPropagation(); SettingsManager.editCategory('${cat}')" 
-                      class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-primary">
-                      <i class="fas fa-pen text-[10px]"></i>
-                    </button>
-                    <button onclick="event.stopPropagation(); SettingsManager.removeCategory('${cat}')" 
-                      class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500">
-                      <i class="fas fa-trash text-[10px]"></i>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div class="collapse-content px-4 pb-3">
-                <div class="flex gap-2 mb-2">
-                  <input type="text" id="in-sub-${cat.replace(/\s/g, '_')}" 
-                    class="input input-xs input-bordered flex-1 text-xs" 
-                    placeholder="เพิ่มหมวดย่อย..."
-                    onkeypress="if(event.key==='Enter') SettingsManager.addSubCategory('${cat}')">
-                  <button onclick="SettingsManager.addSubCategory('${cat}')" 
-                    class="btn btn-xs btn-primary px-2">
-                    <i class="fas fa-plus text-[10px]"></i>
-                  </button>
-                </div>
-                <div class="space-y-1">
-                  ${subs.length === 0 ? '<div class="text-[10px] text-gray-300 text-center py-2">ไม่มีหมวดย่อย</div>' :
-                            subs.map((sub, si) => `
-                      <div class="flex items-center justify-between group bg-white hover:bg-base-200/50 px-3 py-1.5 rounded-lg transition-all border border-base-100">
-                        <span class="text-xs text-gray-600">${sub}</span>
+        container.innerHTML = items
+          .map(
+            (item, i) => `
+                    <div class="flex items-center justify-between group bg-base-100 hover:bg-base-200/50 px-3 py-2 rounded-lg transition-all">
+                        <span class="text-xs font-medium text-gray-700">${item}</span>
                         <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onclick="SettingsManager.editSubCategory('${cat}', ${si})" 
-                            class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-primary">
-                            <i class="fas fa-pen text-[10px]"></i>
-                          </button>
-                          <button onclick="SettingsManager.removeSubCategory('${cat}', ${si})" 
-                            class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500">
-                            <i class="fas fa-trash text-[10px]"></i>
-                          </button>
+                            <button onclick="SettingsManager.editItem('${listName}', ${i})" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-primary"><i class="fas fa-pen text-[10px]"></i></button>
+                            <button onclick="SettingsManager.removeItem('${listName}', ${i})" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500"><i class="fas fa-trash text-[10px]"></i></button>
                         </div>
-                      </div>
-                    `).join('')
-                        }
-                </div>
-              </div>
-            </div>
-          `;
-                }).join('');
-            },
+                    </div>`,
+          )
+          .join("");
+      },
 
-            handleEnter: function (event, listName) {
-                if (event.key === 'Enter') this.addItem(listName);
-            },
+      renderCategories: function () {
+        const container = getEl("container-categories");
+        if (!container) return;
 
-            addItem: function (listName) {
-                const inputId = listName === 'statuses' ? 'in-new-status' :
-                    listName === 'types' ? 'in-new-type' :
-                        listName === 'severities' ? 'in-new-severity' :
-                            listName === 'staff' ? 'in-new-staff' : 'in-new-assignee';
-                const input = getEl(inputId);
-                if (!input) return;
-                const val = input.value.trim();
-                if (!val) return;
-                if (_config[listName].includes(val)) {
-                    UIManager.showToast("รายการนี้มีอยู่แล้ว", "error");
-                    return;
-                }
-                _config[listName].push(val);
-                input.value = '';
-                this.renderList(listName);
-            },
+        const cats = Object.keys(_config.categories);
+        if (cats.length === 0) {
+          container.innerHTML =
+            '<div class="text-center text-sm text-gray-300 py-10"><i class="fas fa-folder-open text-2xl mb-2"></i><p>ยังไม่มีหมวดหมู่</p></div>';
+          return;
+        }
 
-            removeItem: function (listName, index) {
-                _config[listName].splice(index, 1);
-                this.renderList(listName);
-            },
+        container.innerHTML = cats
+          .map((cat) => {
+            const subs = _config.categories[cat] || [];
+            return `
+                    <div class="collapse collapse-arrow bg-base-100 border border-base-200 rounded-xl shadow-sm">
+                        <input type="checkbox" checked>
+                        <div class="collapse-title py-3 px-4 min-h-0">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                    <i class="fas fa-folder text-warning text-xs"></i> ${cat}
+                                    <span class="badge badge-ghost badge-xs font-mono">${subs.length}</span>
+                                </span>
+                                <div class="flex items-center gap-1 z-10">
+                                    <button onclick="event.stopPropagation(); SettingsManager.editCategory('${cat}')" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-primary"><i class="fas fa-pen text-[10px]"></i></button>
+                                    <button onclick="event.stopPropagation(); SettingsManager.removeCategory('${cat}')" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500"><i class="fas fa-trash text-[10px]"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="collapse-content px-4 pb-3">
+                            <div class="flex gap-2 mb-2">
+                                <input type="text" id="in-sub-${cat.replace(/\s/g, "_")}" class="input input-xs input-bordered flex-1 text-xs" placeholder="เพิ่มหมวดย่อย..." onkeypress="if(event.key==='Enter') SettingsManager.addSubCategory('${cat}')">
+                                <button onclick="SettingsManager.addSubCategory('${cat}')" class="btn btn-xs btn-primary px-2"><i class="fas fa-plus text-[10px]"></i></button>
+                            </div>
+                            <div class="space-y-1">
+                                ${
+                                  subs.length === 0
+                                    ? '<div class="text-[10px] text-gray-300 text-center py-2">ไม่มีหมวดย่อย</div>'
+                                    : subs
+                                        .map(
+                                          (sub, si) => `
+                                    <div class="flex items-center justify-between group bg-white hover:bg-base-200/50 px-3 py-1.5 rounded-lg transition-all border border-base-100">
+                                        <span class="text-xs text-gray-600">${sub}</span>
+                                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onclick="SettingsManager.editSubCategory('${cat}', ${si})" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-primary"><i class="fas fa-pen text-[10px]"></i></button>
+                                            <button onclick="SettingsManager.removeSubCategory('${cat}', ${si})" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500"><i class="fas fa-trash text-[10px]"></i></button>
+                                        </div>
+                                    </div>`,
+                                        )
+                                        .join("")
+                                }
+                            </div>
+                        </div>
+                    </div>`;
+          })
+          .join("");
+      },
 
-            editItem: function (listName, index) {
-                _editContext = { listName: listName, index: index };
-                const modal = getEl('modal_edit_setting');
-                const title = getEl('modal-edit-title');
-                const input = getEl('modal-edit-input');
-                const errEl = getEl('modal-edit-error');
+      handleEnter: function (event, listName) {
+        if (event.key === "Enter") this.addItem(listName);
+      },
 
-                if (title) title.innerText = 'แก้ไข ' + listName;
-                if (input) input.value = _config[listName][index];
-                if (errEl) errEl.classList.add('hidden');
-                if (modal) modal.showModal();
-                setTimeout(() => { if (input) input.focus(); }, 100);
-            },
+      addItem: function (listName) {
+        const inputId =
+          listName === "statuses"
+            ? "in-new-status"
+            : listName === "types"
+              ? "in-new-type"
+              : listName === "severities"
+                ? "in-new-severity"
+                : listName === "staff"
+                  ? "in-new-staff"
+                  : "in-new-assignee";
+        const input = getEl(inputId);
+        if (!input) return;
+        const val = input.value.trim();
+        if (!val) return;
+        if (_config[listName].includes(val)) {
+          UIManager.showToast("รายการนี้มีอยู่แล้ว", "error");
+          return;
+        }
+        _config[listName].push(val);
+        input.value = "";
+        this.renderList(listName);
+      },
 
-            addCategory: function () {
-                const input = getEl('in-new-cat');
-                if (!input) return;
-                const val = input.value.trim();
-                if (!val) return;
-                if (_config.categories[val]) {
-                    UIManager.showToast("หมวดหมู่นี้มีอยู่แล้ว", "error");
-                    return;
-                }
-                _config.categories[val] = [];
-                input.value = '';
-                this.renderCategories();
-            },
+      removeItem: function (listName, index) {
+        _config[listName].splice(index, 1);
+        this.renderList(listName);
+      },
 
-            removeCategory: function (cat) {
-                delete _config.categories[cat];
-                this.renderCategories();
-            },
+      editItem: function (listName, index) {
+        _editContext = { listName: listName, index: index };
+        const modal = getEl("modal_edit_setting");
+        const title = getEl("modal-edit-title");
+        const input = getEl("modal-edit-input");
+        const errEl = getEl("modal-edit-error");
+        if (title) title.innerText = "แก้ไข " + listName;
+        if (input) input.value = _config[listName][index];
+        if (errEl) errEl.classList.add("hidden");
+        if (modal) modal.showModal();
+        setTimeout(() => {
+          if (input) input.focus();
+        }, 100);
+      },
 
-            editCategory: function (cat) {
-                _editContext = { category: cat, subIndex: -1 };
-                const modal = getEl('modal_edit_setting');
-                const title = getEl('modal-edit-title');
-                const input = getEl('modal-edit-input');
-                const errEl = getEl('modal-edit-error');
+      addCategory: function () {
+        const input = getEl("in-new-cat");
+        if (!input) return;
+        const val = input.value.trim();
+        if (!val) return;
+        if (_config.categories[val]) {
+          UIManager.showToast("หมวดหมู่นี้มีอยู่แล้ว", "error");
+          return;
+        }
+        _config.categories[val] = [];
+        input.value = "";
+        this.renderCategories();
+      },
 
-                if (title) title.innerText = 'แก้ไขหมวดหมู่';
-                if (input) input.value = cat;
-                if (errEl) errEl.classList.add('hidden');
-                if (modal) modal.showModal();
-                setTimeout(() => { if (input) input.focus(); }, 100);
-            },
+      removeCategory: function (cat) {
+        delete _config.categories[cat];
+        this.renderCategories();
+      },
 
-            addSubCategory: function (cat) {
-                const inputId = 'in-sub-' + cat.replace(/\s/g, '_');
-                const input = getEl(inputId);
-                if (!input) return;
-                const val = input.value.trim();
-                if (!val) return;
-                if (!_config.categories[cat]) _config.categories[cat] = [];
-                if (_config.categories[cat].includes(val)) {
-                    UIManager.showToast("หมวดย่อยนี้มีอยู่แล้ว", "error");
-                    return;
-                }
-                _config.categories[cat].push(val);
-                input.value = '';
-                this.renderCategories();
-            },
+      editCategory: function (cat) {
+        _editContext = { category: cat, subIndex: -1 };
+        const modal = getEl("modal_edit_setting");
+        const title = getEl("modal-edit-title");
+        const input = getEl("modal-edit-input");
+        const errEl = getEl("modal-edit-error");
+        if (title) title.innerText = "แก้ไขหมวดหมู่";
+        if (input) input.value = cat;
+        if (errEl) errEl.classList.add("hidden");
+        if (modal) modal.showModal();
+        setTimeout(() => {
+          if (input) input.focus();
+        }, 100);
+      },
 
-            removeSubCategory: function (cat, subIndex) {
-                if (_config.categories[cat]) {
-                    _config.categories[cat].splice(subIndex, 1);
-                    this.renderCategories();
-                }
-            },
+      addSubCategory: function (cat) {
+        const inputId = "in-sub-" + cat.replace(/\s/g, "_");
+        const input = getEl(inputId);
+        if (!input) return;
+        const val = input.value.trim();
+        if (!val) return;
+        if (!_config.categories[cat]) _config.categories[cat] = [];
+        if (_config.categories[cat].includes(val)) {
+          UIManager.showToast("หมวดย่อยนี้มีอยู่แล้ว", "error");
+          return;
+        }
+        _config.categories[cat].push(val);
+        input.value = "";
+        this.renderCategories();
+      },
 
-            editSubCategory: function (cat, subIndex) {
-                _editContext = { category: cat, subIndex: subIndex };
-                const modal = getEl('modal_edit_setting');
-                const title = getEl('modal-edit-title');
-                const input = getEl('modal-edit-input');
-                const errEl = getEl('modal-edit-error');
+      removeSubCategory: function (cat, subIndex) {
+        if (_config.categories[cat]) {
+          _config.categories[cat].splice(subIndex, 1);
+          this.renderCategories();
+        }
+      },
 
-                if (title) title.innerText = 'แก้ไขหมวดย่อย';
-                if (input) input.value = _config.categories[cat][subIndex];
-                if (errEl) errEl.classList.add('hidden');
-                if (modal) modal.showModal();
-                setTimeout(() => { if (input) input.focus(); }, 100);
-            },
+      editSubCategory: function (cat, subIndex) {
+        _editContext = { category: cat, subIndex: subIndex };
+        const modal = getEl("modal_edit_setting");
+        const title = getEl("modal-edit-title");
+        const input = getEl("modal-edit-input");
+        const errEl = getEl("modal-edit-error");
+        if (title) title.innerText = "แก้ไขหมวดย่อย";
+        if (input) input.value = _config.categories[cat][subIndex];
+        if (errEl) errEl.classList.add("hidden");
+        if (modal) modal.showModal();
+        setTimeout(() => {
+          if (input) input.focus();
+        }, 100);
+      },
 
-            saveEditFromModal: function () {
-                const input = getEl('modal-edit-input');
-                const errEl = getEl('modal-edit-error');
-                const newVal = input ? input.value.trim() : '';
+      saveEditFromModal: function () {
+        const input = getEl("modal-edit-input");
+        const errEl = getEl("modal-edit-error");
+        const newVal = input ? input.value.trim() : "";
+        if (!newVal) {
+          if (errEl) errEl.classList.remove("hidden");
+          return;
+        }
 
-                if (!newVal) {
-                    if (errEl) errEl.classList.remove('hidden');
-                    return;
-                }
+        if (_editContext) {
+          if (_editContext.listName) {
+            _config[_editContext.listName][_editContext.index] = newVal;
+            this.renderList(_editContext.listName);
+          } else if (_editContext.category && _editContext.subIndex === -1) {
+            const oldCat = _editContext.category;
+            if (oldCat !== newVal) {
+              _config.categories[newVal] = _config.categories[oldCat] || [];
+              delete _config.categories[oldCat];
+            }
+            this.renderCategories();
+          } else if (_editContext.category && _editContext.subIndex >= 0) {
+            _config.categories[_editContext.category][_editContext.subIndex] =
+              newVal;
+            this.renderCategories();
+          }
+        }
+        this.closeModal();
+      },
 
-                if (_editContext) {
-                    if (_editContext.listName) {
-                        _config[_editContext.listName][_editContext.index] = newVal;
-                        this.renderList(_editContext.listName);
-                    } else if (_editContext.category && _editContext.subIndex === -1) {
-                        const oldCat = _editContext.category;
-                        if (oldCat !== newVal) {
-                            _config.categories[newVal] = _config.categories[oldCat] || [];
-                            delete _config.categories[oldCat];
-                        }
-                        this.renderCategories();
-                    } else if (_editContext.category && _editContext.subIndex >= 0) {
-                        _config.categories[_editContext.category][_editContext.subIndex] = newVal;
-                        this.renderCategories();
-                    }
-                }
+      closeModal: function () {
+        const modal = getEl("modal_edit_setting");
+        if (modal) modal.close();
+        _editContext = null;
+      },
 
-                this.closeModal();
-            },
+      saveSettings: function () {
+        const btn = getEl("btn-sett-save");
+        const icon = getEl("icon-sett-save");
+        const loader = getEl("loader-sett-save");
+        if (btn) btn.disabled = true;
+        if (icon) icon.classList.add("hidden");
+        if (loader) loader.classList.remove("hidden");
 
-            closeModal: function () {
-                const modal = getEl('modal_edit_setting');
-                if (modal) modal.close();
-                _editContext = null;
-            },
+        const p1 = Server.call(
+          { func: "saveTicketConfig", silent: true },
+          _config,
+        );
+        const p2 = Server.call(
+          { func: "saveEmailProfiles", silent: true },
+          _emailProfiles,
+        );
+        const p3 = Server.call(
+          { func: "saveEmailDrafts", silent: true },
+          _emailDrafts,
+        );
+        const p4 = Server.call(
+          { func: "saveMailDrafts", silent: true },
+          _mailDrafts,
+        );
+        const p5 = Server.call(
+          { func: "saveStaffAndAssignees", silent: true },
+          { leaders: _config.staff, operators: _config.assignees },
+        );
 
-            saveSettings: function () {
-                const btn = getEl('btn-sett-save');
-                const icon = getEl('icon-sett-save');
-                const loader = getEl('loader-sett-save');
+        Promise.all([p1, p2, p3, p4, p5])
+          .then(([r1, r2, r3, r4, r5]) => {
+            if (
+              r1.success &&
+              r2.success &&
+              r3.success &&
+              r4.success &&
+              r5.success
+            ) {
+              UIManager.showToast("✅ บันทึกการตั้งค่าสำเร็จ", "success");
 
-                if (btn) btn.disabled = true;
-                if (icon) icon.classList.add('hidden');
-                if (loader) loader.classList.remove('hidden');
+              // ✨ [เพิ่มใหม่] แจ้งให้หน้า Ticket โหลด Config ใหม่ทันที ไม่ต้องรอ Refresh หน้าเว็บ
+              if (
+                typeof TicketManager !== "undefined" &&
+                typeof TicketManager.loadData === "function"
+              ) {
+                console.log("🔄 Force refreshing Ticket Data...");
+                TicketManager.loadData(true);
+              }
+            } else {
+              const msgs = [r1, r2, r3, r4, r5]
+                .filter((r) => !r.success)
+                .map((r) => r.message || r.error)
+                .join(" | ");
+              UIManager.showToast("Save Error: " + msgs, "error");
+            }
+          })
+          .catch((err) => {
+            console.error(err);
+            UIManager.showToast("Connection Error", "error");
+          })
+          .finally(() => {
+            if (btn) btn.disabled = false;
+            if (icon) icon.classList.remove("hidden");
+            if (loader) loader.classList.add("hidden");
+          });
+      },
 
-                // Debug Payload
-                console.log("Payload - TicketConfig:", _config);
-                console.log("Payload - EmailProfiles:", _emailProfiles);
-                console.log("Payload - EmailDrafts:", _emailDrafts);
-                console.log("Payload - MailDrafts:", _mailDrafts);
+      // ===================== Email Profiles =====================
+      loadEmailProfiles: function () {
+        Server.call({ func: "getEmailProfiles", silent: true })
+          .then((res) => {
+            if (res.success) {
+              _emailProfiles = res.data || [];
+              this.renderEmailProfiles();
+            }
+          })
+          .catch((err) => console.error("Email Profiles Load Error", err));
+      },
 
-                // Save ticket config, email profiles, and email drafts in parallel
-                const p1 = Server.call({ func: 'saveTicketConfig', silent: true }, _config);
-                const p2 = Server.call({ func: 'saveEmailProfiles', silent: true }, _emailProfiles);
-                const p3 = Server.call({ func: 'saveEmailDrafts', silent: true }, _emailDrafts);
-                const p4 = Server.call({ func: 'saveMailDrafts', silent: true }, _mailDrafts);
-                // Also save Staff
-                const p5 = Server.call({ func: 'saveStaffAndAssignees', silent: true }, { leaders: _config.staff, operators: _config.assignees });
+      renderEmailProfiles: function () {
+        const container = getEl("list-email-profiles");
+        const counter = getEl("count-email-profiles");
+        if (counter) counter.innerText = _emailProfiles.length;
+        if (!container) return;
 
-                Promise.all([p1, p2, p3, p4, p5])
-                    .then(([r1, r2, r3, r4, r5]) => {
-                        if (r1.success && r2.success && r3.success && r4.success && r5.success) {
-                            UIManager.showToast("✅ บันทึกการตั้งค่าสำเร็จ", "success");
-                        } else {
-                            const msgs = [r1, r2, r3, r4, r5].filter(r => !r.success).map(r => r.message || r.error).join(' | ');
-                            UIManager.showToast("Save Error: " + msgs, "error");
-                        }
-                    })
-                    .catch(err => {
-                        console.error(err);
-                        UIManager.showToast("Connection Error", "error");
-                    })
-                    .finally(() => {
-                        if (btn) btn.disabled = false;
-                        if (icon) icon.classList.remove('hidden');
-                        if (loader) loader.classList.add('hidden');
-                    });
-            },
+        if (_emailProfiles.length === 0) {
+          container.innerHTML =
+            '<div class="text-center text-xs text-gray-300 py-8"><i class="fas fa-envelope-open text-2xl mb-2 opacity-30"></i><p>ยังไม่มี Email Profile</p></div>';
+          return;
+        }
 
-            // ===================== Email Profiles =====================
-            loadEmailProfiles: function () {
-                Server.call({ func: 'getEmailProfiles', silent: true })
-                    .then(res => {
-                        if (res.success) {
-                            _emailProfiles = res.data || [];
-                            this.renderEmailProfiles();
-                        }
-                    })
-                    .catch(err => console.error("Email Profiles Load Error", err));
-            },
-
-            renderEmailProfiles: function () {
-                const container = getEl('list-email-profiles');
-                const counter = getEl('count-email-profiles');
-                if (counter) counter.innerText = _emailProfiles.length;
-                if (!container) return;
-
-                if (_emailProfiles.length === 0) {
-                    container.innerHTML = '<div class="text-center text-xs text-gray-300 py-8"><i class="fas fa-envelope-open text-2xl mb-2 opacity-30"></i><p>ยังไม่มี Email Profile</p></div>';
-                    return;
-                }
-
-                container.innerHTML = _emailProfiles.map((p, i) => `
+        container.innerHTML = _emailProfiles
+          .map(
+            (p, i) => `
                     <div class="group bg-base-100 hover:bg-base-200/30 border border-base-200 rounded-xl p-3 transition-all">
                         <div class="flex items-center justify-between mb-1.5">
-                            <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                                <i class="fas fa-user-circle text-primary text-sm"></i> ${p.name}
-                            </span>
+                            <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5"><i class="fas fa-user-circle text-primary text-sm"></i> ${p.name}</span>
                             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onclick="SettingsManager.editEmailProfile(${i})" 
-                                    class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-primary">
-                                    <i class="fas fa-pen text-[10px]"></i>
-                                </button>
-                                <button onclick="SettingsManager.removeEmailProfile(${i})" 
-                                    class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500">
-                                    <i class="fas fa-trash text-[10px]"></i>
-                                </button>
+                                <button onclick="SettingsManager.editEmailProfile(${i})" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-primary"><i class="fas fa-pen text-[10px]"></i></button>
+                                <button onclick="SettingsManager.removeEmailProfile(${i})" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500"><i class="fas fa-trash text-[10px]"></i></button>
                             </div>
                         </div>
                         <div class="text-[10px] text-gray-500 font-mono space-y-0.5 pl-5">
                             <div class="flex gap-1"><span class="text-gray-400 font-bold w-6">To:</span> <span class="break-all">${p.to}</span></div>
-                            <div class="flex gap-1"><span class="text-gray-400 font-bold w-6">CC:</span> <span class="break-all">${p.cc || '-'}</span></div>
+                            <div class="flex gap-1"><span class="text-gray-400 font-bold w-6">CC:</span> <span class="break-all">${p.cc || "-"}</span></div>
                         </div>
-                    </div>
-                `).join('');
-            },
+                    </div>`,
+          )
+          .join("");
+      },
 
-            addEmailProfile: function () {
-                const nameEl = getEl('in-profile-name');
-                const toEl = getEl('in-profile-to');
-                const ccEl = getEl('in-profile-cc');
-                const name = nameEl ? nameEl.value.trim() : '';
-                const to = toEl ? toEl.value.trim() : '';
-                const cc = ccEl ? ccEl.value.trim() : '';
+      addEmailProfile: function () {
+        const nameEl = getEl("in-profile-name");
+        const toEl = getEl("in-profile-to");
+        const ccEl = getEl("in-profile-cc");
+        const name = nameEl ? nameEl.value.trim() : "";
+        const to = toEl ? toEl.value.trim() : "";
+        const cc = ccEl ? ccEl.value.trim() : "";
+        if (!name || !to) {
+          UIManager.showToast("กรุณากรอกชื่อ Profile และ To อีเมล", "error");
+          return;
+        }
+        _emailProfiles.push({ name, to, cc });
+        if (nameEl) nameEl.value = "";
+        if (toEl) toEl.value = "";
+        if (ccEl) ccEl.value = "";
+        this.renderEmailProfiles();
+        UIManager.showToast(
+          "เพิ่ม Profile สำเร็จ (กด บันทึกข้อมูล เพื่อ Save)",
+          "info",
+        );
+      },
 
-                if (!name || !to) {
-                    UIManager.showToast("กรุณากรอกชื่อ Profile และ To อีเมล", "error");
-                    return;
-                }
+      removeEmailProfile: function (index) {
+        _emailProfiles.splice(index, 1);
+        this.renderEmailProfiles();
+      },
 
-                _emailProfiles.push({ name, to, cc });
-                if (nameEl) nameEl.value = '';
-                if (toEl) toEl.value = '';
-                if (ccEl) ccEl.value = '';
-                this.renderEmailProfiles();
-                UIManager.showToast("เพิ่ม Profile สำเร็จ (กด บันทึกข้อมูล เพื่อ Save)", "info");
-            },
+      editEmailProfile: function (index) {
+        _editProfileIdx = index;
+        const p = _emailProfiles[index];
+        const modal = getEl("modal_edit_email_profile");
+        if (getEl("edit-profile-name"))
+          getEl("edit-profile-name").value = p.name;
+        if (getEl("edit-profile-to")) getEl("edit-profile-to").value = p.to;
+        if (getEl("edit-profile-cc"))
+          getEl("edit-profile-cc").value = p.cc || "";
+        if (modal) modal.showModal();
+      },
 
-            removeEmailProfile: function (index) {
-                _emailProfiles.splice(index, 1);
-                this.renderEmailProfiles();
-            },
+      saveEditEmailProfile: function () {
+        const name = (getEl("edit-profile-name") || {}).value || "";
+        const to = (getEl("edit-profile-to") || {}).value || "";
+        const cc = (getEl("edit-profile-cc") || {}).value || "";
+        if (!name.trim() || !to.trim()) {
+          UIManager.showToast("กรุณากรอกชื่อ Profile และ To", "error");
+          return;
+        }
+        if (_editProfileIdx >= 0 && _editProfileIdx < _emailProfiles.length) {
+          _emailProfiles[_editProfileIdx] = {
+            name: name.trim(),
+            to: to.trim(),
+            cc: cc.trim(),
+          };
+          this.renderEmailProfiles();
+        }
+        const modal = getEl("modal_edit_email_profile");
+        if (modal) modal.close();
+        _editProfileIdx = -1;
+      },
 
-            editEmailProfile: function (index) {
-                _editProfileIdx = index;
-                const p = _emailProfiles[index];
-                const modal = getEl('modal_edit_email_profile');
-                if (getEl('edit-profile-name')) getEl('edit-profile-name').value = p.name;
-                if (getEl('edit-profile-to')) getEl('edit-profile-to').value = p.to;
-                if (getEl('edit-profile-cc')) getEl('edit-profile-cc').value = p.cc || '';
-                if (modal) modal.showModal();
-            },
+      getProfiles: function () {
+        return _emailProfiles;
+      },
 
-            saveEditEmailProfile: function () {
-                const name = (getEl('edit-profile-name') || {}).value || '';
-                const to = (getEl('edit-profile-to') || {}).value || '';
-                const cc = (getEl('edit-profile-cc') || {}).value || '';
-                if (!name.trim() || !to.trim()) {
-                    UIManager.showToast("กรุณากรอกชื่อ Profile และ To", "error");
-                    return;
-                }
-                if (_editProfileIdx >= 0 && _editProfileIdx < _emailProfiles.length) {
-                    _emailProfiles[_editProfileIdx] = { name: name.trim(), to: to.trim(), cc: cc.trim() };
-                    this.renderEmailProfiles();
-                }
-                const modal = getEl('modal_edit_email_profile');
-                if (modal) modal.close();
-                _editProfileIdx = -1;
-            },
+      // ===================== Email Draft Templates =====================
+      loadEmailDrafts: function () {
+        Server.call({ func: "getEmailDrafts", silent: true })
+          .then((res) => {
+            if (res.success) {
+              _emailDrafts = res.data || [];
+              this.renderEmailDrafts();
+            }
+          })
+          .catch((err) => console.error("Email Drafts Load Error", err));
+      },
 
-            // Expose profiles for TicketManager to use
-            getProfiles: function () {
-                return _emailProfiles;
-            },
+      renderEmailDrafts: function () {
+        const container = getEl("list-email-drafts");
+        const counter = getEl("count-email-drafts");
+        if (counter) counter.innerText = _emailDrafts.length;
+        if (!container) return;
 
-            // ===================== Email Draft Templates =====================
-            loadEmailDrafts: function () {
-                Server.call({ func: 'getEmailDrafts', silent: true })
-                    .then(res => {
-                        if (res.success) {
-                            _emailDrafts = res.data || [];
-                            this.renderEmailDrafts();
-                        }
-                    })
-                    .catch(err => console.error("Email Drafts Load Error", err));
-            },
+        if (_emailDrafts.length === 0) {
+          container.innerHTML =
+            '<div class="text-center text-xs text-gray-300 py-8"><i class="fas fa-file-alt text-2xl mb-2 opacity-30"></i><p>ยังไม่มี Draft Template</p></div>';
+          return;
+        }
 
-            renderEmailDrafts: function () {
-                const container = getEl('list-email-drafts');
-                const counter = getEl('count-email-drafts');
-                if (counter) counter.innerText = _emailDrafts.length;
-                if (!container) return;
-
-                if (_emailDrafts.length === 0) {
-                    container.innerHTML = '<div class="text-center text-xs text-gray-300 py-8"><i class="fas fa-file-alt text-2xl mb-2 opacity-30"></i><p>ยังไม่มี Draft Template</p></div>';
-                    return;
-                }
-
-                container.innerHTML = _emailDrafts.map((d, i) => `
+        container.innerHTML = _emailDrafts
+          .map(
+            (d, i) => `
                     <div class="group bg-base-100 hover:bg-base-200/30 border border-base-200 rounded-xl p-3 transition-all">
                         <div class="flex items-center justify-between mb-1">
-                            <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                                <i class="fas fa-file-signature text-warning text-sm"></i> ${d.name}
-                            </span>
+                            <span class="text-xs font-bold text-gray-800 flex items-center gap-1.5"><i class="fas fa-file-signature text-warning text-sm"></i> ${d.name}</span>
                             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onclick="SettingsManager.editEmailDraft(${i})" 
-                                    class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-primary">
-                                    <i class="fas fa-pen text-[10px]"></i>
-                                </button>
-                                <button onclick="SettingsManager.removeEmailDraft(${i})" 
-                                    class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500">
-                                    <i class="fas fa-trash text-[10px]"></i>
-                                </button>
+                                <button onclick="SettingsManager.editEmailDraft(${i})" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-primary"><i class="fas fa-pen text-[10px]"></i></button>
+                                <button onclick="SettingsManager.removeEmailDraft(${i})" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500"><i class="fas fa-trash text-[10px]"></i></button>
                             </div>
                         </div>
                         <div class="text-[10px] text-gray-500 pl-5 space-y-0.5">
-                            <div class="truncate"><span class="text-gray-400 font-bold">Company:</span> ${d.company || '-'}</div>
-                            <div class="truncate"><span class="text-gray-400 font-bold">Greeting:</span> ${d.greeting || '-'}</div>
-                            <div class="truncate"><span class="text-gray-400 font-bold">Contact:</span> ${d.contactName || '-'} | ${d.contactNum || '-'}</div>
+                            <div class="truncate"><span class="text-gray-400 font-bold">Company:</span> ${d.company || "-"}</div>
+                            <div class="truncate"><span class="text-gray-400 font-bold">Greeting:</span> ${d.greeting || "-"}</div>
+                            <div class="truncate"><span class="text-gray-400 font-bold">Contact:</span> ${d.contactName || "-"} | ${d.contactNum || "-"}</div>
                         </div>
-                    </div>
-                `).join('');
-            },
+                    </div>`,
+          )
+          .join("");
+      },
 
-            addEmailDraft: function () {
-                const name = (getEl('in-draft-name') || {}).value || '';
-                if (!name.trim()) {
-                    UIManager.showToast("กรุณากรอกชื่อ Draft Template", "error");
-                    return;
-                }
+      addEmailDraft: function () {
+        const name = (getEl("in-draft-name") || {}).value || "";
+        if (!name.trim()) {
+          UIManager.showToast("กรุณากรอกชื่อ Draft Template", "error");
+          return;
+        }
+        const draft = {
+          name: name.trim(),
+          greeting: (getEl("in-draft-greeting") || {}).value || "",
+          showGreeting: true,
+          note: (getEl("in-draft-note") || {}).value || "",
+          showNote: true,
+          company: (getEl("in-draft-company") || {}).value || "",
+          contactName: (getEl("in-draft-contact-name") || {}).value || "",
+          contactNum: (getEl("in-draft-contact-num") || {}).value || "",
+          siteName: (getEl("in-draft-site-name") || {}).value || "",
+          siteNum: (getEl("in-draft-site-num") || {}).value || "",
+          siteEmail: (getEl("in-draft-site-email") || {}).value || "",
+          siteAddr: (getEl("in-draft-site-addr") || {}).value || "",
+          rootCause: "",
+          action: (getEl("in-draft-action") || {}).value || "",
+          impact: (getEl("in-draft-impact") || {}).value || "",
+          schedule: "",
+        };
+        _emailDrafts.push(draft);
+        if (getEl("in-draft-name")) getEl("in-draft-name").value = "";
+        this.renderEmailDrafts();
+        UIManager.showToast(
+          "เพิ่ม Draft Template สำเร็จ (กด บันทึกข้อมูล เพื่อ Save)",
+          "info",
+        );
+      },
 
-                const draft = {
-                    name: name.trim(),
-                    greeting: (getEl('in-draft-greeting') || {}).value || '',
-                    showGreeting: true,
-                    note: (getEl('in-draft-note') || {}).value || '',
-                    showNote: true,
-                    company: (getEl('in-draft-company') || {}).value || '',
-                    contactName: (getEl('in-draft-contact-name') || {}).value || '',
-                    contactNum: (getEl('in-draft-contact-num') || {}).value || '',
-                    siteName: (getEl('in-draft-site-name') || {}).value || '',
-                    siteNum: (getEl('in-draft-site-num') || {}).value || '',
-                    siteEmail: (getEl('in-draft-site-email') || {}).value || '',
-                    siteAddr: (getEl('in-draft-site-addr') || {}).value || '',
-                    rootCause: '',
-                    action: (getEl('in-draft-action') || {}).value || '',
-                    impact: (getEl('in-draft-impact') || {}).value || '',
-                    schedule: ''
-                };
+      removeEmailDraft: function (index) {
+        _emailDrafts.splice(index, 1);
+        this.renderEmailDrafts();
+      },
 
-                _emailDrafts.push(draft);
-                if (getEl('in-draft-name')) getEl('in-draft-name').value = '';
-                this.renderEmailDrafts();
-                UIManager.showToast("เพิ่ม Draft Template สำเร็จ (กด บันทึกข้อมูล เพื่อ Save)", "info");
-            },
+      editEmailDraft: function (index) {
+        _editDraftIdx = index;
+        const d = _emailDrafts[index];
+        const modal = getEl("modal_edit_email_draft");
+        if (getEl("edit-draft-name"))
+          getEl("edit-draft-name").value = d.name || "";
+        if (getEl("edit-draft-greeting"))
+          getEl("edit-draft-greeting").value = d.greeting || "";
+        if (getEl("edit-draft-show-greeting"))
+          getEl("edit-draft-show-greeting").checked = d.showGreeting !== false;
+        if (getEl("edit-draft-note"))
+          getEl("edit-draft-note").value = d.note || "";
+        if (getEl("edit-draft-show-note"))
+          getEl("edit-draft-show-note").checked = d.showNote !== false;
+        if (getEl("edit-draft-company"))
+          getEl("edit-draft-company").value = d.company || "";
+        if (getEl("edit-draft-contact-name"))
+          getEl("edit-draft-contact-name").value = d.contactName || "";
+        if (getEl("edit-draft-contact-num"))
+          getEl("edit-draft-contact-num").value = d.contactNum || "";
+        if (getEl("edit-draft-site-name"))
+          getEl("edit-draft-site-name").value = d.siteName || "";
+        if (getEl("edit-draft-site-num"))
+          getEl("edit-draft-site-num").value = d.siteNum || "";
+        if (getEl("edit-draft-site-email"))
+          getEl("edit-draft-site-email").value = d.siteEmail || "";
+        if (getEl("edit-draft-site-addr"))
+          getEl("edit-draft-site-addr").value = d.siteAddr || "";
+        if (getEl("edit-draft-root-cause"))
+          getEl("edit-draft-root-cause").value = d.rootCause || "";
+        if (getEl("edit-draft-action"))
+          getEl("edit-draft-action").value = d.action || "";
+        if (getEl("edit-draft-impact"))
+          getEl("edit-draft-impact").value = d.impact || "";
+        if (getEl("edit-draft-schedule"))
+          getEl("edit-draft-schedule").value = d.schedule || "";
+        if (modal) modal.showModal();
+      },
 
-            removeEmailDraft: function (index) {
-                _emailDrafts.splice(index, 1);
-                this.renderEmailDrafts();
-            },
+      saveEditEmailDraft: function () {
+        const name = (getEl("edit-draft-name") || {}).value || "";
+        if (!name.trim()) {
+          UIManager.showToast("กรุณากรอกชื่อ Draft", "error");
+          return;
+        }
+        if (_editDraftIdx >= 0 && _editDraftIdx < _emailDrafts.length) {
+          _emailDrafts[_editDraftIdx] = {
+            name: name.trim(),
+            greeting: (getEl("edit-draft-greeting") || {}).value || "",
+            showGreeting: getEl("edit-draft-show-greeting")
+              ? getEl("edit-draft-show-greeting").checked
+              : true,
+            note: (getEl("edit-draft-note") || {}).value || "",
+            showNote: getEl("edit-draft-show-note")
+              ? getEl("edit-draft-show-note").checked
+              : true,
+            company: (getEl("edit-draft-company") || {}).value || "",
+            contactName: (getEl("edit-draft-contact-name") || {}).value || "",
+            contactNum: (getEl("edit-draft-contact-num") || {}).value || "",
+            siteName: (getEl("edit-draft-site-name") || {}).value || "",
+            siteNum: (getEl("edit-draft-site-num") || {}).value || "",
+            siteEmail: (getEl("edit-draft-site-email") || {}).value || "",
+            siteAddr: (getEl("edit-draft-site-addr") || {}).value || "",
+            rootCause: (getEl("edit-draft-root-cause") || {}).value || "",
+            action: (getEl("edit-draft-action") || {}).value || "",
+            impact: (getEl("edit-draft-impact") || {}).value || "",
+            schedule: (getEl("edit-draft-schedule") || {}).value || "",
+          };
+          this.renderEmailDrafts();
+        }
+        const modal = getEl("modal_edit_email_draft");
+        if (modal) modal.close();
+        _editDraftIdx = -1;
+      },
 
-            editEmailDraft: function (index) {
-                _editDraftIdx = index;
-                const d = _emailDrafts[index];
-                const modal = getEl('modal_edit_email_draft');
-                if (getEl('edit-draft-name')) getEl('edit-draft-name').value = d.name || '';
-                if (getEl('edit-draft-greeting')) getEl('edit-draft-greeting').value = d.greeting || '';
-                if (getEl('edit-draft-show-greeting')) getEl('edit-draft-show-greeting').checked = d.showGreeting !== false;
-                if (getEl('edit-draft-note')) getEl('edit-draft-note').value = d.note || '';
-                if (getEl('edit-draft-show-note')) getEl('edit-draft-show-note').checked = d.showNote !== false;
-                if (getEl('edit-draft-company')) getEl('edit-draft-company').value = d.company || '';
-                if (getEl('edit-draft-contact-name')) getEl('edit-draft-contact-name').value = d.contactName || '';
-                if (getEl('edit-draft-contact-num')) getEl('edit-draft-contact-num').value = d.contactNum || '';
-                if (getEl('edit-draft-site-name')) getEl('edit-draft-site-name').value = d.siteName || '';
-                if (getEl('edit-draft-site-num')) getEl('edit-draft-site-num').value = d.siteNum || '';
-                if (getEl('edit-draft-site-email')) getEl('edit-draft-site-email').value = d.siteEmail || '';
-                if (getEl('edit-draft-site-addr')) getEl('edit-draft-site-addr').value = d.siteAddr || '';
-                if (getEl('edit-draft-root-cause')) getEl('edit-draft-root-cause').value = d.rootCause || '';
-                if (getEl('edit-draft-action')) getEl('edit-draft-action').value = d.action || '';
-                if (getEl('edit-draft-impact')) getEl('edit-draft-impact').value = d.impact || '';
-                if (getEl('edit-draft-schedule')) getEl('edit-draft-schedule').value = d.schedule || '';
-                if (modal) modal.showModal();
-            },
+      // ===================== Saved Mail Drafts =====================
+      loadMailDrafts: function () {
+        Server.call({ func: "getMailDrafts", silent: true })
+          .then((res) => {
+            if (res.success) {
+              _mailDrafts = res.data || [];
+              this.renderMailDrafts();
+            }
+          })
+          .catch((err) => console.error("Mail Drafts Load Error", err));
+      },
 
-            saveEditEmailDraft: function () {
-                const name = (getEl('edit-draft-name') || {}).value || '';
-                if (!name.trim()) {
-                    UIManager.showToast("กรุณากรอกชื่อ Draft", "error");
-                    return;
-                }
-                if (_editDraftIdx >= 0 && _editDraftIdx < _emailDrafts.length) {
-                    _emailDrafts[_editDraftIdx] = {
-                        name: name.trim(),
-                        greeting: (getEl('edit-draft-greeting') || {}).value || '',
-                        showGreeting: getEl('edit-draft-show-greeting') ? getEl('edit-draft-show-greeting').checked : true,
-                        note: (getEl('edit-draft-note') || {}).value || '',
-                        showNote: getEl('edit-draft-show-note') ? getEl('edit-draft-show-note').checked : true,
-                        company: (getEl('edit-draft-company') || {}).value || '',
-                        contactName: (getEl('edit-draft-contact-name') || {}).value || '',
-                        contactNum: (getEl('edit-draft-contact-num') || {}).value || '',
-                        siteName: (getEl('edit-draft-site-name') || {}).value || '',
-                        siteNum: (getEl('edit-draft-site-num') || {}).value || '',
-                        siteEmail: (getEl('edit-draft-site-email') || {}).value || '',
-                        siteAddr: (getEl('edit-draft-site-addr') || {}).value || '',
-                        rootCause: (getEl('edit-draft-root-cause') || {}).value || '',
-                        action: (getEl('edit-draft-action') || {}).value || '',
-                        impact: (getEl('edit-draft-impact') || {}).value || '',
-                        schedule: (getEl('edit-draft-schedule') || {}).value || ''
-                    };
-                    this.renderEmailDrafts();
-                }
-                const modal = getEl('modal_edit_email_draft');
-                if (modal) modal.close();
-                _editDraftIdx = -1;
-            },
+      renderMailDrafts: function () {
+        const container = getEl("list-mail-drafts");
+        const counter = getEl("count-mail-drafts");
+        if (counter) counter.innerText = _mailDrafts.length;
+        if (!container) return;
 
-            // ===================== Saved Mail Drafts (Management) =====================
-            loadMailDrafts: function () {
-                Server.call({ func: 'getMailDrafts', silent: true })
-                    .then(res => {
-                        if (res.success) {
-                            _mailDrafts = res.data || [];
-                            this.renderMailDrafts();
-                        }
-                    })
-                    .catch(err => console.error("Mail Drafts Load Error", err));
-            },
+        if (_mailDrafts.length === 0) {
+          container.innerHTML =
+            '<div class="text-center text-xs text-gray-300 py-8"><i class="fas fa-save text-2xl mb-2 opacity-30"></i><p>ยังไม่มี Draft ที่บันทึกไว้</p></div>';
+          return;
+        }
 
-            renderMailDrafts: function () {
-                const container = getEl('list-mail-drafts');
-                const counter = getEl('count-mail-drafts');
-                if (counter) counter.innerText = _mailDrafts.length;
-                if (!container) return;
-
-                if (_mailDrafts.length === 0) {
-                    container.innerHTML = '<div class="text-center text-xs text-gray-300 py-8"><i class="fas fa-save text-2xl mb-2 opacity-30"></i><p>ยังไม่มี Draft ที่บันทึกไว้</p></div>';
-                    return;
-                }
-
-                container.innerHTML = _mailDrafts.map((d, i) => `
+        container.innerHTML = _mailDrafts
+          .map(
+            (d, i) => `
                     <div class="group bg-base-100 hover:bg-base-200/30 border border-base-200 rounded-xl p-3 transition-all relative">
                         <div class="flex items-center justify-between mb-1.5">
-                             <div class="flex items-center gap-2 overflow-hidden">
-                                <span class="w-1.5 h-1.5 rounded-full bg-info shrink-0"></span>
-                                <span class="text-xs font-bold text-gray-800 truncate" title="${d.name}">${d.name}</span>
-                             </div>
-                             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onclick="SettingsManager.removeMailDraft(${i})" 
-                                    class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500">
-                                    <i class="fas fa-trash text-[10px]"></i>
-                                </button>
-                             </div>
+                             <div class="flex items-center gap-2 overflow-hidden"><span class="w-1.5 h-1.5 rounded-full bg-info shrink-0"></span><span class="text-xs font-bold text-gray-800 truncate" title="${d.name}">${d.name}</span></div>
+                             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onclick="SettingsManager.removeMailDraft(${i})" class="btn btn-ghost btn-xs btn-square text-gray-400 hover:text-red-500"><i class="fas fa-trash text-[10px]"></i></button></div>
                         </div>
-                        <div class="text-[10px] text-gray-400 mb-1">Subject: <span class="text-gray-600 truncate block">${d.subject || '(No Subject)'}</span></div>
-                        <div class="text-[10px] text-gray-400">To: <span class="text-gray-600 break-all">${d.to || '-'}</span></div>
-                    </div>
-                `).join('');
-            },
+                        <div class="text-[10px] text-gray-400 mb-1">Subject: <span class="text-gray-600 truncate block">${d.subject || "(No Subject)"}</span></div>
+                        <div class="text-[10px] text-gray-400">To: <span class="text-gray-600 break-all">${d.to || "-"}</span></div>
+                    </div>`,
+          )
+          .join("");
+      },
 
-            removeMailDraft: function (index) {
-                if (!confirm("ต้องการลบ Draft นี้ใช่หรือไม่?")) return;
-                _mailDrafts.splice(index, 1);
-                this.renderMailDrafts();
-                // We don't auto-save here to be consistent with other sections (User must click Save)
-                UIManager.showToast("ลบ Draft เรียบร้อย (กดบันทึกเพื่อยืนยัน)", "info");
-            }
-        };
-    })();
+      removeMailDraft: function (index) {
+        if (!confirm("ต้องการลบ Draft นี้ใช่หรือไม่?")) return;
+        _mailDrafts.splice(index, 1);
+        this.renderMailDrafts();
+        UIManager.showToast("ลบ Draft เรียบร้อย (กดบันทึกเพื่อยืนยัน)", "info");
+      },
+    };
+  })();
 
-    document.addEventListener('DOMContentLoaded', () => {
-        Router.register('page-settings', SettingsManager);
-        SettingsManager.init();
-    });
+  document.addEventListener("DOMContentLoaded", () => {
+    Router.register("page-settings", SettingsManager);
+    SettingsManager.init();
+  });
 </script>

@@ -1,35 +1,67 @@
 <script>
-  document.addEventListener('DOMContentLoaded', async () => {
+  // ดึงค่าหน้าล่าสุดไว้ทันทีตั้งแต่สคริปต์เริ่มรัน
+  const savedLastPage = localStorage.getItem("gas_last_page");
+  let isAppReady = false;
+
+  document.addEventListener("DOMContentLoaded", async () => {
     console.log("🚀 App Starting...");
 
     // 1. Sidebar Links
-    document.querySelectorAll('aside a[data-target]').forEach(el => {
-      el.addEventListener('click', (e) => {
+    document.querySelectorAll("aside a[data-target]").forEach((el) => {
+      el.addEventListener("click", (e) => {
         e.preventDefault();
         const target = el.dataset.target;
         Router.navigateTo(target);
-        // Close drawer on mobile
-        const drawer = document.getElementById('my-drawer');
+
+        const drawer = document.getElementById("my-drawer");
         if (drawer) drawer.checked = false;
       });
     });
 
-    // 2. Initialize Data
-  try {
-      await Store.init();
+    // 2. จับ Event เปลี่ยนหน้า
+    document.addEventListener("page-change", (e) => {
+      if (isAppReady && e.detail && e.detail.pageId) {
+        localStorage.setItem("gas_last_page", e.detail.pageId);
+      }
+    });
 
-      // ✅ [แก้ไขใหม่] 3. Navigate to Last Page or Default
-      const lastPage = localStorage.getItem('gas_last_page');
-      
-      // ตรวจสอบว่าหน้าที่มีในความทรงจำนั้นมีอยู่จริงหรือไม่ (กัน Error กรณีเปลี่ยนชื่อหน้า)
-      if (lastPage && document.getElementById(lastPage)) {
-        Router.navigateTo(lastPage);
-      } else {
-        Router.navigateTo('page-dashboard');
+    // 3. Initialize Data
+    try {
+      if (typeof Store !== "undefined" && Store.init) {
+        await Store.init(); // รอโหลดข้อมูล User
       }
 
+      // นำทางไปยังหน้าเดิม
+      if (
+        savedLastPage &&
+        savedLastPage !== "undefined" &&
+        document.getElementById(savedLastPage)
+      ) {
+        Router.navigateTo(savedLastPage);
+      } else {
+        Router.navigateTo("page-dashboard");
+      }
     } catch (e) {
       console.error("App Init Failed", e);
+      Router.navigateTo("page-dashboard");
+    } finally {
+      // ✨ 4. ระบบนำทางเสร็จแล้ว ปลดล็อคและซ่อนหน้าโหลด
+      setTimeout(() => {
+        isAppReady = true;
+
+        // ค้นหาหน้า Splash Screen
+        const splashScreen = document.getElementById("initial-splash-screen");
+        if (splashScreen) {
+          // สั่งให้ค่อยๆ จางหายไป (Fade out)
+          splashScreen.style.opacity = "0";
+
+          // พอจางหายเสร็จ (500ms) ให้ลบทิ้งออกจากหน้าเว็บไปเลย จะได้ไม่กินแรม
+          setTimeout(() => {
+            splashScreen.remove();
+            console.log("✅ App is fully ready.");
+          }, 500);
+        }
+      }, 500); // หน่วงเวลาให้ Router ทำงานเสร็จภาพไม่กระตุก
     }
   });
 </script>

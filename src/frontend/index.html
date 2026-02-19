@@ -1,299 +1,375 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="light">
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>ระบบจัดการงาน GAS</title>
 
-<head>
-  <base target="_top">
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ระบบจัดการงาน GAS</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
 
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css"
+      rel="stylesheet"
+      type="text/css"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
 
-  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
-  <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/pikaday/pikaday.js"></script>
 
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css">
-  <script src="https://cdn.jsdelivr.net/npm/pikaday/pikaday.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/locale/th.js"></script>
+    <script>
+      dayjs.locale("th");
+    </script>
 
-  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/locale/th.js"></script>
-  <script>
-    dayjs.locale('th');
-  </script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: { fontFamily: { sans: ["Sarabun", "sans-serif"] } },
+        },
+      };
+    </script>
+    <?!= include('frontend/styles/CSS_Custom'); ?>
 
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: { fontFamily: { sans: ['Sarabun', 'sans-serif'] } }
+    <style>
+      .pika-single {
+        background: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        color: #fff;
+        font-family: "Sarabun", sans-serif;
       }
-    }
-  </script>
-  <?!= include('frontend/styles/CSS_Custom'); ?>
 
-  <style>
-    .pika-single {
-      background: #1f2937;
-      /* สีพื้นหลังดำเทา (Gray-800) */
-      border: 1px solid #374151;
-      /* ขอบสีเทา (Gray-700) */
-      border-radius: 12px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-      color: #fff;
-      font-family: 'Sarabun', sans-serif;
-    }
+      .pika-label {
+        background-color: #1f2937;
+        color: #f3f4f6;
+        font-weight: bold;
+      }
 
-    /* หัวปฏิทิน */
-    .pika-label {
-      background-color: #1f2937;
-      color: #f3f4f6;
-      /* ขาวนวล */
-      font-weight: bold;
-    }
+      .pika-prev,
+      .pika-next {
+        opacity: 0.7;
+      }
 
-    .pika-prev,
-    .pika-next {
-      opacity: 0.7;
-    }
+      .pika-prev:hover,
+      .pika-next:hover {
+        opacity: 1;
+        background-color: #374151;
+        border-radius: 4px;
+      }
 
-    .pika-prev:hover,
-    .pika-next:hover {
-      opacity: 1;
-      background-color: #374151;
-      border-radius: 4px;
-    }
+      .pika-table th {
+        color: #9ca3af;
+      }
 
-    /* ตารางวัน */
-    .pika-table th {
-      color: #9ca3af;
-      /* เทาอ่อน */
-    }
+      .pika-button {
+        color: #e5e7eb;
+        background: transparent;
+        border-radius: 8px;
+        text-align: center;
+      }
 
-    .pika-button {
-      color: #e5e7eb;
-      /* ตัวเลขวันสีขาว */
-      background: transparent;
-      border-radius: 8px;
-      text-align: center;
-    }
+      .pika-button:hover {
+        background: #374151 !important;
+        color: #fff !important;
+      }
 
-    .pika-button:hover {
-      background: #374151 !important;
-      /* Hover สีเทาเข้ม */
-      color: #fff !important;
-    }
+      .is-selected .pika-button {
+        background: #3b82f6 !important;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        color: #fff;
+        font-weight: bold;
+      }
 
-    /* วันที่เลือก (Selected) */
-    .is-selected .pika-button {
-      background: #3b82f6 !important;
-      /* สีน้ำเงิน (Blue-500) */
-      box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
-      color: #fff;
-      font-weight: bold;
-    }
+      .is-today .pika-button {
+        color: #3b82f6;
+        font-weight: bold;
+      }
 
-    /* วันวันนี้ (Today) */
-    .is-today .pika-button {
-      color: #3b82f6;
-      font-weight: bold;
-    }
+      body.swal2-shown:not(.swal2-no-backdrop):not(.swal2-toast-shown) {
+        padding-right: 0 !important;
+        overflow-y: hidden !important;
+      }
+    </style>
+  </head>
 
-    /* 🔧 Fix: Prevent Layout Shift from SweetAlert2 */
-    body.swal2-shown:not(.swal2-no-backdrop):not(.swal2-toast-shown) {
-      padding-right: 0 !important;
-      overflow-y: hidden !important;
-    }
-  </style>
-</head>
+  <body
+    class="bg-base-200 text-base-content font-sans h-screen overflow-hidden"
+  >
+    <div
+      id="initial-splash-screen"
+      class="fixed inset-0 z-[99999] bg-base-100 flex flex-col items-center justify-center transition-opacity duration-500"
+    >
+      <span class="loading loading-spinner text-primary w-16 mb-4"></span>
+      <h2 class="text-xl font-bold text-base-content animate-pulse">
+        กำลังโหลด...
+      </h2>
+      <p class="text-sm text-base-content/60 mt-2">NOC APP System</p>
+    </div>
 
-<body class="bg-base-200 text-base-content font-sans h-screen overflow-hidden">
+    <div
+      id="login-page"
+      class="fixed inset-0 z-[100] flex items-center justify-center bg-base-300 p-4 transition-all duration-500"
+    >
+      <div
+        class="card w-full max-w-md bg-white shadow-2xl border border-base-300"
+      >
+        <div class="card-body items-center text-center">
+          <div class="bg-primary/10 p-4 rounded-full mb-2">
+            <i class="fas fa-lock text-3xl text-primary"></i>
+          </div>
+          <h2 class="card-title text-2xl font-bold text-gray-800 border-none">
+            Daily Report System
+          </h2>
+          <p class="text-sm text-gray-400 mb-6">
+            กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อ
+          </p>
 
-  <div id="login-page"
-    class="fixed inset-0 z-[100] flex items-center justify-center bg-base-300 p-4 transition-all duration-500">
-    <div class="card w-full max-w-md bg-white shadow-2xl border border-base-300">
-      <div class="card-body items-center text-center">
-        <div class="bg-primary/10 p-4 rounded-full mb-2">
-          <i class="fas fa-lock text-3xl text-primary"></i>
-        </div>
-        <h2 class="card-title text-2xl font-bold text-gray-800 border-none">Daily Report System</h2>
-        <p class="text-sm text-gray-400 mb-6">กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อ</p>
+          <div class="form-control w-full">
+            <label class="label"
+              ><span class="label-text font-semibold"
+                >อีเมล / ชื่อผู้ใช้</span
+              ></label
+            >
+            <input
+              type="text"
+              id="login-user"
+              placeholder="example@email.com"
+              class="input input-bordered w-full focus:input-primary"
+            />
+          </div>
 
-        <div class="form-control w-full">
-          <label class="label"><span class="label-text font-semibold">อีเมล / ชื่อผู้ใช้</span></label>
-          <input type="text" id="login-user" placeholder="example@email.com" class="input input-bordered w-full focus:input-primary" />
-        </div>
+          <div class="form-control w-full mt-4">
+            <label class="label"
+              ><span class="label-text font-semibold"
+                >รหัสผ่าน (PIN)</span
+              ></label
+            >
+            <input
+              type="password"
+              id="login-pass"
+              placeholder="••••"
+              class="input input-bordered w-full focus:input-primary"
+              onkeyup="if (event.key === 'Enter') handleLogin();"
+            />
+          </div>
 
-        <div class="form-control w-full mt-4">
-          <label class="label"><span class="label-text font-semibold">รหัสผ่าน (PIN)</span></label>
-          <input type="password" id="login-pass" placeholder="••••" class="input input-bordered w-full focus:input-primary" onkeyup="if(event.key === 'Enter') handleLogin()" />
-        </div>
-
-        <div class="card-actions w-full mt-8">
-          <button id="btn-login-submit" onclick="handleLogin()" class="btn btn-primary w-full shadow-lg text-white">
-            <span id="login-spinner" class="loading loading-spinner hidden"></span>
-            เข้าสู่ระบบ
-          </button>
+          <div class="card-actions w-full mt-8">
+            <button
+              id="btn-login-submit"
+              onclick="handleLogin()"
+              class="btn btn-primary w-full shadow-lg text-white"
+            >
+              <span
+                id="login-spinner"
+                class="loading loading-spinner hidden"
+              ></span>
+              เข้าสู่ระบบ
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div id="main-app" class="drawer lg:drawer-open h-full opacity-0 pointer-events-none transition-opacity duration-500">
-    <input id="my-drawer" type="checkbox" class="drawer-toggle" />
-    <div class="drawer-content flex flex-col h-full overflow-hidden relative">
-      <?!= include('frontend/components/Part_Navbar'); ?>
+    <div
+      id="main-app"
+      class="drawer lg:drawer-open h-full opacity-0 pointer-events-none transition-opacity duration-500"
+    >
+      <input id="my-drawer" type="checkbox" class="drawer-toggle" />
+      <div class="drawer-content flex flex-col h-full overflow-hidden relative">
+        <?!= include('frontend/components/Part_Navbar'); ?>
 
-      <div class="hidden">
-        <span id="display-user-name"></span>
-        <span id="display-user-email"></span>
+        <div class="hidden">
+          <span id="display-user-name"></span>
+          <span id="display-user-email"></span>
+        </div>
+
+        <main class="flex-1 overflow-y-auto scroll-smooth relative w-full">
+          <?!= include('frontend/pages/Page_Dashboard'); ?> <?!=
+          include('frontend/pages/Page_Report'); ?> <?!=
+          include('frontend/pages/Page_Ticket'); ?> <?!=
+          include('frontend/pages/Page_History'); ?> <?!=
+          include('frontend/pages/Page_Settings'); ?>
+        </main>
       </div>
-
-      <main class="flex-1 overflow-y-auto scroll-smooth relative w-full">
-        <?!= include('frontend/pages/Page_Dashboard'); ?>
-        <?!= include('frontend/pages/Page_Report'); ?>
-        <?!= include('frontend/pages/Page_Ticket'); ?>
-        <?!= include('frontend/pages/Page_History'); ?>
-        <?!= include('frontend/pages/Page_Settings'); ?>
-      </main>
+      <div class="drawer-side z-50">
+        <label
+          for="my-drawer"
+          aria-label="close sidebar"
+          class="drawer-overlay"
+        ></label>
+        <?!= include('frontend/components/Part_Sidebar'); ?>
+      </div>
     </div>
-    <div class="drawer-side z-50">
-      <label for="my-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
-      <?!= include('frontend/components/Part_Sidebar'); ?>
-    </div>
-  </div>
 
-  <?!= include('frontend/components/Part_Modal_Core'); ?>
+    <?!= include('frontend/components/Part_Modal_Core'); ?>
 
-  <script>
-    /**
-     * Logic การจัดการ Login
-     */
-    function handleLogin() {
-    const email = document.getElementById('login-user').value;
-    const pass = document.getElementById('login-pass').value;
-    const btn = document.getElementById('btn-login-submit');
-    const spinner = document.getElementById('login-spinner');
+    <script>
+      /**
+       * Logic การจัดการ Login
+       */
+      function handleLogin() {
+        const email = document.getElementById("login-user").value;
+        const pass = document.getElementById("login-pass").value;
+        const btn = document.getElementById("btn-login-submit");
+        const spinner = document.getElementById("login-spinner");
 
-    if (!email || !pass) {
-      return Swal.fire('แจ้งเตือน', 'กรุณากรอกข้อมูลให้ครบถ้วน', 'warning');
-    }
-
-    btn.disabled = true;
-    spinner.classList.remove('hidden');
-
-    google.script.run
-      .withSuccessHandler(function(res) {
-        btn.disabled = false;
-        spinner.classList.add('hidden');
-
-        if (res.success) {
-          // ✅ บันทึกข้อมูลลง LocalStorage
-          localStorage.setItem('gas_app_user', JSON.stringify(res));
-
-          const loginPage = document.getElementById('login-page');
-          const mainApp = document.getElementById('main-app');
-          
-          loginPage.classList.add('opacity-0', 'pointer-events-none');
-          mainApp.classList.remove('pointer-events-none', 'opacity-0');
-          
-          if (window.updateNavbarUI) {
-            window.updateNavbarUI(res); 
-          }
-
-          if (window.Dashboard && typeof window.Dashboard.init === 'function') {
-            window.Dashboard.init();
-          }
-          
-          Swal.fire({
-            icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', text: 'ยินดีต้อนรับคุณ ' + res.userName,
-            timer: 1500, showConfirmButton: false, toast: true, position: 'top-end'
-          });
-        } else {
-          Swal.fire('ผิดพลาด', res.message, 'error');
+        if (!email || !pass) {
+          return Swal.fire("แจ้งเตือน", "กรุณากรอกข้อมูลให้ครบถ้วน", "warning");
         }
-      })
-      .withFailureHandler(function(err) {
-        btn.disabled = false;
-        spinner.classList.add('hidden');
-        Swal.fire('Error', 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
-      })
-      .apiLogin(email, pass); 
-  }
 
-    /**
-     * ฟังก์ชันออกจากระบบ (Logout)
-     * เรียกใช้งานได้จาก Part_Navbar หรือ Part_Sidebar
-     */
-function handleLogout() {
-  Swal.fire({
-    title: 'ยืนยันการออกจากระบบ?',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'ใช่, ออกจากระบบ',
-    cancelButtonText: 'ยกเลิก',
-    confirmButtonColor: '#d33'
-  }).then((result) => {
-    if (result.isConfirmed) {
-      // ✅ ล้างข้อมูลใน LocalStorage
-      localStorage.removeItem('gas_app_user');
-      
-      // รีโหลดหน้าใหม่เพื่อให้กลับไปหน้า Login และล้างตัวแปรทั้งหมด
-      location.reload();
-    }
-  });
-}
+        btn.disabled = true;
+        spinner.classList.remove("hidden");
 
-    // ✅ ตรวจสอบสถานะการเข้าสู่ระบบเมื่อโหลดหน้าเว็บ
-document.addEventListener('DOMContentLoaded', function() {
-  const savedUser = localStorage.getItem('gas_app_user');
-  
-  if (savedUser) {
-    try {
-      const user = JSON.parse(savedUser);
-      
-      // ถ้ามีข้อมูลในเครื่อง ให้ข้ามหน้า Login ไปหน้าหลักทันที
-      const loginPage = document.getElementById('login-page');
-      const mainApp = document.getElementById('main-app');
-      
-      if (loginPage && mainApp) {
-        loginPage.classList.add('hidden'); // ซ่อนไปเลยไม่ต้องรอ Transition
-        mainApp.classList.remove('opacity-0', 'pointer-events-none');
-        
-        // อัปเดต UI ต่างๆ
-        if (window.updateNavbarUI) window.updateNavbarUI(user);
-        
-        // หน่วงเวลาเล็กน้อยเพื่อให้ระบบ Core อื่นๆ โหลดเสร็จก่อนเริ่ม Init
-        setTimeout(() => {
-          if (window.Dashboard && typeof window.Dashboard.init === 'function') {
-             window.Dashboard.init();
-          }
-        }, 500);
+        google.script.run
+          .withSuccessHandler(function (res) {
+            btn.disabled = false;
+            spinner.classList.add("hidden");
+
+            if (res.success) {
+              // ✅ บันทึกข้อมูลลง LocalStorage
+              localStorage.setItem("gas_app_user", JSON.stringify(res));
+
+              const loginPage = document.getElementById("login-page");
+              const mainApp = document.getElementById("main-app");
+
+              loginPage.classList.add("opacity-0", "pointer-events-none");
+              mainApp.classList.remove("pointer-events-none", "opacity-0");
+
+              if (window.updateNavbarUI) {
+                window.updateNavbarUI(res);
+              }
+
+              if (
+                window.Dashboard &&
+                typeof window.Dashboard.init === "function"
+              ) {
+                window.Dashboard.init();
+              }
+
+              Swal.fire({
+                icon: "success",
+                title: "เข้าสู่ระบบสำเร็จ",
+                text: "ยินดีต้อนรับคุณ " + res.userName,
+                timer: 1500,
+                showConfirmButton: false,
+                toast: true,
+                position: "top-end",
+              });
+            } else {
+              Swal.fire("ผิดพลาด", res.message, "error");
+            }
+          })
+          .withFailureHandler(function (err) {
+            btn.disabled = false;
+            spinner.classList.add("hidden");
+            Swal.fire(
+              "Error",
+              "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์",
+              "error",
+            );
+          })
+          .apiLogin(email, pass);
       }
-    } catch (e) {
-      console.error("LocalStorage Parse Error", e);
-      localStorage.removeItem('gas_app_user'); // ถ้าข้อมูลเสียให้ลบทิ้ง
-    }
-  }
-});
-  </script>
 
-  <?!= include('frontend/scripts/JS_Core'); ?>
-  <?!= include('frontend/scripts/JS_Dashboard'); ?>
-  <?!= include('frontend/scripts/JS_Report'); ?>
-  <?!= include('frontend/scripts/JS_Ticket_Service'); ?>
-  <?!= include('frontend/scripts/JS_Ticket_View'); ?>
-  <?!= include('frontend/scripts/JS_Ticket_Email'); ?>
-  <?!= include('frontend/scripts/JS_Ticket_Controller'); ?>
-  <?!= include('frontend/scripts/JS_History'); ?>
-  <?!= include('frontend/scripts/JS_Settings'); ?>
-  <?!= include('frontend/scripts/JS_App'); ?>
+      /**
+       * ฟังก์ชันออกจากระบบ (Logout)
+       */
+      function handleLogout() {
+        Swal.fire({
+          title: "ยืนยันการออกจากระบบ?",
+          icon: "question",
+          showCancelButton: true,
+          confirmButtonText: "ใช่, ออกจากระบบ",
+          cancelButtonText: "ยกเลิก",
+          confirmButtonColor: "#d33",
+        }).then((result) => {
+          if (result.isConfirmed) {
+            localStorage.removeItem("gas_app_user");
+            location.reload();
+          }
+        });
+      }
 
-</body>
+      // ✅ ตรวจสอบสถานะการเข้าสู่ระบบเมื่อโหลดหน้าเว็บ
+      document.addEventListener("DOMContentLoaded", function () {
+        const savedUser = localStorage.getItem("gas_app_user");
+        const splashScreen = document.getElementById("initial-splash-screen");
 
+        if (savedUser) {
+          try {
+            const user = JSON.parse(savedUser);
+            const loginPage = document.getElementById("login-page");
+            const mainApp = document.getElementById("main-app");
+
+            if (loginPage && mainApp) {
+              loginPage.classList.add("hidden");
+              mainApp.classList.remove("opacity-0", "pointer-events-none");
+
+              if (window.updateNavbarUI) window.updateNavbarUI(user);
+
+              setTimeout(() => {
+                if (
+                  window.Dashboard &&
+                  typeof window.Dashboard.init === "function"
+                ) {
+                  window.Dashboard.init();
+                }
+              }, 500);
+            }
+          } catch (e) {
+            console.error("LocalStorage Parse Error", e);
+            localStorage.removeItem("gas_app_user");
+            // ถ้าข้อมูลเสียให้ลบทิ้ง แล้วซ่อนหน้า Loading เพื่อให้เห็นหน้า Login
+            if (splashScreen) {
+              splashScreen.style.opacity = "0";
+              setTimeout(() => splashScreen.remove(), 500);
+            }
+          }
+        } else {
+          // ✨ [เพิ่มใหม่] ถ้ายอมรับว่ายังไม่ได้ล็อกอิน ให้ปิด Splash Screen ทันที เพื่อให้เห็นหน้า Login
+          if (splashScreen) {
+            splashScreen.style.opacity = "0";
+            setTimeout(() => splashScreen.remove(), 500);
+          }
+        }
+      });
+    </script>
+
+    <?!= include('frontend/scripts/JS_Core'); ?> <?!=
+    include('frontend/scripts/JS_Dashboard'); ?> <?!=
+    include('frontend/scripts/JS_Report'); ?> <?!=
+    include('frontend/scripts/JS_Ticket_Service'); ?> <?!=
+    include('frontend/scripts/JS_Ticket_View'); ?> <?!=
+    include('frontend/scripts/JS_Ticket_Email'); ?> <?!=
+    include('frontend/scripts/JS_Ticket_Controller'); ?> <?!=
+    include('frontend/scripts/JS_History'); ?> <?!=
+    include('frontend/scripts/JS_Settings'); ?> <?!=
+    include('frontend/scripts/JS_App'); ?>
+  </body>
 </html>

@@ -4,7 +4,7 @@
   // ----------------------------------------------------------------------
   const Router = {
     activePage: null,
-    _controllers: {},   // Registry: { 'page-dashboard': { onShow, onHide } }
+    _controllers: {}, // Registry: { 'page-dashboard': { onShow, onHide } }
     _previousPage: null,
 
     /**
@@ -14,7 +14,7 @@
      */
     register: function (pageId, controller) {
       this._controllers[pageId] = controller;
-      console.log('📌 Router: Registered controller for', pageId);
+      console.log("📌 Router: Registered controller for", pageId);
     },
 
     /**
@@ -25,7 +25,7 @@
       // 1. Validate target exists
       var target = document.getElementById(pageId);
       if (!target) {
-        console.warn('⚠️ Router: Page not found -', pageId);
+        console.warn("⚠️ Router: Page not found -", pageId);
         return;
       }
 
@@ -36,35 +36,39 @@
       this._previousPage = this.activePage;
       if (this._previousPage && this._controllers[this._previousPage]) {
         var prevCtrl = this._controllers[this._previousPage];
-        if (typeof prevCtrl.onHide === 'function') {
-          try { prevCtrl.onHide(); } catch (e) { console.error('Router: onHide error for', this._previousPage, e); }
+        if (typeof prevCtrl.onHide === "function") {
+          try {
+            prevCtrl.onHide();
+          } catch (e) {
+            console.error("Router: onHide error for", this._previousPage, e);
+          }
         }
       }
 
       // 4. Hide all pages
-      var sections = document.querySelectorAll('.page-section');
+      var sections = document.querySelectorAll(".page-section");
       for (var i = 0; i < sections.length; i++) {
-        sections[i].classList.add('hidden');
-        sections[i].classList.remove('fade-in');
+        sections[i].classList.add("hidden");
+        sections[i].classList.remove("fade-in");
       }
 
       // 5. Show target page with animation
-      target.classList.remove('hidden');
-      target.classList.add('fade-in');
+      target.classList.remove("hidden");
+      target.classList.add("fade-in");
       this.activePage = pageId;
 
       // ✅ [เพิ่มใหม่] บันทึกหน้าปัจจุบันลง LocalStorage
-      localStorage.setItem('gas_last_page', pageId);
+      localStorage.setItem("gas_last_page", pageId);
 
       // 6. Update Sidebar active state
-      var links = document.querySelectorAll('aside a[data-target]');
+      var links = document.querySelectorAll("aside a[data-target]");
       for (var i = 0; i < links.length; i++) {
         var link = links[i];
-        link.classList.remove('active', 'bg-primary', 'text-white');
+        link.classList.remove("active", "bg-primary", "text-white");
         if (link.dataset.target === pageId) {
-          link.classList.add('active', 'bg-primary', 'text-white');
+          link.classList.add("active", "bg-primary", "text-white");
           // Update Header Title
-          var titleEl = document.getElementById('header-title');
+          var titleEl = document.getElementById("header-title");
           if (titleEl) titleEl.innerText = link.innerText.trim();
         }
       }
@@ -72,16 +76,22 @@
       // 7. Call onShow() on the new page controller
       if (this._controllers[pageId]) {
         var ctrl = this._controllers[pageId];
-        if (typeof ctrl.onShow === 'function') {
-          try { ctrl.onShow(); } catch (e) { console.error('Router: onShow error for', pageId, e); }
+        if (typeof ctrl.onShow === "function") {
+          try {
+            ctrl.onShow();
+          } catch (e) {
+            console.error("Router: onShow error for", pageId, e);
+          }
         }
       }
 
       // 8. Dispatch event for backward compatibility (existing listeners)
       setTimeout(function () {
-        document.dispatchEvent(new CustomEvent('page-change', { detail: { pageId: pageId } }));
+        document.dispatchEvent(
+          new CustomEvent("page-change", { detail: { pageId: pageId } }),
+        );
       }, 50);
-    }
+    },
   };
 
   /** Global helper function */
@@ -96,7 +106,7 @@
     call: function (target) {
       var args = Array.prototype.slice.call(arguments, 1);
       return new Promise(function (resolve, reject) {
-        if (typeof google === 'undefined' || !google.script) {
+        if (typeof google === "undefined" || !google.script) {
           console.error("Local Dev Mode: Google Script not found");
           reject(new Error("Local Dev Mode"));
           return;
@@ -106,7 +116,7 @@
         var options = { silent: false, loadingMsg: null };
         var useApiHandler = false;
 
-        if (typeof target === 'object' && target !== null) {
+        if (typeof target === "object" && target !== null) {
           funcName = target.func;
           if (target.silent) options.silent = true;
           if (target.loadingMsg) options.loadingMsg = target.loadingMsg;
@@ -119,14 +129,17 @@
           .withSuccessHandler(function (res) {
             if (!options.silent) UIManager.hideLoading();
             try {
-              var data = typeof res === 'string' ? JSON.parse(res) : res;
+              var data = typeof res === "string" ? JSON.parse(res) : res;
               resolve(data);
-            } catch (e) { resolve(res); }
+            } catch (e) {
+              resolve(res);
+            }
           })
           .withFailureHandler(function (err) {
             if (!options.silent) UIManager.hideLoading();
             console.error("Server Error:", err);
-            if (typeof UIManager !== 'undefined') UIManager.showToast(err.message, "error");
+            if (typeof UIManager !== "undefined")
+              UIManager.showToast(err.message, "error");
             reject(err);
           });
 
@@ -135,15 +148,15 @@
           runner.apiHandler({ func: funcName, data: args[0] });
         } else {
           // Legacy: direct global function call (e.g., getUserSettings)
-          if (typeof runner[funcName] !== 'function') {
+          if (typeof runner[funcName] !== "function") {
             if (!options.silent) UIManager.hideLoading();
-            reject(new Error('Function not found: ' + funcName));
+            reject(new Error("Function not found: " + funcName));
             return;
           }
           runner[funcName].apply(runner, args);
         }
       });
-    }
+    },
   };
 
   // ----------------------------------------------------------------------
@@ -151,13 +164,13 @@
   // ----------------------------------------------------------------------
   const UIManager = {
     showToast: function (msg, type) {
-      type = type || 'info';
+      type = type || "info";
 
       // Use SweetAlert2 for robust, high-z-index toasts
-      if (typeof Swal !== 'undefined') {
+      if (typeof Swal !== "undefined") {
         const Toast = Swal.mixin({
           toast: true,
-          position: 'top-end',
+          position: "top-end",
           showConfirmButton: false,
           timer: 3000,
           timerProgressBar: true,
@@ -166,61 +179,65 @@
             toast.onmouseleave = Swal.resumeTimer;
             // Force container z-index again just in case
             const container = Swal.getContainer();
-            if (container) container.style.zIndex = '2147483647';
-          }
+            if (container) container.style.zIndex = "2147483647";
+          },
         });
 
         Toast.fire({
           icon: type,
-          title: msg
+          title: msg,
         });
       } else {
         // Fallback (Rare case)
-        console.warn('Swal not found, simple alert:', msg);
+        console.warn("Swal not found, simple alert:", msg);
         alert(msg);
       }
     },
 
     showLoading: function (msg) {
-      if (document.getElementById('global-loading')) return;
-      var d = document.createElement('dialog');
-      d.id = 'global-loading';
-      d.className = 'modal';
+      if (document.getElementById("global-loading")) return;
+      var d = document.createElement("dialog");
+      d.id = "global-loading";
+      d.className = "modal";
       // ให้ Loading อยู่รองลงมาจาก Toast เล็กน้อย
-      d.style.zIndex = '2147483646';
+      d.style.zIndex = "2147483646";
       d.innerHTML =
         '<div class="modal-box bg-transparent shadow-none flex flex-col items-center justify-center overflow-hidden">' +
         '<span class="loading loading-spinner loading-lg text-primary"></span>' +
-        (msg ? '<p class="mt-2 text-white font-bold drop-shadow-md text-sm">' + msg + '</p>' : '') +
-        '</div>';
+        (msg
+          ? '<p class="mt-2 text-white font-bold drop-shadow-md text-sm">' +
+            msg +
+            "</p>"
+          : "") +
+        "</div>";
       document.body.appendChild(d);
       d.showModal();
     },
 
     hideLoading: function () {
-      var d = document.getElementById('global-loading');
+      var d = document.getElementById("global-loading");
       if (d) {
-        if (typeof d.close === 'function') d.close();
+        if (typeof d.close === "function") d.close();
         d.remove();
       }
     },
 
     confirm: function (msg) {
       return new Promise(function (resolve) {
-        if (typeof Swal !== 'undefined') {
+        if (typeof Swal !== "undefined") {
           Swal.fire({
-            title: 'Are you sure?',
+            title: "Are you sure?",
             text: msg,
-            icon: 'warning',
+            icon: "warning",
             showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Yes',
+            confirmButtonColor: "#d33",
+            cancelButtonColor: "#3085d6",
+            confirmButtonText: "Yes",
             didOpen: function () {
               // บังคับ SweetAlert ให้อยู่เหนือ Modal ปกติ
               var container = Swal.getContainer();
-              if (container) container.style.zIndex = '100000';
-            }
+              if (container) container.style.zIndex = "100000";
+            },
           }).then(function (result) {
             resolve(result.isConfirmed);
           });
@@ -229,7 +246,7 @@
           resolve(res);
         }
       });
-    }
+    },
   };
 
   // ----------------------------------------------------------------------
@@ -239,10 +256,17 @@
     state: { currentUser: null, settings: {}, isAppLoaded: false },
     init: function () {
       var self = this;
-      return Server.call('getUserSettings').then(function (res) {
-        self.state.currentUser = res.profile;
-        self.state.settings = res;
-      });
-    }
+      // ✨ [แก้ไข] เปลี่ยนวิธีเรียก API ให้ผ่าน Router apiHandler และปิดโหมดแจ้งเตือนตอนโหลด
+      return Server.call({ func: "getUserSettings", silent: true })
+        .then(function (res) {
+          if (res) {
+            self.state.currentUser = res.profile;
+            self.state.settings = res;
+          }
+        })
+        .catch(function (err) {
+          console.error("Store Init Error:", err);
+        });
+    },
   };
 </script>

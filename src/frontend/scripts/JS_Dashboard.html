@@ -1,730 +1,1023 @@
 <script>
-    /**
-       * JS_Dashboard.html
-       * Version: Multi-Image Support & Grid Preview
-       */
-    const Dashboard = (function () {
-        // --- Helpers ---
-        const getEl = function (id) { return document.getElementById(id); };
-        let _currentDate = new Date();
-        let _allWorkData = [];
-        let _pickers = {};
+  /**
+   * JS_Dashboard.html
+   * Version: Multi-Image Support & Grid Preview
+   */
+  const Dashboard = (function () {
+    // --- Helpers ---
+    const getEl = function (id) {
+      return document.getElementById(id);
+    };
+    let _currentDate = new Date();
+    let _allWorkData = [];
+    let _pickers = {};
 
-        // ✨ NEW: Store array of images objects: { type: 'url'|'file', source: string|File }
-        let _workImages = { start: [], stop: [], 'stop-quick': [] };
+    // ✨ NEW: Store array of images objects: { type: 'url'|'file', source: string|File }
+    let _workImages = { start: [], stop: [], "stop-quick": [] };
 
-        let _editMode = 'all'; // 'new', 'all', 'start', 'stop'
-        let _isLoaded = false;
-        let _lastCalendarFetchDate = null;
+    let _editMode = "all"; // 'new', 'all', 'start', 'stop'
+    let _isLoaded = false;
+    let _lastCalendarFetchDate = null;
 
-        let _galleryList = [];
-        let _galleryIndex = 0;
+    let _galleryList = [];
+    let _galleryIndex = 0;
 
-        // --- Date Helpers ---
-        const toDisplayDate = (date) => {
-            if (!date) return "";
-            const d = new Date(date);
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${day}/${m}/${y}`;
+    // --- Date Helpers ---
+    const toDisplayDate = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${day}/${m}/${y}`;
+    };
+
+    const toInputDate = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
+    const showToastInModal = (msg, type, modalId) => {
+      const targetEl = getEl(modalId);
+      Swal.fire({
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 3000,
+        icon: type,
+        title: msg,
+        target: targetEl || "body",
+        customClass: { container: "z-[999999]" },
+      });
+    };
+
+    const createPicker = (elementId, onSelectCallback) => {
+      const el = getEl(elementId);
+      if (!el) return null;
+      return new Pikaday({
+        field: el,
+        format: "DD/MM/YYYY",
+        theme: "triangle-theme",
+        i18n: {
+          previousMonth: "เดือนก่อน",
+          nextMonth: "เดือนถัดไป",
+          months: [
+            "มกราคม",
+            "กุมภาพันธ์",
+            "มีนาคม",
+            "เมษายน",
+            "พฤษภาคม",
+            "มิถุนายน",
+            "กรกฎาคม",
+            "สิงหาคม",
+            "กันยายน",
+            "ตุลาคม",
+            "พฤศจิกายน",
+            "ธันวาคม",
+          ],
+          weekdays: [
+            "อาทิตย์",
+            "จันทร์",
+            "อังคาร",
+            "พุธ",
+            "พฤหัสบดี",
+            "ศุกร์",
+            "เสาร์",
+          ],
+          weekdaysShort: ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"],
+        },
+        toString(date, format) {
+          const y = date.getFullYear();
+          const m = String(date.getMonth() + 1).padStart(2, "0");
+          const d = String(date.getDate()).padStart(2, "0");
+          return `${d}/${m}/${y}`;
+        },
+        onSelect: onSelectCallback,
+      });
+    };
+
+    const compressImage = function (file, quality = 0.8) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.readAsDataURL(file);
+        r.onload = (e) => {
+          const i = new Image();
+          i.src = e.target.result;
+          i.onload = () => {
+            const c = document.createElement("canvas");
+            let w = i.width,
+              h = i.height,
+              m = 1200;
+            if (w > m) {
+              h *= m / w;
+              w = m;
+            }
+            c.width = w;
+            c.height = h;
+            c.getContext("2d").drawImage(i, 0, 0, w, h);
+            resolve(c.toDataURL("image/jpeg", quality).split(",")[1]);
+          };
+          i.onerror = reject;
         };
+        r.onerror = reject;
+      });
+    };
 
-        const toInputDate = (date) => {
-            if (!date) return "";
-            const d = new Date(date);
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${y}-${m}-${day}`;
-        };
+    const formatDriveUrl = function (url) {
+      if (!url) return "";
+      if (url.startsWith("data:")) return url;
+      try {
+        let id = null;
+        if (url.indexOf("/d/") !== -1) {
+          const match = url.match(/\/d\/(.+?)(\/|$)/);
+          if (match) id = match[1];
+        } else if (url.indexOf("id=") !== -1) {
+          const match = url.match(/id=([^&]+)/);
+          if (match) id = match[1];
+        }
+        if (id)
+          return "https://drive.google.com/thumbnail?id=" + id + "&sz=w1000";
+        return url;
+      } catch (e) {
+        return url;
+      }
+    };
 
-        const showToastInModal = (msg, type, modalId) => {
-            const targetEl = getEl(modalId);
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                showConfirmButton: false,
-                timer: 3000,
-                icon: type,
-                title: msg,
-                target: targetEl || 'body',
-                customClass: { container: 'z-[999999]' }
-            });
-        };
+    return {
+      init: function () {
+        this.initDatePickers();
 
-        const createPicker = (elementId, onSelectCallback) => {
-            const el = getEl(elementId);
-            if (!el) return null;
-            return new Pikaday({
-                field: el,
-                format: 'DD/MM/YYYY',
-                theme: 'triangle-theme',
-                i18n: { previousMonth: 'เดือนก่อน', nextMonth: 'เดือนถัดไป', months: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'], weekdays: ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'], weekdaysShort: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'] },
-                toString(date, format) {
-                    const y = date.getFullYear();
-                    const m = String(date.getMonth() + 1).padStart(2, '0');
-                    const d = String(date.getDate()).padStart(2, '0');
-                    return `${d}/${m}/${y}`;
-                },
-                onSelect: onSelectCallback
-            });
-        };
+        // โหลดครั้งแรกตอนเปิดแอป
+        this.loadWorkList(true);
 
-        const compressImage = function (file, quality = 0.8) { return new Promise((resolve, reject) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = e => { const i = new Image(); i.src = e.target.result; i.onload = () => { const c = document.createElement('canvas'); let w = i.width, h = i.height, m = 1200; if (w > m) { h *= m / w; w = m } c.width = w; c.height = h; c.getContext('2d').drawImage(i, 0, 0, w, h); resolve(c.toDataURL('image/jpeg', quality).split(',')[1]) }; i.onerror = reject }; r.onerror = reject }) };
+        document.addEventListener("page-change", function (e) {
+          if (e.detail.pageId === "page-dashboard") {
+            if (_pickers.main) _pickers.main.setDate(_currentDate);
 
-        const formatDriveUrl = function (url) {
-            if (!url) return "";
-            if (url.startsWith('data:')) return url;
-            try {
-                let id = null;
-                if (url.indexOf('/d/') !== -1) {
-                    const match = url.match(/\/d\/(.+?)(\/|$)/);
-                    if (match) id = match[1];
-                } else if (url.indexOf('id=') !== -1) {
-                    const match = url.match(/id=([^&]+)/);
-                    if (match) id = match[1];
-                }
-                if (id) return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w1000';
-                return url;
-            } catch (e) { return url; }
-        };
+            // ✨ [แก้ไขข้อ 2] เปลี่ยนเป็น true!
+            // เพื่อบังคับให้ดึงข้อมูลจาก Server ใหม่ทุกครั้งที่สลับกลับมาหน้าแดชบอร์ด
+            Dashboard.loadWorkList(true);
+          }
+        });
 
-        return {
-            init: function () {
-                this.initDatePickers();
-                this.loadWorkList();
-                document.addEventListener('page-change', function (e) {
-                    if (e.detail.pageId === 'page-dashboard') {
-                        if (_pickers.main) _pickers.main.setDate(_currentDate);
-                        Dashboard.loadWorkList(false);
-                    }
-                });
-            },
+        // ระบบอัปเดต UI ป้ายสถานะแบบเรียลไทม์ (ถ้าคุณใส่ไว้ตามที่คุยกันรอบที่แล้ว)
+        setInterval(() => {
+          if (
+            typeof Router !== "undefined" &&
+            Router.activePage === "page-dashboard" &&
+            _isLoaded
+          ) {
+            Dashboard.renderFilteredList();
+          }
+        }, 60000);
+      },
 
-            initDatePickers: function () {
-                _pickers.main = createPicker('dash-date-input', (date) => {
-                    _currentDate = date;
-                    Dashboard.updateDateDisplay();
-                    Dashboard.loadWorkList(true);
-                });
-                this.updateDateDisplay();
-            },
+      initDatePickers: function () {
+        _pickers.main = createPicker("dash-date-input", (date) => {
+          _currentDate = date;
+          Dashboard.updateDateDisplay();
+          Dashboard.loadWorkList(true);
+        });
+        this.updateDateDisplay();
+      },
 
-            changeDate: function (days) {
-                _currentDate.setDate(_currentDate.getDate() + days);
-                if (_pickers.main) { _pickers.main.setDate(_currentDate); }
-                else { this.updateDateDisplay(); this.loadWorkList(true); }
-            },
+      changeDate: function (days) {
+        _currentDate.setDate(_currentDate.getDate() + days);
+        if (_pickers.main) {
+          _pickers.main.setDate(_currentDate);
+        } else {
+          this.updateDateDisplay();
+          this.loadWorkList(true);
+        }
+      },
 
-            updateDateDisplay: function () {
-                const input = getEl('dash-date-input');
-                if (input) input.value = toDisplayDate(_currentDate);
-            },
+      updateDateDisplay: function () {
+        const input = getEl("dash-date-input");
+        if (input) input.value = toDisplayDate(_currentDate);
+      },
 
-            loadWorkList: function (forceRefresh) {
-                if (!forceRefresh && _isLoaded) { return; }
-                var btn = getEl('btn-refresh-dashboard');
-                if (btn) { btn.classList.add('is-loading'); btn.disabled = true; }
-                var empty = getEl('dash-empty');
-                if (empty) empty.classList.add('hidden');
+      loadWorkList: function (forceRefresh) {
+        if (!forceRefresh && _isLoaded) {
+          return;
+        }
+        var btn = getEl("btn-refresh-dashboard");
+        if (btn) {
+          btn.classList.add("is-loading");
+          btn.disabled = true;
+        }
+        var empty = getEl("dash-empty");
+        if (empty) empty.classList.add("hidden");
 
-                Server.call({ func: 'apiGetWorkList', silent: true }, forceRefresh)
-                    .then(function (res) {
-                        if (res && res.success) {
-                            _allWorkData = res.data || [];
-                            Dashboard.renderFilteredList();
-                            _isLoaded = true;
-                        } else {
-                            if (typeof UIManager !== 'undefined') UIManager.showToast("Load Failed: " + (res ? res.message : "Unknown Error"), 'error');
-                        }
-                    })
-                    .catch(function (err) { console.error(err); })
-                    .finally(function () {
-                        if (btn) { btn.classList.remove('is-loading'); btn.disabled = false; }
-                    });
-            },
+        Server.call({ func: "apiGetWorkList", silent: true }, forceRefresh)
+          .then(function (res) {
+            if (res && res.success) {
+              _allWorkData = res.data || [];
+              Dashboard.renderFilteredList();
+              _isLoaded = true;
+            } else {
+              if (typeof UIManager !== "undefined")
+                UIManager.showToast(
+                  "Load Failed: " + (res ? res.message : "Unknown Error"),
+                  "error",
+                );
+            }
+          })
+          .catch(function (err) {
+            console.error(err);
+          })
+          .finally(function () {
+            if (btn) {
+              btn.classList.remove("is-loading");
+              btn.disabled = false;
+            }
+          });
+      },
 
-            renderFilteredList: function () {
-                var curDateStr = toInputDate(_currentDate);
-                var filtered = _allWorkData.filter(item => item.date === curDateStr);
-                filtered.sort((a, b) => a.time.localeCompare(b.time));
-                this.renderTable(filtered);
-                this.updateStats(filtered);
-            },
+      renderFilteredList: function () {
+        var curDateStr = toInputDate(_currentDate);
+        var filtered = _allWorkData.filter((item) => item.date === curDateStr);
+        filtered.sort((a, b) => a.time.localeCompare(b.time));
+        this.renderTable(filtered);
+        this.updateStats(filtered);
+      },
 
-            formatTime: function (rawTime) {
-                if (!rawTime) return "-";
-                var str = String(rawTime);
-                if (str.indexOf('T') !== -1) return str.split('T')[1].substring(0, 5);
-                return str.substring(0, 5);
-            },
+      formatTime: function (rawTime) {
+        if (!rawTime) return "-";
+        var str = String(rawTime);
+        if (str.indexOf("T") !== -1) return str.split("T")[1].substring(0, 5);
+        return str.substring(0, 5);
+      },
 
-            // --- Updated Logic: Handle Multiple Images in Table (Show first one or count) ---
-            renderTable: function (data) {
-                var tbody = getEl('work-list-body');
-                var empty = getEl('dash-empty');
-                if (!tbody) return;
-                tbody.innerHTML = '';
+      // --- Updated Logic: Handle Multiple Images in Table (Show first one or count) ---
+      renderTable: function (data) {
+        var tbody = getEl("work-list-body");
+        var empty = getEl("dash-empty");
+        if (!tbody) return;
+        tbody.innerHTML = "";
 
-                if (!data || data.length === 0) {
-                    if (empty) empty.classList.remove('hidden');
-                    return;
-                }
-                if (empty) empty.classList.add('hidden');
+        if (!data || data.length === 0) {
+          if (empty) empty.classList.remove("hidden");
+          return;
+        }
+        if (empty) empty.classList.add("hidden");
 
-                var html = '';
-                data.forEach(function (item) {
-                    var isDone = item.status === 'DONE';
-                    var now = new Date();
-                    var matchTimeStr = item.date + 'T' + item.time + ':00';
-                    var matchDate = new Date(matchTimeStr);
-                    var matchEndDate = new Date(matchDate.getTime() + 120 * 60 * 1000);
-                    var isTimeReached = now >= matchDate;
-                    var isMatchEnded = now >= matchEndDate;
-                    var hasStart = !!item.start_img && (Array.isArray(item.start_img) ? item.start_img.length > 0 : true);
+        var html = "";
+        data.forEach(function (item) {
+          var isDone = item.status === "DONE";
+          var now = new Date();
+          var matchTimeStr = item.date + "T" + item.time + ":00";
+          var matchDate = new Date(matchTimeStr);
+          var matchEndDate = new Date(matchDate.getTime() + 120 * 60 * 1000);
+          var isTimeReached = now >= matchDate;
+          var isMatchEnded = now >= matchEndDate;
+          var hasStart =
+            !!item.start_img &&
+            (Array.isArray(item.start_img) ? item.start_img.length > 0 : true);
 
-                    // Status Widget
-                    var statusWidget = '';
-                    if (isDone) statusWidget = '<div class="flex flex-col items-center justify-center opacity-70"><div class="w-6 h-6 rounded-full bg-success text-white flex items-center justify-center mb-1 shadow-sm"><i class="fas fa-check text-[10px]"></i></div><span class="text-[9px] font-bold text-success tracking-wider">DONE</span></div>';
-                    else if (hasStart) {
-                        if (isMatchEnded) statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-warning badge-sm text-white font-bold tracking-wider shadow-sm">ENDED</span><span class="text-[9px] text-warning/70">จบการแข่ง</span></div>';
-                        else if (isTimeReached) statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><div class="flex items-center gap-1 animate-pulse"><span class="w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.6)]"></span><span class="text-[9px] font-black text-red-500 tracking-wider">ON AIR</span></div></div>';
-                        else statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-success badge-sm text-white font-bold tracking-wider shadow-sm">READY</span><span class="text-[9px] text-success/70">รอเวลาเริ่ม</span></div>';
-                    } else {
-                        if (isTimeReached) statusWidget = '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-error badge-sm text-white font-bold tracking-wider shadow-sm">LATE</span><span class="text-[9px] text-error/70">เลยเวลาแข่ง</span></div>';
-                        else statusWidget = '<span class="badge badge-ghost badge-sm text-[10px] opacity-50">WAIT</span>';
-                    }
+          // Status Widget
+          var statusWidget = "";
+          if (isDone)
+            statusWidget =
+              '<div class="flex flex-col items-center justify-center opacity-70"><div class="w-6 h-6 rounded-full bg-success text-white flex items-center justify-center mb-1 shadow-sm"><i class="fas fa-check text-[10px]"></i></div><span class="text-[9px] font-bold text-success tracking-wider">DONE</span></div>';
+          else if (hasStart) {
+            if (isMatchEnded)
+              statusWidget =
+                '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-warning badge-sm text-white font-bold tracking-wider shadow-sm">ENDED</span><span class="text-[9px] text-warning/70">จบการแข่ง</span></div>';
+            else if (isTimeReached)
+              statusWidget =
+                '<div class="flex flex-col items-center justify-center gap-1"><div class="flex items-center gap-1 animate-pulse"><span class="w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.6)]"></span><span class="text-[9px] font-black text-red-500 tracking-wider">ON AIR</span></div></div>';
+            else
+              statusWidget =
+                '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-success badge-sm text-white font-bold tracking-wider shadow-sm">READY</span><span class="text-[9px] text-success/70">รอเวลาเริ่ม</span></div>';
+          } else {
+            if (isTimeReached)
+              statusWidget =
+                '<div class="flex flex-col items-center justify-center gap-1"><span class="badge badge-error badge-sm text-white font-bold tracking-wider shadow-sm">LATE</span><span class="text-[9px] text-error/70">เลยเวลาแข่ง</span></div>';
+            else
+              statusWidget =
+                '<span class="badge badge-ghost badge-sm text-[10px] opacity-50">WAIT</span>';
+          }
 
-                    var itemJson = encodeURIComponent(JSON.stringify(item));
-                    var actionWidget = '<div class="flex flex-col items-center gap-1">';
-                    if (hasStart && !isDone) {
-                        var stopBtnClass = isTimeReached ? 'btn-error' : 'btn-success';
-                        actionWidget += '<button onclick="Dashboard.openStopModal(\'' + item.id + '\')" class="btn btn-xs btn-outline ' + stopBtnClass + ' bg-white hover:text-white transition-all shadow-sm w-full max-w-[80px] gap-1"><i class="fas fa-stop"></i> จบงาน</button>';
-                    }
-                    actionWidget += '<button onclick="Dashboard.openEditModal(\'' + itemJson + '\', \'all\')" class="btn btn-ghost btn-xs text-base-content/40 hover:text-primary hover:bg-base-200 gap-1 w-full max-w-[80px]"><i class="fas fa-pencil-alt"></i> แก้ไข</button>';
-                    actionWidget += '</div>';
+          var itemJson = encodeURIComponent(JSON.stringify(item));
+          var actionWidget = '<div class="flex flex-col items-center gap-1">';
+          if (hasStart && !isDone) {
+            var stopBtnClass = isTimeReached ? "btn-error" : "btn-success";
+            actionWidget +=
+              "<button onclick=\"Dashboard.openStopModal('" +
+              item.id +
+              '\')" class="btn btn-xs btn-outline ' +
+              stopBtnClass +
+              ' bg-white hover:text-white transition-all shadow-sm w-full max-w-[80px] gap-1"><i class="fas fa-stop"></i> จบงาน</button>';
+          }
+          actionWidget +=
+            "<button onclick=\"Dashboard.openEditModal('" +
+            itemJson +
+            '\', \'all\')" class="btn btn-ghost btn-xs text-base-content/40 hover:text-primary hover:bg-base-200 gap-1 w-full max-w-[80px]"><i class="fas fa-pencil-alt"></i> แก้ไข</button>';
+          actionWidget += "</div>";
 
-                    // --- Proof Button Logic (View Work Images) ---
-                    // ✅ Updated: Call viewWorkImages with ID and Type
-                    var btnProof = function (imgData, label) {
-                        var count = 0;
-                        var firstUrl = '';
+          // --- Proof Button Logic (View Work Images) ---
+          // ✅ Updated: Call viewWorkImages with ID and Type
+          var btnProof = function (imgData, label) {
+            var count = 0;
+            var firstUrl = "";
 
-                        if (Array.isArray(imgData)) {
-                            count = imgData.length;
-                            if (count > 0) firstUrl = imgData[0];
-                        } else if (imgData) {
-                            count = 1;
-                            firstUrl = imgData;
-                        }
+            if (Array.isArray(imgData)) {
+              count = imgData.length;
+              if (count > 0) firstUrl = imgData[0];
+            } else if (imgData) {
+              count = 1;
+              firstUrl = imgData;
+            }
 
-                        if (count === 0) {
-                            // 🟡 No Image: Use "No Img" thumbnail, No Animation
-                            return '<div onclick="Dashboard.openEditModal(\'' + itemJson + '\', \'' + label.toLowerCase() + '\')" class="tooltip cursor-pointer w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto hover:bg-slate-200 transition-colors" data-tip="ยังไม่ใส่รูป ' + label + ' (คลิกเพื่อเพิ่ม)">' +
-                                '<span class="text-[9px] text-slate-400 font-bold leading-tight">No<br>Img</span>' +
-                                '</div>';
-                        }
+            if (count === 0) {
+              // 🟡 No Image: Use "No Img" thumbnail, No Animation
+              return (
+                "<div onclick=\"Dashboard.openEditModal('" +
+                itemJson +
+                "', '" +
+                label.toLowerCase() +
+                '\')" class="tooltip cursor-pointer w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto hover:bg-slate-200 transition-colors" data-tip="ยังไม่ใส่รูป ' +
+                label +
+                ' (คลิกเพื่อเพิ่ม)">' +
+                '<span class="text-[9px] text-slate-400 font-bold leading-tight">No<br>Img</span>' +
+                "</div>"
+              );
+            }
 
-                        var validUrl = formatDriveUrl(firstUrl);
-                        var badge = count > 1 ? '<span class="absolute -top-1 -right-1 bg-black text-white text-[8px] font-bold px-1 rounded-full shadow-md border border-white">+' + (count - 1) + '</span>' : '';
+            var validUrl = formatDriveUrl(firstUrl);
+            var badge =
+              count > 1
+                ? '<span class="absolute -top-1 -right-1 bg-black text-white text-[8px] font-bold px-1 rounded-full shadow-md border border-white">+' +
+                  (count - 1) +
+                  "</span>"
+                : "";
 
-                        // ✅ Use viewWorkImages to lookup array (No Animation)
-                        return '<div onclick="Dashboard.viewWorkImages(\'' + item.id + '\', \'' + label.toLowerCase() + '\')" class="tooltip cursor-pointer bg-white rounded-lg shadow-sm border border-base-200 p-0.5 inline-block relative group" data-tip="ดูรูป ' + label + ' (' + count + ')">' +
-                            '<img src="' + validUrl + '" class="h-10 w-10 object-cover rounded-md" onerror="this.onerror=null;this.src=\'https://placehold.co/40x40?text=Err\'">' +
-                            badge +
-                            '</div>';
-                    };
+            // ✅ Use viewWorkImages to lookup array (No Animation)
+            return (
+              "<div onclick=\"Dashboard.viewWorkImages('" +
+              item.id +
+              "', '" +
+              label.toLowerCase() +
+              '\')" class="tooltip cursor-pointer bg-white rounded-lg shadow-sm border border-base-200 p-0.5 inline-block relative group" data-tip="ดูรูป ' +
+              label +
+              " (" +
+              count +
+              ')">' +
+              '<img src="' +
+              validUrl +
+              '" class="h-10 w-10 object-cover rounded-md" onerror="this.onerror=null;this.src=\'https://placehold.co/40x40?text=Err\'">' +
+              badge +
+              "</div>"
+            );
+          };
 
-                    html += '<tr class="hover:bg-base-50 transition-colors border-b border-base-100 last:border-none h-16"><td class="text-center font-mono font-bold text-base-content/70">' + Dashboard.formatTime(item.time) + '</td><td class="pl-4 align-middle"><div class="flex flex-col justify-center h-full"><span class="text-[9px] font-bold text-base-content/40 uppercase tracking-widest mb-0.5 truncate max-w-[200px]">' + (item.league || '-') + '</span><div class="font-bold text-sm text-base-content/90 flex items-center gap-1 truncate"><div class="truncate max-w-[150px]">' + (hasStart ? '<span class="text-primary">' + item.home + '</span>' : item.home) + '</div><span class="text-[10px] text-base-content/30 px-1 font-normal">vs</span><div class="truncate max-w-[150px]">' + (hasStart ? '<span class="text-primary">' + item.away + '</span>' : item.away) + '</div></div></div></td><td class="text-center"><span class="badge badge-ghost badge-sm font-mono text-[10px]">' + (item.channel || '-') + '</span></td><td class="text-center align-middle">' + btnProof(item.start_img, 'Start') + '</td><td class="text-center align-middle">' + btnProof(item.stop_img, 'Stop') + '</td><td class="text-center align-middle bg-base-50/50 h-16">' + statusWidget + '</td><td class="text-center align-middle">' + actionWidget + '</td></tr>';
-                });
-                tbody.innerHTML = html;
-            },
+          html +=
+            '<tr class="hover:bg-base-50 transition-colors border-b border-base-100 last:border-none h-16"><td class="text-center font-mono font-bold text-base-content/70">' +
+            Dashboard.formatTime(item.time) +
+            '</td><td class="pl-4 align-middle"><div class="flex flex-col justify-center h-full"><span class="text-[9px] font-bold text-base-content/40 uppercase tracking-widest mb-0.5 truncate max-w-[200px]">' +
+            (item.league || "-") +
+            '</span><div class="font-bold text-sm text-base-content/90 flex items-center gap-1 truncate"><div class="truncate max-w-[150px]">' +
+            (hasStart
+              ? '<span class="text-primary">' + item.home + "</span>"
+              : item.home) +
+            '</div><span class="text-[10px] text-base-content/30 px-1 font-normal">vs</span><div class="truncate max-w-[150px]">' +
+            (hasStart
+              ? '<span class="text-primary">' + item.away + "</span>"
+              : item.away) +
+            '</div></div></div></td><td class="text-center"><span class="badge badge-ghost badge-sm font-mono text-[10px]">' +
+            (item.channel || "-") +
+            '</span></td><td class="text-center align-middle">' +
+            btnProof(item.start_img, "Start") +
+            '</td><td class="text-center align-middle">' +
+            btnProof(item.stop_img, "Stop") +
+            '</td><td class="text-center align-middle bg-base-50/50 h-16">' +
+            statusWidget +
+            '</td><td class="text-center align-middle">' +
+            actionWidget +
+            "</td></tr>";
+        });
+        tbody.innerHTML = html;
+      },
 
-            updateStats: function (data) {
-                var live = data.filter(function (d) { return d.status === 'LIVE'; }).length;
-                var done = data.filter(function (d) { return d.status === 'DONE'; }).length;
-                var liveEl = getEl('stat-live'); if (liveEl) liveEl.innerText = live;
-                var doneEl = getEl('stat-done'); if (doneEl) doneEl.innerText = done;
-            },
+      updateStats: function (data) {
+        var live = data.filter(function (d) {
+          return d.status === "LIVE";
+        }).length;
+        var done = data.filter(function (d) {
+          return d.status === "DONE";
+        }).length;
+        var liveEl = getEl("stat-live");
+        if (liveEl) liveEl.innerText = live;
+        var doneEl = getEl("stat-done");
+        if (doneEl) doneEl.innerText = done;
+      },
 
-            // --- ✨ NEW: Image Management Functions ---
+      // --- ✨ NEW: Image Management Functions ---
 
-            // Clear all images for a mode
-            resetImages: function (mode) {
-                _workImages[mode] = [];
-                this.renderGallery(mode);
-            },
+      // Clear all images for a mode
+      resetImages: function (mode) {
+        _workImages[mode] = [];
+        this.renderGallery(mode);
+      },
 
-            // Add images (from file input or DB URLs)
-            addImages: function (mode, items) {
-                // items can be array of Files or Strings (URLs)
-                if (!items || items.length === 0) return;
+      // Add images (from file input or DB URLs)
+      addImages: function (mode, items) {
+        // items can be array of Files or Strings (URLs)
+        if (!items || items.length === 0) return;
 
-                Array.from(items).forEach(item => {
-                    if (item instanceof File) {
-                        _workImages[mode].push({ type: 'file', source: item });
-                    } else if (typeof item === 'string') {
-                        _workImages[mode].push({ type: 'url', source: item });
-                    }
-                });
-                this.renderGallery(mode);
-            },
+        Array.from(items).forEach((item) => {
+          if (item instanceof File) {
+            _workImages[mode].push({ type: "file", source: item });
+          } else if (typeof item === "string") {
+            _workImages[mode].push({ type: "url", source: item });
+          }
+        });
+        this.renderGallery(mode);
+      },
 
-            // --- Updated Gallery Render (Click to View Gallery) ---
-            renderGallery: function (mode) {
-                const container = getEl('gallery-' + mode);
-                const countEl = getEl(mode === 'stop-quick' ? '' : 'count-' + mode);
-                const images = _workImages[mode];
-                if (countEl) countEl.innerText = images.length + " รูป";
-                if (!container) return;
-                container.innerHTML = '';
-                if (images.length === 0) return;
+      // --- Updated Gallery Render (Click to View Gallery) ---
+      renderGallery: function (mode) {
+        const container = getEl("gallery-" + mode);
+        const countEl = getEl(mode === "stop-quick" ? "" : "count-" + mode);
+        const images = _workImages[mode];
+        if (countEl) countEl.innerText = images.length + " รูป";
+        if (!container) return;
+        container.innerHTML = "";
+        if (images.length === 0) return;
 
-                images.forEach((imgObj, index) => {
-                    const div = document.createElement('div');
-                    div.className = "relative group w-full aspect-square bg-gray-100 rounded-lg border border-gray-200 overflow-hidden";
-                    let src = (imgObj.type === 'file') ? URL.createObjectURL(imgObj.source) : formatDriveUrl(imgObj.source);
+        images.forEach((imgObj, index) => {
+          const div = document.createElement("div");
+          div.className =
+            "relative group w-full aspect-square bg-gray-100 rounded-lg border border-gray-200 overflow-hidden";
+          let src =
+            imgObj.type === "file"
+              ? URL.createObjectURL(imgObj.source)
+              : formatDriveUrl(imgObj.source);
 
-                    // ✅ Click to open gallery at specific index
-                    // We need to resolve all URLs first to pass to viewImage
-                    div.innerHTML = `
+          // ✅ Click to open gallery at specific index
+          // We need to resolve all URLs first to pass to viewImage
+          div.innerHTML = `
                         <img src="${src}" class="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity" onclick="Dashboard.viewGalleryFromEdit('${mode}', ${index})">
                         <button type="button" onclick="Dashboard.removeImage('${mode}', ${index})" class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-md hover:bg-red-600 transition-colors z-10">
                             <i class="fas fa-times text-[10px]"></i>
                         </button>
                     `;
-                    container.appendChild(div);
-                });
-            },
+          container.appendChild(div);
+        });
+      },
 
-            // --- ✨ NEW: View Image & Gallery Functions ---
+      // --- ✨ NEW: View Image & Gallery Functions ---
 
-            // 1. Helper to open gallery from Edit Modal (where we have mixed File/URL objects)
-            viewGalleryFromEdit: function (mode, startIndex) {
-                const images = _workImages[mode];
-                if (!images || images.length === 0) return;
+      // 1. Helper to open gallery from Edit Modal (where we have mixed File/URL objects)
+      viewGalleryFromEdit: function (mode, startIndex) {
+        const images = _workImages[mode];
+        if (!images || images.length === 0) return;
 
-                // Convert all to URLs
-                const urlList = images.map(img => (img.type === 'file') ? URL.createObjectURL(img.source) : img.source);
-                this.viewImage(urlList, startIndex);
-            },
+        // Convert all to URLs
+        const urlList = images.map((img) =>
+          img.type === "file" ? URL.createObjectURL(img.source) : img.source,
+        );
+        this.viewImage(urlList, startIndex);
+      },
 
-            // 2. Helper to open gallery from Dashboard Table (lookup by ID)
-            viewWorkImages: function (id, type) { // type = 'start' or 'stop'
-                const item = _allWorkData.find(d => d.id === id);
-                if (!item) return;
+      // 2. Helper to open gallery from Dashboard Table (lookup by ID)
+      viewWorkImages: function (id, type) {
+        // type = 'start' or 'stop'
+        const item = _allWorkData.find((d) => d.id === id);
+        if (!item) return;
 
-                let rawData = (type === 'start') ? item.start_img : item.stop_img;
-                let list = [];
+        let rawData = type === "start" ? item.start_img : item.stop_img;
+        let list = [];
 
-                if (Array.isArray(rawData)) list = rawData;
-                else if (rawData) list = [rawData];
+        if (Array.isArray(rawData)) list = rawData;
+        else if (rawData) list = [rawData];
 
-                if (list.length > 0) this.viewImage(list, 0);
-            },
+        if (list.length > 0) this.viewImage(list, 0);
+      },
 
-            // 3. Core Viewer Function (Accepts Array or String)
-            viewImage: function (source, startIndex = 0) {
-                if (!source) return;
+      // 3. Core Viewer Function (Accepts Array or String)
+      viewImage: function (source, startIndex = 0) {
+        if (!source) return;
 
-                // Reset State
-                _galleryList = Array.isArray(source) ? source : [source];
-                _galleryIndex = startIndex;
+        // Reset State
+        _galleryList = Array.isArray(source) ? source : [source];
+        _galleryIndex = startIndex;
 
-                if (_galleryList.length === 0) return;
+        if (_galleryList.length === 0) return;
 
-                // Initial Render
-                this.updatePreviewUI();
-                getEl('modal-view-image').showModal();
-            },
+        // Initial Render
+        this.updatePreviewUI();
+        getEl("modal-view-image").showModal();
+      },
 
-            // 4. Update UI (Image, Arrows, Counter)
-            updatePreviewUI: function () {
-                const imgEl = getEl('img-preview-target');
-                const prevBtn = getEl('btn-gallery-prev');
-                const nextBtn = getEl('btn-gallery-next');
-                const counter = getEl('gallery-counter');
+      // 4. Update UI (Image, Arrows, Counter)
+      updatePreviewUI: function () {
+        const imgEl = getEl("img-preview-target");
+        const prevBtn = getEl("btn-gallery-prev");
+        const nextBtn = getEl("btn-gallery-next");
+        const counter = getEl("gallery-counter");
 
-                // Set Image
-                const currentUrl = _galleryList[_galleryIndex];
-                imgEl.src = formatDriveUrl(currentUrl);
+        // Set Image
+        const currentUrl = _galleryList[_galleryIndex];
+        imgEl.src = formatDriveUrl(currentUrl);
 
-                // Handle Arrows
-                if (_galleryList.length > 1) {
-                    prevBtn.classList.remove('hidden');
-                    nextBtn.classList.remove('hidden');
-                    counter.classList.remove('hidden');
-                    counter.innerText = `${_galleryIndex + 1} / ${_galleryList.length}`;
-                } else {
-                    prevBtn.classList.add('hidden');
-                    nextBtn.classList.add('hidden');
-                    counter.classList.add('hidden');
-                }
-            },
+        // Handle Arrows
+        if (_galleryList.length > 1) {
+          prevBtn.classList.remove("hidden");
+          nextBtn.classList.remove("hidden");
+          counter.classList.remove("hidden");
+          counter.innerText = `${_galleryIndex + 1} / ${_galleryList.length}`;
+        } else {
+          prevBtn.classList.add("hidden");
+          nextBtn.classList.add("hidden");
+          counter.classList.add("hidden");
+        }
+      },
 
-            // 5. Navigation Logic
-            navGallery: function (direction) {
-                let newIndex = _galleryIndex + direction;
-                // Loop functionality
-                if (newIndex < 0) newIndex = _galleryList.length - 1;
-                if (newIndex >= _galleryList.length) newIndex = 0;
+      // 5. Navigation Logic
+      navGallery: function (direction) {
+        let newIndex = _galleryIndex + direction;
+        // Loop functionality
+        if (newIndex < 0) newIndex = _galleryList.length - 1;
+        if (newIndex >= _galleryList.length) newIndex = 0;
 
-                _galleryIndex = newIndex;
-                this.updatePreviewUI();
-            },
+        _galleryIndex = newIndex;
+        this.updatePreviewUI();
+      },
 
-            removeImage: function (mode, index) {
-                _workImages[mode].splice(index, 1);
-                this.renderGallery(mode);
-            },
+      removeImage: function (mode, index) {
+        _workImages[mode].splice(index, 1);
+        this.renderGallery(mode);
+      },
 
-            handleFileSelect: function (input, mode) {
-                if (input.files && input.files.length > 0) {
-                    this.addImages(mode, input.files);
-                    input.value = ''; // Reset input to allow re-selecting same file
-                }
-            },
+      handleFileSelect: function (input, mode) {
+        if (input.files && input.files.length > 0) {
+          this.addImages(mode, input.files);
+          input.value = ""; // Reset input to allow re-selecting same file
+        }
+      },
 
-            triggerPaste: async function (mode) {
-                var modalId = mode === 'stop-quick' ? 'modal-stop-work' : 'modal-add-work';
-                var areaId = 'paste-area-' + mode;
-                var area = getEl(areaId);
+      triggerPaste: async function (mode) {
+        var modalId =
+          mode === "stop-quick" ? "modal-stop-work" : "modal-add-work";
+        var areaId = "paste-area-" + mode;
+        var area = getEl(areaId);
 
-                if (area) {
-                    area.style.width = '1px'; area.style.height = '1px'; area.style.opacity = '0';
-                    area.style.position = 'fixed'; area.focus();
-                    if (!area.hasAttribute('data-listening')) {
-                        area.addEventListener('paste', (e) => Dashboard.handlePasteEvent(e, mode));
-                        area.setAttribute('data-listening', 'true');
-                    }
-                }
+        if (area) {
+          area.style.width = "1px";
+          area.style.height = "1px";
+          area.style.opacity = "0";
+          area.style.position = "fixed";
+          area.focus();
+          if (!area.hasAttribute("data-listening")) {
+            area.addEventListener("paste", (e) =>
+              Dashboard.handlePasteEvent(e, mode),
+            );
+            area.setAttribute("data-listening", "true");
+          }
+        }
 
-                try {
-                    const clipboardItems = await navigator.clipboard.read();
-                    let imageFound = false;
-                    for (const item of clipboardItems) {
-                        const imageTypes = item.types.filter(type => type.startsWith('image/'));
-                        for (const type of imageTypes) {
-                            const blob = await item.getType(type);
-                            // Convert Blob to File for consistency
-                            const file = new File([blob], "pasted_image.png", { type: "image/png" });
-                            this.addImages(mode, [file]);
-                            showToastInModal("วางรูปสำเร็จ", "success", modalId);
-                            imageFound = true;
-                            break;
-                        }
-                        if (imageFound) break;
-                    }
-                    if (!imageFound) showToastInModal("ไม่พบรูปภาพใน Clipboard", "warning", modalId);
-                } catch (err) {
-                    console.warn("Clipboard API failed:", err);
-                    showToastInModal("กด Ctrl+V เพื่อวางรูป", "info", modalId);
-                }
-            },
+        try {
+          const clipboardItems = await navigator.clipboard.read();
+          let imageFound = false;
+          for (const item of clipboardItems) {
+            const imageTypes = item.types.filter((type) =>
+              type.startsWith("image/"),
+            );
+            for (const type of imageTypes) {
+              const blob = await item.getType(type);
+              // Convert Blob to File for consistency
+              const file = new File([blob], "pasted_image.png", {
+                type: "image/png",
+              });
+              this.addImages(mode, [file]);
+              showToastInModal("วางรูปสำเร็จ", "success", modalId);
+              imageFound = true;
+              break;
+            }
+            if (imageFound) break;
+          }
+          if (!imageFound)
+            showToastInModal("ไม่พบรูปภาพใน Clipboard", "warning", modalId);
+        } catch (err) {
+          console.warn("Clipboard API failed:", err);
+          showToastInModal("กด Ctrl+V เพื่อวางรูป", "info", modalId);
+        }
+      },
 
-            handlePasteEvent: function (e, mode) {
-                var items = (e.clipboardData || e.originalEvent.clipboardData).items;
-                for (var i = 0; i < items.length; i++) {
-                    if (items[i].type.indexOf("image") !== -1) {
-                        var blob = items[i].getAsFile();
-                        this.addImages(mode, [blob]);
-                        e.preventDefault();
-                        var modalId = mode === 'stop-quick' ? 'modal-stop-work' : 'modal-add-work';
-                        showToastInModal("วางรูปเรียบร้อย", "success", modalId);
-                        return;
-                    }
-                }
-            },
+      handlePasteEvent: function (e, mode) {
+        var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf("image") !== -1) {
+            var blob = items[i].getAsFile();
+            this.addImages(mode, [blob]);
+            e.preventDefault();
+            var modalId =
+              mode === "stop-quick" ? "modal-stop-work" : "modal-add-work";
+            showToastInModal("วางรูปเรียบร้อย", "success", modalId);
+            return;
+          }
+        }
+      },
 
-            // --- Form Logic ---
+      // --- Form Logic ---
 
-            openAddModal: function () {
-                this._editMode = 'new';
-                getEl('form-add-work').reset();
-                getEl('input-edit-id').value = "";
-                getEl('modal-title-work').innerText = "เริ่มงานใหม่ (New Work)";
+      openAddModal: function () {
+        this._editMode = "new";
+        getEl("form-add-work").reset();
+        getEl("input-edit-id").value = "";
+        getEl("modal-title-work").innerText = "เริ่มงานใหม่ (New Work)";
 
-                getEl('section-import').classList.remove('hidden');
-                getEl('form-add-work').classList.remove('lg:grid-cols-2');
-                getEl('form-add-work').classList.add('lg:grid-cols-3');
+        getEl("section-import").classList.remove("hidden");
+        getEl("form-add-work").classList.remove("lg:grid-cols-2");
+        getEl("form-add-work").classList.add("lg:grid-cols-3");
 
-                getEl('section-img-stop').classList.add('hidden');
-                getEl('btn-delete-work').classList.add('hidden');
-                getEl('btn-submit-start').innerHTML = '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกและเริ่มงาน</span>';
+        getEl("section-img-stop").classList.add("hidden");
+        getEl("btn-delete-work").classList.add("hidden");
+        getEl("btn-submit-start").innerHTML =
+          '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกและเริ่มงาน</span>';
 
-                var now = new Date();
-                getEl('input-date').value = toInputDate(now);
-                var HH = String(now.getHours()).padStart(2, '0');
-                var ii = String(now.getMinutes()).padStart(2, '0');
-                getEl('input-time').value = HH + ':' + ii;
+        var now = new Date();
+        getEl("input-date").value = toInputDate(now);
+        var HH = String(now.getHours()).padStart(2, "0");
+        var ii = String(now.getMinutes()).padStart(2, "0");
+        getEl("input-time").value = HH + ":" + ii;
 
-                // Reset Images
-                this.resetImages('start');
-                this.resetImages('stop');
+        // Reset Images
+        this.resetImages("start");
+        this.resetImages("stop");
 
-                // Calendar Logic
-                getEl('import-date-picker').value = toInputDate(now);
-                if (_lastCalendarFetchDate !== toInputDate(now)) {
-                    this.fetchCalendarEvents();
-                } else {
-                    var list = getEl('calendar-picker-list');
-                    if (!list || list.children.length === 0) this.fetchCalendarEvents();
-                }
+        // Calendar Logic
+        getEl("import-date-picker").value = toInputDate(now);
+        if (_lastCalendarFetchDate !== toInputDate(now)) {
+          this.fetchCalendarEvents();
+        } else {
+          var list = getEl("calendar-picker-list");
+          if (!list || list.children.length === 0) this.fetchCalendarEvents();
+        }
 
-                getEl('modal-add-work').showModal();
-                this.checkFormInput(); // Initial visibility check
-            },
+        getEl("modal-add-work").showModal();
+        this.checkFormInput(); // Initial visibility check
+      },
 
-            openEditModal: function (itemEncoded, mode) {
-                this._editMode = mode || 'all';
-                var item = JSON.parse(decodeURIComponent(itemEncoded));
-                getEl('input-edit-id').value = item.id;
-                getEl('input-date').value = item.date;
-                getEl('input-time').value = item.time;
-                getEl('input-league').value = item.league;
-                getEl('input-home').value = item.home;
-                getEl('input-away').value = item.away;
-                getEl('input-channel').value = item.channel;
+      openEditModal: function (itemEncoded, mode) {
+        this._editMode = mode || "all";
+        var item = JSON.parse(decodeURIComponent(itemEncoded));
+        getEl("input-edit-id").value = item.id;
+        getEl("input-date").value = item.date;
+        getEl("input-time").value = item.time;
+        getEl("input-league").value = item.league;
+        getEl("input-home").value = item.home;
+        getEl("input-away").value = item.away;
+        getEl("input-channel").value = item.channel;
 
-                getEl('modal-title-work').innerText = "แก้ไขข้อมูล (Edit)";
-                getEl('section-import').classList.add('hidden');
-                getEl('form-add-work').classList.remove('lg:grid-cols-3');
-                getEl('form-add-work').classList.add('lg:grid-cols-2');
-                getEl('btn-delete-work').classList.remove('hidden');
-                getEl('btn-submit-start').innerHTML = '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกการแก้ไข</span>';
+        getEl("modal-title-work").innerText = "แก้ไขข้อมูล (Edit)";
+        getEl("section-import").classList.add("hidden");
+        getEl("form-add-work").classList.remove("lg:grid-cols-3");
+        getEl("form-add-work").classList.add("lg:grid-cols-2");
+        getEl("btn-delete-work").classList.remove("hidden");
+        getEl("btn-submit-start").innerHTML =
+          '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกการแก้ไข</span>';
 
-                // Reset & Load Existing Images
-                this.resetImages('start');
-                this.resetImages('stop');
+        // Reset & Load Existing Images
+        this.resetImages("start");
+        this.resetImages("stop");
 
-                // Helper to push images (array or single string)
-                const pushToGallery = (mode, data) => {
-                    if (Array.isArray(data)) {
-                        this.addImages(mode, data);
-                    } else if (data) {
-                        this.addImages(mode, [data]); // Convert single URL to array
-                    }
-                };
-
-                pushToGallery('start', item.start_img);
-                pushToGallery('stop', item.stop_img);
-
-                // Visibility logic based on mode
-                var startSection = getEl('section-img-start');
-                var stopSection = getEl('section-img-stop');
-
-                if (startSection) startSection.classList.remove('hidden');
-                if (stopSection) stopSection.classList.remove('hidden');
-
-                if (mode === 'start') stopSection.classList.add('hidden');
-                if (mode === 'stop') startSection.classList.add('hidden');
-
-                getEl('modal-add-work').showModal();
-            },
-
-            checkFormInput: function () {
-                var home = getEl('input-home').value.trim();
-                var away = getEl('input-away').value.trim();
-                var sectionStart = getEl('section-img-start');
-                if (!sectionStart) return;
-
-                if (this._editMode === 'new') {
-                    if (home && away) sectionStart.classList.remove('hidden');
-                    else sectionStart.classList.add('hidden');
-                }
-            },
-
-            handleDeleteWork: function () {
-                var id = getEl('input-edit-id').value;
-                if (!id) return;
-                Swal.fire({
-                    title: 'ยืนยันการลบ?',
-                    text: "คุณต้องการลบรายการนี้ใช่หรือไม่",
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#3085d6',
-                    confirmButtonText: 'ใช่, ลบรายการ',
-                    cancelButtonText: 'ยกเลิก',
-                    target: getEl('modal-add-work')
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        var btn = getEl('btn-delete-work');
-                        var btnTxt = btn.innerHTML;
-                        btn.disabled = true;
-                        btn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> กำลังลบ...';
-                        Server.call({ func: 'apiDeleteWorkItem', silent: true }, id)
-                            .then(res => {
-                                if (res && res.success) {
-                                    showToastInModal("ลบรายการเรียบร้อย", "success", "modal-add-work");
-                                    setTimeout(() => { getEl('modal-add-work').close(); Dashboard.loadWorkList(true); }, 1000);
-                                } else { throw new Error(res ? res.message : "Unknown Error"); }
-                            })
-                            .catch(e => Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-add-work') }))
-                            .finally(() => { btn.disabled = false; btn.innerHTML = btnTxt; });
-                    }
-                });
-            },
-
-            handleSubmitWork: function () {
-                var form = getEl('form-add-work');
-                if (!form.checkValidity()) { form.reportValidity(); return; }
-
-                var id = getEl('input-edit-id').value;
-                var isEdit = !!id;
-                var payload = {
-                    id: id,
-                    date: getEl('input-date').value,
-                    time: getEl('input-time').value,
-                    league: getEl('input-league').value,
-                    home: getEl('input-home').value,
-                    away: getEl('input-away').value,
-                    channel: getEl('input-channel').value,
-                    startImages: [], // For Backend Array
-                    stopImages: []   // For Backend Array
-                };
-
-                var btn = getEl('btn-submit-start');
-                var spinner = getEl('spinner-submit-start');
-                btn.disabled = true; spinner.classList.remove('hidden');
-
-                // ✨ PROCESS IMAGES (Compress Files, Keep URLs)
-                const processImages = async (mode) => {
-                    const results = [];
-                    for (const item of _workImages[mode]) {
-                        if (item.type === 'file') {
-                            const b64 = await compressImage(item.source);
-                            results.push({ type: 'base64', data: b64 });
-                        } else {
-                            results.push({ type: 'url', data: item.source });
-                        }
-                    }
-                    return results;
-                };
-
-                Promise.all([processImages('start'), processImages('stop')])
-                    .then(([startRes, stopRes]) => {
-                        payload.startImages = startRes;
-                        payload.stopImages = stopRes;
-
-                        // Compatibility with old backend (Send first Base64 if exists, for legacy support)
-                        // Note: Backend SHOULD be updated to use payload.startImages array.
-                        const startB64 = startRes.find(x => x.type === 'base64');
-                        if (startB64) payload.imageBase64 = startB64.data;
-
-                        const apiFunc = isEdit ? 'apiUpdateWorkItem' : 'apiCreateWorkItem';
-                        return Server.call({ func: apiFunc, silent: true }, payload);
-                    })
-                    .then(res => {
-                        if (res && res.success) {
-                            showToastInModal(isEdit ? "แก้ไขข้อมูลสำเร็จ" : "เริ่มงานสำเร็จ", "success", "modal-add-work");
-                            setTimeout(() => { getEl('modal-add-work').close(); Dashboard.loadWorkList(true); }, 1000);
-                        } else { throw new Error(res ? res.message : "Unknown Error"); }
-                    })
-                    .catch(e => { Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-add-work') }); })
-                    .finally(() => { btn.disabled = false; spinner.classList.add('hidden'); });
-            },
-
-            openStopModal: function (id) {
-                getEl('inp-stop-id-quick').value = id;
-                this.resetImages('stop-quick');
-                getEl('modal-stop-work').showModal();
-            },
-
-            submitStopWork: function (skipImage) {
-                var id = getEl('inp-stop-id-quick').value;
-                var btn = getEl('btn-submit-stop');
-                var btnSkip = getEl('btn-submit-stop-skip');
-                var spinner = getEl('spinner-submit-stop');
-
-                if (btn) btn.disabled = true;
-                if (btnSkip) btnSkip.disabled = true;
-                if (spinner) spinner.classList.remove('hidden');
-
-                const processQuickStop = async () => {
-                    const results = [];
-                    if (!skipImage) {
-                        for (const item of _workImages['stop-quick']) {
-                            if (item.type === 'file') {
-                                const b64 = await compressImage(item.source);
-                                results.push({ type: 'base64', data: b64 });
-                            }
-                        }
-                    }
-                    return results;
-                };
-
-                processQuickStop().then(images => {
-                    Server.call({ func: 'apiStopWorkItem', silent: true }, {
-                        id: id,
-                        stopImages: images, // Array of {type:'base64', data: '...'}
-                        isSkipImage: skipImage
-                    })
-                        .then(res => {
-                            if (res && res.success) {
-                                showToastInModal("จบงานเรียบร้อย!", "success", "modal-stop-work");
-                                setTimeout(() => { getEl('modal-stop-work').close(); Dashboard.loadWorkList(true); }, 1000);
-                            } else { throw new Error(res ? res.message : "Unknown Error"); }
-                        })
-                        .catch(e => { Swal.fire({ title: 'Error', text: e.message, icon: 'error', target: getEl('modal-stop-work') }); })
-                        .finally(() => {
-                            if (btn) btn.disabled = false;
-                            if (btnSkip) btnSkip.disabled = false;
-                            if (spinner) spinner.classList.add('hidden');
-                        });
-                });
-            },
-
-            // --- Other Helpers ---
-            fetchCalendarEvents: function () {
-                var dateVal = getEl('import-date-picker').value || getEl('input-date').value;
-                if (!dateVal) return;
-                var loader = getEl('cal-loader');
-                var list = getEl('calendar-picker-list');
-                loader.classList.remove('hidden'); list.innerHTML = '';
-
-                Server.call({ func: 'apiGetCalendarEvents', silent: true }, dateVal)
-                    .then(res => {
-                        loader.classList.add('hidden');
-                        if (res && res.success) { Dashboard.renderImportList(res.data); _lastCalendarFetchDate = dateVal; }
-                        else list.innerHTML = '<div class="text-error text-center text-xs p-4">' + (res ? (res.error || res.message || "No Data") : "No Data") + '</div>';
-                    })
-                    .catch(err => { loader.classList.add('hidden'); list.innerHTML = '<div class="text-error text-center text-xs p-4">Connection failed</div>'; });
-            },
-
-            renderImportList: function (events) {
-                var list = getEl('calendar-picker-list');
-                if (!events || events.length === 0) { list.innerHTML = '<div class="text-center text-xs text-base-content/40 py-6">ไม่พบรายการแข่งขัน</div>'; return; }
-                var html = '';
-                events.forEach(function (evt) {
-                    var evtJson = encodeURIComponent(JSON.stringify(evt));
-                    var timeBadgeClass = evt.isPreviousDay ? 'badge-error text-white border-none' : 'badge-neutral';
-                    var timeLabel = evt.time + (evt.isPreviousDay ? '<span class="ml-1 text-[9px] opacity-90 font-normal">(ข้ามวัน)</span>' : '');
-                    html += '<div onclick="Dashboard.selectImportEvent(\'' + evtJson + '\')" class="p-2 bg-white hover:bg-primary/5 border border-base-200 rounded-lg cursor-pointer transition-all hover:shadow-sm group mb-1"><div class="flex items-center gap-3"><div class="badge ' + timeBadgeClass + ' font-mono font-bold h-6 whitespace-nowrap">' + timeLabel + '</div><div class="flex-1 min-w-0"><div class="text-[10px] font-bold text-primary/70 uppercase tracking-wider truncate">' + (evt.league || 'Unknown') + '</div><div class="text-sm font-bold text-base-content/80 truncate group-hover:text-primary transition-colors">' + evt.home + ' <span class="text-xs text-base-content/40 font-normal px-1">vs</span> ' + evt.away + '</div></div><i class="fas fa-plus-circle text-base-content/10 group-hover:text-primary text-xl transition-colors"></i></div></div>';
-                });
-                list.innerHTML = html;
-            },
-
-            selectImportEvent: function (evtEncoded) {
-                try {
-                    var evt = JSON.parse(decodeURIComponent(evtEncoded));
-                    getEl('input-time').value = evt.time;
-                    getEl('input-league').value = evt.league;
-                    getEl('input-home').value = evt.home;
-                    getEl('input-away').value = evt.away;
-                    getEl('input-channel').value = evt.channel || 'N/A';
-                    var importDate = getEl('import-date-picker') ? getEl('import-date-picker').value : '';
-                    if (importDate) getEl('input-date').value = importDate;
-                    showToastInModal("นำเข้าข้อมูลเรียบร้อย", "success", "modal-add-work");
-                    this.checkFormInput();
-                } catch (e) { console.error(e); }
-            },
-
+        // Helper to push images (array or single string)
+        const pushToGallery = (mode, data) => {
+          if (Array.isArray(data)) {
+            this.addImages(mode, data);
+          } else if (data) {
+            this.addImages(mode, [data]); // Convert single URL to array
+          }
         };
-    })();
 
-    document.addEventListener('DOMContentLoaded', function () {
-        Dashboard.init();
-    });
+        pushToGallery("start", item.start_img);
+        pushToGallery("stop", item.stop_img);
+
+        // Visibility logic based on mode
+        var startSection = getEl("section-img-start");
+        var stopSection = getEl("section-img-stop");
+
+        if (startSection) startSection.classList.remove("hidden");
+        if (stopSection) stopSection.classList.remove("hidden");
+
+        if (mode === "start") stopSection.classList.add("hidden");
+        if (mode === "stop") startSection.classList.add("hidden");
+
+        getEl("modal-add-work").showModal();
+      },
+
+      checkFormInput: function () {
+        var home = getEl("input-home").value.trim();
+        var away = getEl("input-away").value.trim();
+        var sectionStart = getEl("section-img-start");
+        if (!sectionStart) return;
+
+        if (this._editMode === "new") {
+          if (home && away) sectionStart.classList.remove("hidden");
+          else sectionStart.classList.add("hidden");
+        }
+      },
+
+      handleDeleteWork: function () {
+        var id = getEl("input-edit-id").value;
+        if (!id) return;
+        Swal.fire({
+          title: "ยืนยันการลบ?",
+          text: "คุณต้องการลบรายการนี้ใช่หรือไม่",
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonColor: "#d33",
+          cancelButtonColor: "#3085d6",
+          confirmButtonText: "ใช่, ลบรายการ",
+          cancelButtonText: "ยกเลิก",
+          target: getEl("modal-add-work"),
+        }).then((result) => {
+          if (result.isConfirmed) {
+            var btn = getEl("btn-delete-work");
+            var btnTxt = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML =
+              '<span class="loading loading-spinner loading-xs"></span> กำลังลบ...';
+            Server.call({ func: "apiDeleteWorkItem", silent: true }, id)
+              .then((res) => {
+                if (res && res.success) {
+                  showToastInModal(
+                    "ลบรายการเรียบร้อย",
+                    "success",
+                    "modal-add-work",
+                  );
+                  setTimeout(() => {
+                    getEl("modal-add-work").close();
+                    Dashboard.loadWorkList(true);
+                  }, 1000);
+                } else {
+                  throw new Error(res ? res.message : "Unknown Error");
+                }
+              })
+              .catch((e) =>
+                Swal.fire({
+                  title: "Error",
+                  text: e.message,
+                  icon: "error",
+                  target: getEl("modal-add-work"),
+                }),
+              )
+              .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = btnTxt;
+              });
+          }
+        });
+      },
+
+      handleSubmitWork: function () {
+        var form = getEl("form-add-work");
+        if (!form.checkValidity()) {
+          form.reportValidity();
+          return;
+        }
+
+        var id = getEl("input-edit-id").value;
+        var isEdit = !!id;
+        var payload = {
+          id: id,
+          date: getEl("input-date").value,
+          time: getEl("input-time").value,
+          league: getEl("input-league").value,
+          home: getEl("input-home").value,
+          away: getEl("input-away").value,
+          channel: getEl("input-channel").value,
+          startImages: [], // For Backend Array
+          stopImages: [], // For Backend Array
+        };
+
+        var btn = getEl("btn-submit-start");
+        var spinner = getEl("spinner-submit-start");
+        btn.disabled = true;
+        spinner.classList.remove("hidden");
+
+        // ✨ PROCESS IMAGES (Compress Files, Keep URLs)
+        const processImages = async (mode) => {
+          const results = [];
+          for (const item of _workImages[mode]) {
+            if (item.type === "file") {
+              const b64 = await compressImage(item.source);
+              results.push({ type: "base64", data: b64 });
+            } else {
+              results.push({ type: "url", data: item.source });
+            }
+          }
+          return results;
+        };
+
+        Promise.all([processImages("start"), processImages("stop")])
+          .then(([startRes, stopRes]) => {
+            payload.startImages = startRes;
+            payload.stopImages = stopRes;
+
+            // Compatibility with old backend (Send first Base64 if exists, for legacy support)
+            // Note: Backend SHOULD be updated to use payload.startImages array.
+            const startB64 = startRes.find((x) => x.type === "base64");
+            if (startB64) payload.imageBase64 = startB64.data;
+
+            const apiFunc = isEdit ? "apiUpdateWorkItem" : "apiCreateWorkItem";
+            return Server.call({ func: apiFunc, silent: true }, payload);
+          })
+          .then((res) => {
+            if (res && res.success) {
+              showToastInModal(
+                isEdit ? "แก้ไขข้อมูลสำเร็จ" : "เริ่มงานสำเร็จ",
+                "success",
+                "modal-add-work",
+              );
+              setTimeout(() => {
+                getEl("modal-add-work").close();
+                Dashboard.loadWorkList(true);
+              }, 1000);
+            } else {
+              throw new Error(res ? res.message : "Unknown Error");
+            }
+          })
+          .catch((e) => {
+            Swal.fire({
+              title: "Error",
+              text: e.message,
+              icon: "error",
+              target: getEl("modal-add-work"),
+            });
+          })
+          .finally(() => {
+            btn.disabled = false;
+            spinner.classList.add("hidden");
+          });
+      },
+
+      openStopModal: function (id) {
+        getEl("inp-stop-id-quick").value = id;
+        this.resetImages("stop-quick");
+        getEl("modal-stop-work").showModal();
+      },
+
+      submitStopWork: function (skipImage) {
+        var id = getEl("inp-stop-id-quick").value;
+        var btn = getEl("btn-submit-stop");
+        var btnSkip = getEl("btn-submit-stop-skip");
+        var spinner = getEl("spinner-submit-stop");
+
+        if (btn) btn.disabled = true;
+        if (btnSkip) btnSkip.disabled = true;
+        if (spinner) spinner.classList.remove("hidden");
+
+        const processQuickStop = async () => {
+          const results = [];
+          if (!skipImage) {
+            for (const item of _workImages["stop-quick"]) {
+              if (item.type === "file") {
+                const b64 = await compressImage(item.source);
+                results.push({ type: "base64", data: b64 });
+              }
+            }
+          }
+          return results;
+        };
+
+        processQuickStop().then((images) => {
+          Server.call(
+            { func: "apiStopWorkItem", silent: true },
+            {
+              id: id,
+              stopImages: images, // Array of {type:'base64', data: '...'}
+              isSkipImage: skipImage,
+            },
+          )
+            .then((res) => {
+              if (res && res.success) {
+                showToastInModal(
+                  "จบงานเรียบร้อย!",
+                  "success",
+                  "modal-stop-work",
+                );
+                setTimeout(() => {
+                  getEl("modal-stop-work").close();
+                  Dashboard.loadWorkList(true);
+                }, 1000);
+              } else {
+                throw new Error(res ? res.message : "Unknown Error");
+              }
+            })
+            .catch((e) => {
+              Swal.fire({
+                title: "Error",
+                text: e.message,
+                icon: "error",
+                target: getEl("modal-stop-work"),
+              });
+            })
+            .finally(() => {
+              if (btn) btn.disabled = false;
+              if (btnSkip) btnSkip.disabled = false;
+              if (spinner) spinner.classList.add("hidden");
+            });
+        });
+      },
+
+      // --- Other Helpers ---
+      fetchCalendarEvents: function () {
+        var dateVal =
+          getEl("import-date-picker").value || getEl("input-date").value;
+        if (!dateVal) return;
+        var loader = getEl("cal-loader");
+        var list = getEl("calendar-picker-list");
+        loader.classList.remove("hidden");
+        list.innerHTML = "";
+
+        Server.call({ func: "apiGetCalendarEvents", silent: true }, dateVal)
+          .then((res) => {
+            loader.classList.add("hidden");
+            if (res && res.success) {
+              Dashboard.renderImportList(res.data);
+              _lastCalendarFetchDate = dateVal;
+            } else
+              list.innerHTML =
+                '<div class="text-error text-center text-xs p-4">' +
+                (res ? res.error || res.message || "No Data" : "No Data") +
+                "</div>";
+          })
+          .catch((err) => {
+            loader.classList.add("hidden");
+            list.innerHTML =
+              '<div class="text-error text-center text-xs p-4">Connection failed</div>';
+          });
+      },
+
+      renderImportList: function (events) {
+        var list = getEl("calendar-picker-list");
+        if (!events || events.length === 0) {
+          list.innerHTML =
+            '<div class="text-center text-xs text-base-content/40 py-6">ไม่พบรายการแข่งขัน</div>';
+          return;
+        }
+        var html = "";
+        events.forEach(function (evt) {
+          var evtJson = encodeURIComponent(JSON.stringify(evt));
+          var timeBadgeClass = evt.isPreviousDay
+            ? "badge-error text-white border-none"
+            : "badge-neutral";
+          var timeLabel =
+            evt.time +
+            (evt.isPreviousDay
+              ? '<span class="ml-1 text-[9px] opacity-90 font-normal">(ข้ามวัน)</span>'
+              : "");
+          html +=
+            "<div onclick=\"Dashboard.selectImportEvent('" +
+            evtJson +
+            '\')" class="p-2 bg-white hover:bg-primary/5 border border-base-200 rounded-lg cursor-pointer transition-all hover:shadow-sm group mb-1"><div class="flex items-center gap-3"><div class="badge ' +
+            timeBadgeClass +
+            ' font-mono font-bold h-6 whitespace-nowrap">' +
+            timeLabel +
+            '</div><div class="flex-1 min-w-0"><div class="text-[10px] font-bold text-primary/70 uppercase tracking-wider truncate">' +
+            (evt.league || "Unknown") +
+            '</div><div class="text-sm font-bold text-base-content/80 truncate group-hover:text-primary transition-colors">' +
+            evt.home +
+            ' <span class="text-xs text-base-content/40 font-normal px-1">vs</span> ' +
+            evt.away +
+            '</div></div><i class="fas fa-plus-circle text-base-content/10 group-hover:text-primary text-xl transition-colors"></i></div></div>';
+        });
+        list.innerHTML = html;
+      },
+
+      selectImportEvent: function (evtEncoded) {
+        try {
+          var evt = JSON.parse(decodeURIComponent(evtEncoded));
+          getEl("input-time").value = evt.time;
+          getEl("input-league").value = evt.league;
+          getEl("input-home").value = evt.home;
+          getEl("input-away").value = evt.away;
+          getEl("input-channel").value = evt.channel || "N/A";
+          var importDate = getEl("import-date-picker")
+            ? getEl("import-date-picker").value
+            : "";
+          if (importDate) getEl("input-date").value = importDate;
+          showToastInModal(
+            "นำเข้าข้อมูลเรียบร้อย",
+            "success",
+            "modal-add-work",
+          );
+          this.checkFormInput();
+        } catch (e) {
+          console.error(e);
+        }
+      },
+    };
+  })();
+
+  document.addEventListener("DOMContentLoaded", function () {
+    Dashboard.init();
+  });
 </script>

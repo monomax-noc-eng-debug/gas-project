@@ -14,7 +14,7 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-/* 8. API สำหรับดึงข้อมูลผู้ใช้ปัจจุบัน (ชื่อ, รูป, อีเมล) */
+/* 1. API สำหรับดึงข้อมูลผู้ใช้ปัจจุบัน (ชื่อ, รูป, อีเมล) */
 function getCurrentUser() {
   try {
     const email = Session.getActiveUser().getEmail();
@@ -33,7 +33,6 @@ function getCurrentUser() {
       }
     } catch (e) {
       // กรณีไม่ได้เปิด People API หรือ Error -> ใช้ Fallback แปลงชื่อจากอีเมลแทน
-      // ตัวอย่าง: somchai.j@mono.co.th -> Somchai J
       if (!name) {
         const parts = email.split('@')[0].split('.');
         name = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
@@ -49,59 +48,30 @@ function getCurrentUser() {
   }
 }
 
-
-/* 1. API สำหรับ Polling (เช็คงานใหม่) */
-function checkNewTickets(clientLastCount) {
-  return NotificationService.pollingCheck(clientLastCount);
-}
-
-/* 2. API สำหรับปุ่ม Manual Fetch */
-function manualFetchGmail() {
-  return GmailService.syncTickets();
-}
-
-/* 3. Trigger Function (สำหรับตั้งเวลา) */
-function autoSyncGmail() {
-  GmailService.syncTickets();
-}
-
-/* 4. Trigger Function (สำหรับ Spreadsheet OnChange) */
+/* 3. Trigger Function (สำหรับ Spreadsheet OnChange) */
 function onSheetEdit(e) {
   NotificationService.triggerUpdate();
 }
 
-/**
- * src/backend/API.js หรือ Main.js
- * เพิ่ม wrapper function ให้ frontend เรียกได้
- */
-
-function scanEmailDrafts() {
-  return TicketController.scanEmailDrafts();
-}
-
-function saveEmailDraft(data) {
-  return TicketController.saveEmailDraft(data);
-}
-
-/* 5. API สำหรับ Ticket & Email Draft */
-function createTicketAndDraft(data) {
-  return TicketController.createTicketAndDraft(data);
-}
-
-/* 6. API สำหรับ Saved Drafts (ฟีเจอร์บันทึกแบบร่าง) */
-function getMailDrafts() {
-  return TicketController.getMailDrafts();
-}
-
-function saveMailDrafts(data) {
-  return TicketController.saveMailDrafts(data);
-}
-
-/* 7. API สำหรับ Email Profiles (ถ้ามี) */
-function getEmailProfiles() {
-  return TicketController.getEmailProfiles();
-}
-
-function getEmailDrafts() {
-  return TicketController.getEmailDrafts();
+/* 4. Trigger Function (สำหรับตั้งเวลา Auto Sync Gmail) */
+function autoSyncGmail() {
+  try {
+    // ✅ แก้ไข: ดึงข้อมูลและเซฟแบบอัตโนมัติ ตาม Flow ของ GmailService ใหม่
+    const res = GmailService.getUnsyncedEmails();
+    
+    if (res && res.success && res.items && res.items.length > 0) {
+      // คัดกรองเอาเฉพาะรายการที่พร้อมจะสร้างใหม่ (READY) หรืออัปเดต ID (UPDATE_SVR)
+      const validItems = res.items.filter(item => item.status === 'READY' || item.status === 'UPDATE_SVR');
+      const payloadsToSave = validItems.map(item => item.payload);
+      
+      if (payloadsToSave.length > 0) {
+        const saveRes = GmailService.saveBatchTickets(payloadsToSave);
+        console.log(`Auto-Sync Success: Saved ${saveRes.count} tickets.`);
+      } else {
+        console.log("Auto-Sync: No valid tickets to save.");
+      }
+    }
+  } catch (e) {
+    console.error("Auto Sync Error: ", e);
+  }
 }

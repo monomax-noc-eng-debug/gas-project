@@ -1,137 +1,262 @@
+/**
+ * MatchService.js
+ * จัดการข้อมูลการแข่งขัน สรุปผลลีก และการตรวจสอบรูปภาพหลักฐาน
+ */
 const MatchService = {
-  getMatchesByDate: function (d) {
-    try {
-      const statsId = (typeof CONFIG !== 'undefined') ? CONFIG.STATS_DB_ID : PropertiesService.getScriptProperties().getProperty('STATS_DB_ID');
-      const statsTab = (typeof CONFIG !== 'undefined') ? CONFIG.STATS_TAB_NAME : "Match End";
-      if (!statsId) return API_UTILS.createRes(false, "STATS_DB_ID missing");
-      const ss = SpreadsheetApp.openById(statsId);
-      const sheet = ss.getSheetByName(statsTab);
-      const data = sheet.getDataRange().getValues();
-      const headers = data[0];
-      const findCol = (keys) => headers.findIndex(h => keys.some(k => String(h).toLowerCase().includes(k.toLowerCase())));
-      const idx = { date: findCol(["date", "วันที่"]), time: findCol(["time", "kickoff"]), league: findCol(["league", "program"]), home: findCol(["home", "team 1"]), away: findCol(["away", "team 2"]) };
+  /**
+   * ดึงข้อมูลรายงานการตรวจสอบการแข่ง (สรุปลีก + ตารางคู่แข่งพร้อมรูป)
+   * @param {string} dateStr - วันที่ต้องการดึงข้อมูล (yyyy-MM-dd)
+   * @param {boolean} forceRefresh - บังคับล้าง Cache เพื่อดึงข้อมูลสดจากชีต
+   */
+  getVerificationReport: function (dateStr, forceRefresh = false) {
+    const cache = CacheService.getScriptCache();
+    const cacheKey = "match_report_v2_" + dateStr;
 
-      const targetDateObj = d ? new Date(d) : new Date();
-      const tz = (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok";
-      const targetDateStr = Utilities.formatDate(targetDateObj, tz, "yyyy-MM-dd");
-      const prevDateObj = new Date(targetDateObj); prevDateObj.setDate(targetDateObj.getDate() - 1);
+    // 🔍 1. ตรวจสอบใน Cache ก่อน (ยกเว้นมีการสั่ง forceRefresh)
+    if (!forceRefresh) {
+      const cachedData = cache.get(cacheKey);
+      if (cachedData) {
+        console.log("⚡ Match Report: Cache Hit for " + dateStr);
+        return JSON.parse(cachedData);
+      }
+    } else {
+      console.log("🔄 Match Report: Force Refresh - Clearing Cache");
+      cache.remove(cacheKey);
+    }
+
+    try {
+      const tz =
+        typeof CONFIG !== "undefined" ? CONFIG.TIMEZONE : "Asia/Bangkok";
+      const targetDateObj = dateStr ? new Date(dateStr) : new Date();
+      const targetDateStr = Utilities.formatDate(
+        targetDateObj,
+        tz,
+        "yyyy-MM-dd",
+      );
+      const prevDateObj = new Date(targetDateObj);
+      prevDateObj.setDate(targetDateObj.getDate() - 1);
       const prevDateStr = Utilities.formatDate(prevDateObj, tz, "yyyy-MM-dd");
 
-      const filtered = data.slice(1).filter(row => {
-        const rDateStr = API_UTILS.formatDateTime(row[idx.date], 'date');
-        const rTimeStr = API_UTILS.formatDateTime(row[idx.time], 'time');
-        if (rDateStr === prevDateStr && rTimeStr >= "10:00") return true;
-        if (rDateStr === targetDateStr && rTimeStr < "10:00") return true;
-        return false;
-      });
-
-      let leagueCounts = {};
-      filtered.forEach(row => {
-        let league = row[idx.league] || "Other";
-        const lUpper = String(league).toUpperCase().trim();
-        let groupLeague = league;
-        if (lUpper.includes("SV LEAGUE") && lUpper.includes("VOLLEYBALL")) groupLeague = "SV League Volleyball";
-        else if (lUpper.includes("THAI LEAGUE")) groupLeague = "Thai League";
-        else if (lUpper.includes("FRENCH")) groupLeague = "French League";
-        else if (lUpper.includes("PREMIER LEAGUE")) groupLeague = "Premier League";
-        else if (lUpper.includes("EFL")) groupLeague = "EFL";
-        leagueCounts[groupLeague] = (leagueCounts[groupLeague] || 0) + 1;
-      });
-      return JSON.stringify({ success: true, data: leagueCounts, total: filtered.length, text: "" });
-    } catch (e) { return JSON.stringify({ success: false, error: e.toString() }); }
-  },
-
-  getVerificationReport: function (dateStr) {
-    try {
-      const statsId = (typeof CONFIG !== 'undefined') ? CONFIG.STATS_DB_ID : PropertiesService.getScriptProperties().getProperty('STATS_DB_ID');
-      const statsTab = (typeof CONFIG !== 'undefined') ? CONFIG.STATS_TAB_NAME : "Match End";
+      // --- ส่วนที่ 1: ดึงข้อมูลจากชีต "Match End" (ข้อมูลหลัก) ---
+      const statsId =
+        typeof CONFIG !== "undefined"
+          ? CONFIG.STATS_DB_ID
+          : PropertiesService.getScriptProperties().getProperty("STATS_DB_ID");
+      const statsTab =
+        typeof CONFIG !== "undefined" ? CONFIG.STATS_TAB_NAME : "Match End";
       if (!statsId) return API_UTILS.createRes(false, "STATS_DB_ID missing");
+
       const ssExt = SpreadsheetApp.openById(statsId);
       const sheetExt = ssExt.getSheetByName(statsTab);
-      const dataExt = sheetExt.getDataRange().getValues();
-      const headersExt = dataExt[0];
-      const findColExt = (keys) => headersExt.findIndex(h => keys.some(k => String(h).toLowerCase().includes(k.toLowerCase())));
-      const idxExt = { date: findColExt(["date", "วันที่"]), time: findColExt(["time", "kickoff"]), league: findColExt(["league", "program"]), home: findColExt(["home", "team 1"]), away: findColExt(["away", "team 2"]), score: findColExt(["score", "ft", "ผล"]) };
+      const lastRowExt = sheetExt.getLastRow();
+      const lastColExt = sheetExt.getLastColumn();
 
-      const targetDateObj = dateStr ? new Date(dateStr) : new Date();
-      const tz = (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok";
-      const targetDateStr = Utilities.formatDate(targetDateObj, tz, "yyyy-MM-dd");
-      const prevDateObj = new Date(targetDateObj); prevDateObj.setDate(targetDateObj.getDate() - 1);
-      const prevDateStr = Utilities.formatDate(prevDateObj, tz, "yyyy-MM-dd");
+      if (lastRowExt < 2)
+        return API_UTILS.createRes(true, {
+          summary: {},
+          list: [],
+          stats: { totalMatches: 0 },
+        });
 
-      const filteredExtRaw = dataExt.slice(1).filter(row => {
-        const rDateStr = API_UTILS.formatDateTime(row[idxExt.date], 'date');
-        const rTimeStr = API_UTILS.formatDateTime(row[idxExt.time], 'time');
-        if (rDateStr === prevDateStr && rTimeStr >= "10:00") return true;
-        if (rDateStr === targetDateStr && rTimeStr < "10:00") return true;
-        return false;
-      });
+      // ดึง Header มาเพื่อหาตำแหน่ง Column
+      const headersExt = sheetExt.getRange(1, 1, 1, lastColExt).getValues()[0];
+      const findColExt = (keys) =>
+        headersExt.findIndex((h) =>
+          keys.some((k) => String(h).toLowerCase().includes(k.toLowerCase())),
+        );
+      const idxExt = {
+        date: findColExt(["date", "วันที่"]),
+        time: findColExt(["time", "kickoff"]),
+        league: findColExt(["league", "program"]),
+        home: findColExt(["home", "team 1"]),
+        away: findColExt(["away", "team 2"]),
+        score: findColExt(["score", "ft", "ผล"]),
+      };
+
+      // 🔥 เทคนิคเพิ่มความเร็ว: ดึงแค่ 1,000 บรรทัดล่าสุดจากก้นชีต
+      const FETCH_LIMIT = 1000;
+      const numRowsExt = Math.min(FETCH_LIMIT, lastRowExt - 1);
+      const startRowExt = lastRowExt - numRowsExt + 1;
+      const dataExt = sheetExt
+        .getRange(startRowExt, 1, numRowsExt, lastColExt)
+        .getValues();
 
       const uniqueMap = new Map();
-      filteredExtRaw.forEach(row => {
-        const time = API_UTILS.formatDateTime(row[idxExt.time], 'time');
-        const home = String(row[idxExt.home] || "").toLowerCase().replace(/\s/g, "");
-        if (!uniqueMap.has(`${time}_${home}`)) uniqueMap.set(`${time}_${home}`, row);
+      let leagueCounts = {};
+
+      dataExt.forEach((row) => {
+        const rDateStr = API_UTILS.formatDateTime(row[idxExt.date], "date");
+        const rTimeStr = API_UTILS.formatDateTime(row[idxExt.time], "time");
+
+        // กรองเฉพาะช่วงเวลา 10:00 เมื่อวาน ถึง 09:59 วันนี้
+        if (
+          (rDateStr === prevDateStr && rTimeStr >= "10:00") ||
+          (rDateStr === targetDateStr && rTimeStr < "10:00")
+        ) {
+          const homeName = String(row[idxExt.home] || "").trim();
+          const uniqueKey = `${rTimeStr}_${homeName.toLowerCase().replace(/\s/g, "")}`;
+
+          if (!uniqueMap.has(uniqueKey)) {
+            uniqueMap.set(uniqueKey, row);
+
+            // สรุปจำนวนแยกตามกลุ่มลีก (Grouping Logic)
+            let league = row[idxExt.league] || "Other";
+            const lUpper = String(league).toUpperCase();
+            let groupName = league;
+            if (lUpper.includes("SV LEAGUE"))
+              groupName = "SV League Volleyball";
+            else if (lUpper.includes("THAI LEAGUE")) groupName = "Thai League";
+            else if (lUpper.includes("FRENCH")) groupName = "French League";
+            else if (lUpper.includes("PREMIER LEAGUE"))
+              groupName = "Premier League";
+            else if (lUpper.includes("EFL")) groupName = "EFL";
+
+            leagueCounts[groupName] = (leagueCounts[groupName] || 0) + 1;
+          }
+        }
       });
       const filteredExt = Array.from(uniqueMap.values());
 
+      // --- ส่วนที่ 2: ดึงข้อมูลจากชีต "DB_Matches" (เพื่อเอารูปหลักฐาน) ---
       const sheetDb = API_UTILS.getDbSheet();
-      const dataDb = sheetDb.getDataRange().getValues();
-      const headerMapDb = API_UTILS.getHeaderMap(sheetDb);
-      const findColDb = (keys) => keys.find(k => headerMapDb.hasOwnProperty(k.toLowerCase()));
-      const colDbDate = findColDb(["date"]);
-      const colDbTime = findColDb(["time", "kickoff"]);
-      const colDbHome = findColDb(["home", "team 1"]);
-      const colDbAway = findColDb(["away", "team 2"]);
-      const colDbStart = findColDb(["start image", "start"]);
-      const colDbStop = findColDb(["stop image", "stop"]);
-      const colDbLeague = findColDb(["league"]);
+      const lastRowDb = sheetDb.getLastRow();
+      const lastColDb = sheetDb.getLastColumn();
 
-      const filteredDb = dataDb.slice(1).filter(row => {
-        const rDateStr = API_UTILS.formatDateTime(row[headerMapDb[colDbDate]], 'date');
-        const rTimeStr = API_UTILS.formatDateTime(row[headerMapDb[colDbTime]], 'time');
-        if (rDateStr === prevDateStr && rTimeStr >= "10:00") return true;
-        if (rDateStr === targetDateStr && rTimeStr < "10:00") return true;
-        return false;
+      const headersDb = sheetDb.getRange(1, 1, 1, lastColDb).getValues()[0];
+      const headerMapDb = {};
+      headersDb.forEach((h, i) => {
+        if (h) headerMapDb[String(h).toLowerCase().trim()] = i;
       });
 
-      const norm = (str) => String(str || "").toLowerCase().replace(/\s/g, "");
+      // ดึง 1,000 บรรทัดล่าสุดจากชีต DB เพื่อความเร็ว
+      const numRowsDb = Math.min(FETCH_LIMIT, lastRowDb - 1);
+      const dataDb =
+        lastRowDb > 1
+          ? sheetDb
+              .getRange(lastRowDb - numRowsDb + 1, 1, numRowsDb, lastColDb)
+              .getValues()
+          : [];
 
-      let reportList = filteredExt.map(rowExt => {
+      const norm = (str) =>
+        String(str || "")
+          .toLowerCase()
+          .replace(/\s/g, "");
+
+      // 🧠 สร้าง Hash Map (สารบัญ) สำหรับจับคู่รูปภาพ O(1) Speed
+      const dbImageMap = new Map();
+      const col = {
+        date: headersDb.findIndex((h) =>
+          String(h).toLowerCase().includes("date"),
+        ),
+        time: headersDb.findIndex(
+          (h) =>
+            String(h).toLowerCase().includes("time") ||
+            String(h).toLowerCase().includes("kickoff"),
+        ),
+        home: headersDb.findIndex(
+          (h) =>
+            String(h).toLowerCase().includes("home") ||
+            String(h).toLowerCase().includes("team 1"),
+        ),
+        away: headersDb.findIndex(
+          (h) =>
+            String(h).toLowerCase().includes("away") ||
+            String(h).toLowerCase().includes("team 2"),
+        ),
+        start: headersDb.findIndex((h) =>
+          String(h).toLowerCase().includes("start"),
+        ),
+        stop: headersDb.findIndex((h) =>
+          String(h).toLowerCase().includes("stop"),
+        ),
+        league: headersDb.findIndex((h) =>
+          String(h).toLowerCase().includes("league"),
+        ),
+      };
+
+      dataDb.forEach((rowDb) => {
+        const hDb = norm(rowDb[col.home]);
+        const aDb = norm(rowDb[col.away]);
+        // เก็บสารบัญทั้งแบบเหย้า-เยือน และเยือน-เหย้า (กันพลาด)
+        dbImageMap.set(`${hDb}_${aDb}`, rowDb);
+        dbImageMap.set(`${aDb}_${hDb}`, rowDb);
+      });
+
+      // --- ส่วนที่ 3: รวมร่างข้อมูลเพื่อส่งกลับหน้าเว็บ ---
+      let reportList = filteredExt.map((rowExt) => {
         const homeExt = String(rowExt[idxExt.home] || "").trim();
         const awayExt = String(rowExt[idxExt.away] || "").trim();
-        const timeExt = API_UTILS.formatDateTime(rowExt[idxExt.time], 'time');
+        const timeExt = API_UTILS.formatDateTime(rowExt[idxExt.time], "time");
+        const dateExt = API_UTILS.formatDateTime(rowExt[idxExt.date], "date");
         const leagueExt = rowExt[idxExt.league] || "";
-        const scoreExt = (idxExt.score > -1) ? rowExt[idxExt.score] : "-";
+        const scoreExt = idxExt.score > -1 ? rowExt[idxExt.score] : "-";
 
-        const matchedDb = filteredDb.find(rowDb => {
-          const hDb = norm(rowDb[headerMapDb[colDbHome]]);
-          const aDb = norm(rowDb[headerMapDb[colDbAway]]);
-          const hEx = norm(homeExt);
-          const aEx = norm(awayExt);
-          return (hDb === hEx && aDb === aEx) || (hDb === aEx && aDb === hEx);
-        });
+        // ค้นหารูปจากสารบัญ (ไม่ต้องวนลูปซ้อนลูป)
+        const matchedDb = dbImageMap.get(`${norm(homeExt)}_${norm(awayExt)}`);
 
-        const dateExt = API_UTILS.formatDateTime(rowExt[idxExt.date], 'date');
+        let dbData = {
+          date: dateExt,
+          time: timeExt,
+          home: homeExt,
+          away: awayExt,
+          league: leagueExt,
+          startImg: "",
+          stopImg: "",
+        };
 
-        let status = "MISSING", dbData = { date: dateExt, time: timeExt, home: homeExt, away: awayExt, league: leagueExt, startImg: "", stopImg: "" };
         if (matchedDb) {
-          status = "MATCHED";
-          dbData = {
-            date: API_UTILS.formatDateTime(matchedDb[headerMapDb[colDbDate]], 'date') || dateExt,
-            time: API_UTILS.formatDateTime(matchedDb[headerMapDb[colDbTime]], 'time'),
-            home: matchedDb[headerMapDb[colDbHome]],
-            away: matchedDb[headerMapDb[colDbAway]],
-            league: matchedDb[headerMapDb[colDbLeague]] || leagueExt,
-            startImg: colDbStart ? matchedDb[headerMapDb[colDbStart]] : "",
-            stopImg: colDbStop ? matchedDb[headerMapDb[colDbStop]] : ""
-          };
+          dbData.startImg = col.start > -1 ? matchedDb[col.start] : "";
+          dbData.stopImg = col.stop > -1 ? matchedDb[col.stop] : "";
+          if (col.league > -1 && matchedDb[col.league])
+            dbData.league = matchedDb[col.league];
         }
-        return { dashboard: dbData, external: { home: homeExt, away: awayExt, score: scoreExt }, status: status };
+
+        return {
+          dashboard: dbData,
+          external: { home: homeExt, away: awayExt, score: scoreExt },
+          status: matchedDb ? "MATCHED" : "MISSING",
+        };
       });
 
-      reportList.sort((a, b) => (a.dashboard.date + " " + a.dashboard.time).localeCompare(b.dashboard.date + " " + b.dashboard.time));
-      return API_UTILS.createRes(true, { list: reportList, stats: { totalMatches: reportList.length, dateRange: { from: prevDateStr, to: targetDateStr } } });
-    } catch (e) { return API_UTILS.createRes(false, "Error: " + e.toString()); }
-  }
+      // จัดเรียงตามวันและเวลา
+      reportList.sort((a, b) =>
+        (a.dashboard.date + " " + a.dashboard.time).localeCompare(
+          b.dashboard.date + " " + b.dashboard.time,
+        ),
+      );
+
+      const finalResult = API_UTILS.createRes(true, {
+        summary: leagueCounts,
+        list: reportList,
+        stats: {
+          totalMatches: reportList.length,
+          dateRange: { from: prevDateStr, to: targetDateStr },
+        },
+      });
+
+      // 💾 4. บันทึกลง Cache (เก็บไว้ 10 นาที)
+      try {
+        cache.put(cacheKey, JSON.stringify(finalResult), 600);
+      } catch (e) {
+        console.warn("Cache write error", e);
+      }
+
+      return finalResult;
+    } catch (e) {
+      return API_UTILS.createRes(false, "Error: " + e.toString());
+    }
+  },
+
+  // ฟังก์ชันเก่าที่ยุบรวมแล้ว (ทิ้งไว้กัน Error ถ้ามีหน้าอื่นเรียก แต่ข้างในเรียกใช้ตัวใหม่แทน)
+  getMatchesByDate: function (d) {
+    const res = this.getVerificationReport(d);
+    if (res.success) {
+      return JSON.stringify({
+        success: true,
+        data: res.data.summary,
+        total: res.data.stats.totalMatches,
+      });
+    }
+    return JSON.stringify(res);
+  },
 };

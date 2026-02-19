@@ -8,7 +8,10 @@ const API_UTILS = (() => {
     getDbSheet: function () {
       const dbId = getDbId();
       if (!dbId) throw new Error("DB_ID is missing.");
-      return SpreadsheetApp.openById(dbId).getSheetByName("DB_Matches");
+      
+      // ✅ แก้ไข: ใช้ตัวแปร CONFIG.MATCH_TAB แทนการ Hardcode ชื่อชีต
+      const tabName = (typeof CONFIG !== 'undefined' && CONFIG.MATCH_TAB) ? CONFIG.MATCH_TAB : "DB_Matches";
+      return SpreadsheetApp.openById(dbId).getSheetByName(tabName);
     },
     createRes: function (s, d) { return JSON.stringify(s ? { success: true, data: d } : { success: false, message: d }); },
     getHeaderMap: function (sheet) {
@@ -52,12 +55,12 @@ const API_UTILS = (() => {
   };
 })();
 
-// // =================================================================
-// // 🌐 ROUTER
-// // =================================================================
-
+// =================================================================
+// 🌐 ROUTER (Centralized API Handler)
+// =================================================================
 function apiHandler(request) {
   const { func, data } = request;
+  
   const apiMap = {
     // Ticket Core
     'getTickets': () => TicketController.getTickets(false),
@@ -76,7 +79,7 @@ function apiHandler(request) {
     'getStaffAndAssignees': () => TicketController.getStaffAndAssignees(),
     'saveStaffAndAssignees': (d) => TicketController.saveStaffAndAssignees(d),
 
-    // 🌟 [แก้ไข] เปลี่ยนจาก syncTickets เป็น 2 บรรทัดนี้
+    // Gmail & Import
     'getEmailPreviews': () => GmailService.getUnsyncedEmails(),
     'saveBatchTickets': (d) => GmailService.saveBatchTickets(d),
 
@@ -97,7 +100,11 @@ function apiHandler(request) {
     'getShiftHistory': () => ReportController.getShiftHistory(),
     'getDailyProofImages': (d) => ReportController.getDailyProofImages(d),
 
-    'getMasterTeamList': () => API_UTILS.createRes(true, [])
+    // Master & Config
+    'getMasterTeamList': () => API_UTILS.createRes(true, []),
+    
+    // ✅ นำ getUserSettings มารวมใน Router
+    'getUserSettings': () => JSON.stringify({ theme: "light", profile: { email: Session.getActiveUser().getEmail(), role: "Admin" } })
   };
 
   if (apiMap[func]) {
@@ -111,28 +118,3 @@ function apiHandler(request) {
   }
   return JSON.stringify({ success: false, error: "Function not found: " + func });
 }
-
-// Global Delegates (Legacy Support)
-function getTickets(f) { return TicketController.getTickets(f); }
-function createTicket(d) { return TicketController.createTicket(d); }
-function updateTicket(d) { return TicketController.updateTicket(d); }
-function deleteTicket(id) { return TicketController.deleteTicket(id); }
-function getTicketConfig() { return TicketController.getTicketConfig(); }
-function saveTicketConfig(d) { return TicketController.saveTicketConfig(d); }
-function getEmailProfiles() { return TicketController.getEmailProfiles(); }
-function saveEmailProfiles(d) { return TicketController.saveEmailProfiles(d); }
-function getEmailDrafts() { return TicketController.getEmailDrafts(); }
-function saveEmailDrafts(d) { return TicketController.saveEmailDrafts(d); }
-function getMailDrafts() { return TicketController.getMailDrafts(); }
-function saveMailDrafts(d) { return TicketController.saveMailDrafts(d); }
-function getStaffAndAssignees() { return TicketController.getStaffAndAssignees(); }
-function saveStaffAndAssignees(d) { return TicketController.saveStaffAndAssignees(d); }
-function createTicketAndDraft(d) { return TicketController.createTicketAndDraft(d); }
-function apiGetWorkList(d) { return MatchController.apiGetWorkList(d); }
-function apiCreateWorkItem(d) { return MatchController.apiCreateWorkItem(d); }
-function apiUpdateWorkItem(d) { return MatchController.apiUpdateWorkItem(d); }
-function apiDeleteWorkItem(d) { return MatchController.apiDeleteWorkItem(d); }
-function apiStopWorkItem(d) { return MatchController.apiStopWorkItem(d); }
-function apiGetCalendarEvents(d) { return MatchController.apiGetCalendarEvents(d); }
-function getMatches(d) { return MatchController.apiGetWorkList(d); }
-function getUserSettings() { return JSON.stringify({ theme: "light", profile: { email: Session.getActiveUser().getEmail(), role: "Admin" } }); }

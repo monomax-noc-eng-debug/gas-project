@@ -1,752 +1,829 @@
 <script>
-    /**
-       * JS_Report.html
-       * Version: Final Fix (Index 0 Bug, Hard Refresh, Display Logic)
-       */
-    window.ReportManager = (function () {
-        // --- State Variables ---
-        var _files = { mono: [], ais: [], start: [] };
-        var _autoStartUrls = [];
-        var _autoMonoUrls = [];
-        var _isCustomReporter = false;
-        var _picker = null;
-        var _isLoading = false;
+  /**
+   * JS_Report.html
+   * Version: Final Fix (Added Paste Fix, Safe Image Compression)
+   */
+  window.ReportManager = (function () {
+    // --- State Variables ---
+    var _files = { mono: [], ais: [], start: [] };
+    var _autoStartUrls = [];
+    var _autoMonoUrls = [];
+    var _isCustomReporter = false;
+    var _picker = null;
+    var _isLoading = false;
 
-        // --- Helpers ---
-        var el = function (id) { return document.getElementById(id); };
-        var show = function (id, visible) { var e = el(id); if (e) e.classList.toggle('hidden', !visible); };
+    // --- Helpers ---
+    var el = function (id) {
+      return document.getElementById(id);
+    };
+    var show = function (id, visible) {
+      var e = el(id);
+      if (e) e.classList.toggle("hidden", !visible);
+    };
 
-        var formatDriveUrl = function (url) {
-            if (!url) return "";
-            if (url.startsWith('data:')) return url;
-            try {
-                var id = null;
-                if (url.indexOf('/d/') !== -1) id = url.match(/\/d\/(.+?)(\/|$)/)[1];
-                else if (url.indexOf('id=') !== -1) id = url.match(/id=([^&]+)/)[1];
-                return id ? 'https://drive.google.com/thumbnail?id=' + id + '&sz=w1000' : url;
-            } catch (e) { return url; }
-        };
+    var formatDriveUrl = function (url) {
+      if (!url) return "";
+      if (url.startsWith("data:")) return url;
+      try {
+        var id = null;
+        if (url.indexOf("/d/") !== -1) id = url.match(/\/d\/(.+?)(\/|$)/)[1];
+        else if (url.indexOf("id=") !== -1) id = url.match(/id=([^&]+)/)[1];
+        return id
+          ? "https://drive.google.com/thumbnail?id=" + id + "&sz=w1000"
+          : url;
+      } catch (e) {
+        return url;
+      }
+    };
 
-        // 🧠 Smart Date Parser (Safe Version)
-        var smartParse = function (val) {
-            if (!val) return { date: '', display: '' };
-            let d = null;
-            try {
-                if (val instanceof Date) {
-                    d = val;
-                } else if (typeof val === 'string') {
-                    const s = val.trim();
-                    // Try DD/MM/YYYY
-                    const matchDMY = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
-                    if (matchDMY) {
-                        d = new Date(parseInt(matchDMY[3]), parseInt(matchDMY[2]) - 1, parseInt(matchDMY[1]), parseInt(matchDMY[4] || 0), parseInt(matchDMY[5] || 0), parseInt(matchDMY[6] || 0));
-                    } else {
-                        // Try ISO or other formats
-                        const tryD = new Date(s);
-                        if (!isNaN(tryD.getTime())) d = tryD;
-                    }
-                }
-            } catch (e) { console.warn("Date parse error", e); }
+    // 🧠 Smart Date Parser (Safe Version)
+    var smartParse = function (val) {
+      if (!val) return { date: "", display: "" };
+      let d = null;
+      try {
+        if (val instanceof Date) {
+          d = val;
+        } else if (typeof val === "string") {
+          const s = val.trim();
+          const matchDMY = s.match(
+            /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/,
+          );
+          if (matchDMY) {
+            d = new Date(
+              parseInt(matchDMY[3]),
+              parseInt(matchDMY[2]) - 1,
+              parseInt(matchDMY[1]),
+              parseInt(matchDMY[4] || 0),
+              parseInt(matchDMY[5] || 0),
+              parseInt(matchDMY[6] || 0),
+            );
+          } else {
+            const tryD = new Date(s);
+            if (!isNaN(tryD.getTime())) d = tryD;
+          }
+        }
+      } catch (e) {
+        console.warn("Date parse error", e);
+      }
 
-            if (d && !isNaN(d.getTime())) {
-                const yyyy = d.getFullYear();
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                return { date: `${yyyy}-${mm}-${dd}`, display: `${dd}/${mm}/${yyyy}`, nativeObj: d };
-            }
-            return { date: '', display: val || '-', nativeObj: null };
-        };
-
+      if (d && !isNaN(d.getTime())) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
         return {
-            _autoMonoUrls: _autoMonoUrls, // Expose for debug
+          date: `${yyyy}-${mm}-${dd}`,
+          display: `${dd}/${mm}/${yyyy}`,
+          nativeObj: d,
+        };
+      }
+      return { date: "", display: val || "-", nativeObj: null };
+    };
 
-            init: function () {
-                document.addEventListener('page-change', function (e) {
-                    if (e.detail.pageId === 'page-report') ReportManager.onPageShow();
-                });
-            },
+    return {
+      _autoMonoUrls: _autoMonoUrls, // Expose for debug
 
-            onPageShow: function () {
-                if (!_picker) {
-                    var input = el('inputDate');
-                    if (input) {
-                        var today = new Date();
-                        var yyyy = today.getFullYear();
-                        var mm = String(today.getMonth() + 1).padStart(2, '0');
-                        var dd = String(today.getDate()).padStart(2, '0');
-                        input.value = `${yyyy}-${mm}-${dd}`;
+      init: function () {
+        document.addEventListener("page-change", function (e) {
+          if (e.detail.pageId === "page-report") ReportManager.onPageShow();
+        });
+      },
 
-                        _picker = new Pikaday({
-                            field: input,
-                            format: 'YYYY-MM-DD',
-                            toString(date, format) {
-                                const day = String(date.getDate()).padStart(2, '0');
-                                const month = String(date.getMonth() + 1).padStart(2, '0');
-                                const year = date.getFullYear();
-                                return `${year}-${month}-${day}`;
-                            },
-                            yearRange: [2020, 2030],
-                            onSelect: function () { if (!_isLoading) ReportManager.autoFetchAll(); }
-                        });
-                        setTimeout(function () { ReportManager.autoFetchAll(); }, 300);
-                    }
+      onPageShow: function () {
+        if (!_picker) {
+          var input = el("inputDate");
+          if (input) {
+            var today = new Date();
+            var yyyy = today.getFullYear();
+            var mm = String(today.getMonth() + 1).padStart(2, "0");
+            var dd = String(today.getDate()).padStart(2, "0");
+            input.value = `${yyyy}-${mm}-${dd}`;
+
+            _picker = new Pikaday({
+              field: input,
+              format: "YYYY-MM-DD",
+              toString(date, format) {
+                const day = String(date.getDate()).padStart(2, "0");
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const year = date.getFullYear();
+                return `${year}-${month}-${day}`;
+              },
+              yearRange: [2020, 2030],
+              onSelect: function () {
+                if (!_isLoading) ReportManager.autoFetchAll();
+              },
+            });
+            setTimeout(function () {
+              ReportManager.autoFetchAll();
+            }, 300);
+          }
+        }
+        this.fetchReporters();
+        setTimeout(() => {
+          if (this.setupPasteHandlers) this.setupPasteHandlers();
+        }, 1000);
+      },
+
+      autoFetchAll: function (force = false) {
+        if (_isLoading) return;
+        var dateVal = el("inputDate").value;
+        if (!dateVal) return;
+
+        var self = this;
+        self._setLoading(true);
+
+        // ✨ [เพิ่ม] เคลียร์ตารางเดิมทิ้งก่อน เพื่อให้เห็นความเปลี่ยนแปลงตอนโหลดใหม่
+        if (el("verification-tbody")) el("verification-tbody").innerHTML = "";
+        if (el("disp-ticket-tbody")) el("disp-ticket-tbody").innerHTML = "";
+
+        // ส่งค่า force (บังคับรีเฟรช) ไปยัง fetchMatches
+        // Note: fetchTickets กับ fetchStartImages มักจะโหลดข้อมูลสดอยู่แล้ว
+        // แต่เราจะส่ง force ไปที่ fetchMatches เพื่อล้าง Cache ฝั่ง Backend
+        Promise.all([
+          self.fetchTickets(),
+          self.fetchMatches(force),
+          self.fetchStartImages(),
+        ])
+          .then(function () {
+            if (typeof UIManager !== "undefined")
+              UIManager.showToast(
+                force ? "บังคับดึงข้อมูลใหม่สำเร็จ" : "อัปเดตข้อมูลเรียบร้อย",
+                "success",
+              );
+          })
+          .catch(function (err) {
+            console.error("Fetch Error:", err);
+            if (typeof UIManager !== "undefined")
+              UIManager.showToast("เกิดข้อผิดพลาดในการโหลดข้อมูล", "error");
+          })
+          .finally(function () {
+            self._setLoading(false);
+          });
+      },
+
+      _setLoading: function (loading) {
+        _isLoading = loading;
+        var btn = el("btn-load-data");
+        var input = el("inputDate");
+        if (input) input.disabled = loading;
+        if (btn) {
+          btn.disabled = loading;
+          if (loading) btn.classList.add("is-loading");
+          else btn.classList.remove("is-loading");
+        }
+      },
+
+      fetchTickets: function () {
+        var selectedDate = el("inputDate").value;
+        var tbody = el("disp-ticket-tbody") || el("ticket-table-body");
+        if (!tbody) return Promise.resolve();
+
+        show("loader-ticket", true);
+        show("empty-ticket", false);
+        tbody.innerHTML = "";
+
+        return Server.call({ func: "getTickets", silent: true })
+          .then(function (res) {
+            if (res && res.success) {
+              var allTickets = res.data || [];
+              let stats = {
+                newToday: 0,
+                closedToday: 0,
+                pending: 0,
+                filteredCount: 0,
+              };
+              let listForTable = [];
+
+              allTickets.forEach((r) => {
+                const createdObj = smartParse(r.date);
+                const resolvedObj = smartParse(r.resolvedDate);
+                const status = String(r.status || "").toLowerCase();
+                const isClosed =
+                  status.includes("close") ||
+                  status.includes("resolved") ||
+                  status.includes("fix");
+
+                if (createdObj.date === selectedDate) stats.newToday++;
+
+                if (isClosed) {
+                  if (resolvedObj.date === selectedDate) stats.closedToday++;
+                  else if (
+                    !resolvedObj.date &&
+                    createdObj.date === selectedDate
+                  )
+                    stats.closedToday++;
+                } else {
+                  stats.pending++;
                 }
-                this.fetchReporters();
-                // Setup paste handlers initially
-                setTimeout(() => { if (this.setupPasteHandlers) this.setupPasteHandlers(); }, 1000);
-            },
 
-            autoFetchAll: function () {
-                if (_isLoading) return;
-                var dateVal = el('inputDate').value;
-                if (!dateVal) return;
+                let showRow = false;
+                let tag = "";
 
-                var self = this;
-                self._setLoading(true);
-
-                Promise.all([
-                    self.fetchTickets(),
-                    self.fetchMatches(),
-                    self.fetchStartImages()
-                ]).then(function () {
-                    if (typeof UIManager !== 'undefined') UIManager.showToast("อัปเดตข้อมูลเรียบร้อย", "success");
-                }).catch(function (err) {
-                    console.error("Fetch Error:", err);
-                    if (typeof UIManager !== 'undefined') UIManager.showToast("เกิดข้อผิดพลาดในการโหลดข้อมูล", "error");
-                }).finally(function () {
-                    self._setLoading(false);
-                });
-            },
-
-            _setLoading: function (loading) {
-                _isLoading = loading;
-                var btn = el('btn-load-data');
-                var input = el('inputDate');
-                if (input) input.disabled = loading;
-                if (btn) {
-                    btn.disabled = loading;
-                    if (loading) btn.classList.add('is-loading');
-                    else btn.classList.remove('is-loading');
-                }
-            },
-
-            // ✅ ฟังก์ชันดึง Ticket (Robust & Shift Logic)
-            fetchTickets: function () {
-                var selectedDate = el('inputDate').value; // YYYY-MM-DD
-
-                // 🔍 Safe Element Selector
-                var tbody = el('disp-ticket-tbody') || el('ticket-table-body');
-                if (!tbody) {
-                    console.error("❌ ไม่พบตาราง Ticket (ID: disp-ticket-tbody หรือ ticket-table-body)");
-                    return Promise.resolve();
+                if (createdObj.date === selectedDate) {
+                  showRow = true;
+                  tag = "NEW";
+                } else if (
+                  isClosed &&
+                  (resolvedObj.date === selectedDate ||
+                    (!resolvedObj.date && createdObj.date === selectedDate))
+                ) {
+                  showRow = true;
+                  tag = "RESOLVED";
+                } else if (!isClosed) {
+                  showRow = true;
+                  tag = "BACKLOG";
                 }
 
-                show('loader-ticket', true);
-                show('empty-ticket', false);
-                tbody.innerHTML = '';
+                const ticketDate = createdObj.nativeObj || new Date(r.date);
+                const selectedDateObj = new Date(selectedDate);
+                const yesterdayObj = new Date(selectedDate);
+                yesterdayObj.setDate(yesterdayObj.getDate() - 1);
 
-                return Server.call({ func: 'getTickets', silent: true })
-                    .then(function (res) {
-                        if (res && res.success) {
-                            var allTickets = res.data || [];
+                const isSameDay = (d1, d2) =>
+                  d1.getFullYear() === d2.getFullYear() &&
+                  d1.getMonth() === d2.getMonth() &&
+                  d1.getDate() === d2.getDate();
 
-                            // Stats Logic (Shift Based)
-                            let stats = {
-                                newToday: 0,    // สร้างวันนี้
-                                closedToday: 0, // ปิดวันนี้
-                                pending: 0,     // ค้าง (ทั้งหมด)
-                                filteredCount: 0
-                            };
+                let dateDisplay = createdObj.display;
+                if (!isNaN(ticketDate.getTime())) {
+                  const hh = String(ticketDate.getHours()).padStart(2, "0");
+                  const mm = String(ticketDate.getMinutes()).padStart(2, "0");
 
-                            let listForTable = [];
+                  if (isSameDay(ticketDate, selectedDateObj))
+                    dateDisplay = `<span class="text-blue-600 font-bold">(วันนี้) ${hh}:${mm}</span>`;
+                  else if (isSameDay(ticketDate, yesterdayObj))
+                    dateDisplay = `<span class="text-gray-500">(เมื่อวาน) ${hh}:${mm}</span>`;
+                  else dateDisplay = `${createdObj.display} ${hh}:${mm}`;
+                }
 
-                            allTickets.forEach(r => {
-                                const createdObj = smartParse(r.date);
-                                const resolvedObj = smartParse(r.resolvedDate);
+                if (showRow) {
+                  stats.filteredCount++;
+                  listForTable.push({
+                    id: r.ticketNumber,
+                    dateDisplay: dateDisplay,
+                    status: r.status || "-",
+                    subject: r.subject || "-",
+                    tag: tag,
+                    sortKey: tag === "NEW" ? 3 : tag === "RESOLVED" ? 2 : 1,
+                  });
+                }
+              });
 
-                                const status = String(r.status || '').toLowerCase();
-                                const isClosed = (status.includes('close') || status.includes('resolved') || status.includes('fix'));
+              if (el("disp-ticket-total"))
+                el("disp-ticket-total").innerText = stats.filteredCount || 0;
+              if (el("disp-ticket-new"))
+                el("disp-ticket-new").innerText = stats.newToday || 0;
+              if (el("disp-ticket-resolved"))
+                el("disp-ticket-resolved").innerText = stats.closedToday || 0;
+              if (el("disp-ticket-backlog"))
+                el("disp-ticket-backlog").innerText = stats.pending || 0;
 
-                                // 🟢 1. งานเข้าใหม่
-                                if (createdObj.date === selectedDate) {
-                                    stats.newToday++;
-                                }
+              if (el("ticketSummary"))
+                el("ticketSummary").value =
+                  `งานวันนี้: ${stats.newToday}, ปิดได้: ${stats.closedToday}, ค้าง: ${stats.pending}`;
 
-                                // 🔵 2. ปิดได้ในกะ
-                                if (isClosed) {
-                                    if (resolvedObj.date === selectedDate) {
-                                        stats.closedToday++;
-                                    }
-                                    // Fallback
-                                    else if (!resolvedObj.date && createdObj.date === selectedDate) {
-                                        stats.closedToday++;
-                                    }
-                                }
-                                // 🔴 3. งานค้าง
-                                else {
-                                    stats.pending++;
-                                }
+              listForTable.sort(
+                (a, b) =>
+                  b.sortKey - a.sortKey ||
+                  String(b.id).localeCompare(String(a.id)),
+              );
 
-                                // 📝 4. Filter แสดงในตาราง
-                                let showRow = false;
-                                let tag = '';
+              if (listForTable.length > 0) {
+                tbody.innerHTML = listForTable
+                  .map(function (t) {
+                    var st = String(t.status || "").toLowerCase();
+                    var badgeClass =
+                      "badge-ghost bg-gray-100 text-gray-500 border-none";
+                    if (st.includes("open"))
+                      badgeClass = "badge-error text-white shadow-sm";
+                    else if (st.includes("pending") || st.includes("wait"))
+                      badgeClass = "badge-warning text-white shadow-sm";
+                    else if (st.includes("resolved") || st.includes("close"))
+                      badgeClass = "badge-success text-white shadow-sm";
 
-                                if (createdObj.date === selectedDate) {
-                                    showRow = true;
-                                    tag = 'NEW';
-                                } else if (isClosed && (resolvedObj.date === selectedDate || (!resolvedObj.date && createdObj.date === selectedDate))) {
-                                    showRow = true;
-                                    tag = 'RESOLVED';
-                                } else if (!isClosed) {
-                                    showRow = true;
-                                    tag = 'BACKLOG';
-                                }
+                    var miniTag = "";
+                    if (t.tag === "NEW")
+                      miniTag =
+                        '<span class="text-[9px] text-blue-500 font-bold ml-1 tracking-tighter">✨NEW</span>';
+                    else if (t.tag === "RESOLVED")
+                      miniTag =
+                        '<span class="text-[9px] text-green-500 font-bold ml-1 tracking-tighter">✓DONE</span>';
+                    else if (t.tag === "BACKLOG")
+                      miniTag =
+                        '<span class="text-[9px] text-gray-400 font-bold ml-1 tracking-tighter">⏳OLD</span>';
 
-                                // 🎯 Date Logic
-                                const ticketDate = createdObj.nativeObj || new Date(r.date);
-                                const selectedDateObj = new Date(selectedDate);
-                                const yesterdayObj = new Date(selectedDate);
-                                yesterdayObj.setDate(yesterdayObj.getDate() - 1);
-
-                                const isSameDay = (d1, d2) => d1.getFullYear() === d2.getFullYear() &&
-                                    d1.getMonth() === d2.getMonth() &&
-                                    d1.getDate() === d2.getDate();
-
-                                let dateDisplay = createdObj.display;
-                                if (!isNaN(ticketDate.getTime())) {
-                                    const hh = String(ticketDate.getHours()).padStart(2, '0');
-                                    const mm = String(ticketDate.getMinutes()).padStart(2, '0');
-
-                                    if (isSameDay(ticketDate, selectedDateObj)) {
-                                        dateDisplay = `<span class="text-blue-600 font-bold">(วันนี้) ${hh}:${mm}</span>`;
-                                    } else if (isSameDay(ticketDate, yesterdayObj)) {
-                                        dateDisplay = `<span class="text-gray-500">(เมื่อวาน) ${hh}:${mm}</span>`;
-                                    } else {
-                                        dateDisplay = `${createdObj.display} ${hh}:${mm}`;
-                                    }
-                                }
-
-                                if (showRow) {
-                                    stats.filteredCount++;
-                                    listForTable.push({
-                                        id: r.ticketNumber,
-                                        dateDisplay: dateDisplay,
-                                        status: r.status || '-',
-                                        subject: r.subject || '-',
-                                        tag: tag,
-                                        sortKey: tag === 'NEW' ? 3 : (tag === 'RESOLVED' ? 2 : 1)
-                                    });
-                                }
-                            });
-
-                            // Update UI Stats
-                            if (el('disp-ticket-total')) el('disp-ticket-total').innerText = stats.filteredCount || 0;
-                            if (el('disp-ticket-new')) el('disp-ticket-new').innerText = stats.newToday || 0;
-                            if (el('disp-ticket-resolved')) el('disp-ticket-resolved').innerText = stats.closedToday || 0;
-                            if (el('disp-ticket-backlog')) el('disp-ticket-backlog').innerText = stats.pending || 0;
-
-                            if (el('ticketSummary')) el('ticketSummary').value = `งานวันนี้: ${stats.newToday}, ปิดได้: ${stats.closedToday}, ค้าง: ${stats.pending}`;
-
-                            // Render Table
-                            listForTable.sort((a, b) => b.sortKey - a.sortKey || String(b.id).localeCompare(String(a.id)));
-
-                            if (listForTable.length > 0) {
-                                var html = listForTable.map(function (t) {
-                                    var st = String(t.status || '').toLowerCase();
-                                    var badgeClass = 'badge-ghost bg-gray-100 text-gray-500 border-none';
-
-                                    if (st.includes('open')) badgeClass = 'badge-error text-white shadow-sm';
-                                    else if (st.includes('pending') || st.includes('wait')) badgeClass = 'badge-warning text-white shadow-sm';
-                                    else if (st.includes('resolved') || st.includes('close')) badgeClass = 'badge-success text-white shadow-sm';
-
-                                    var miniTag = '';
-                                    if (t.tag === 'NEW') miniTag = '<span class="text-[9px] text-blue-500 font-bold ml-1 tracking-tighter">✨NEW</span>';
-                                    else if (t.tag === 'RESOLVED') miniTag = '<span class="text-[9px] text-green-500 font-bold ml-1 tracking-tighter">✓DONE</span>';
-                                    else if (t.tag === 'BACKLOG') miniTag = '<span class="text-[9px] text-gray-400 font-bold ml-1 tracking-tighter">⏳OLD</span>';
-
-                                    return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                                                 <td class="font-mono font-bold text-center text-[10px] text-gray-400 w-24 py-3">${t.id}</td>
                                                 <td class="text-center p-1 w-32">
                                                     <div class="flex flex-col items-center justify-center">
-                                                        <span class="badge ${badgeClass} badge-xs font-bold uppercase tracking-wide h-5 px-2 min-w-[70px]">
-                                                            ${t.status}
-                                                        </span>
+                                                        <span class="badge ${badgeClass} badge-xs font-bold uppercase tracking-wide h-5 px-2 min-w-[70px]">${t.status}</span>
                                                         ${miniTag}
                                                     </div>
                                                 </td>
                                                 <td class="p-2 overflow-hidden">
-                                                    <div class="text-xs text-gray-700 font-medium truncate w-full" title="${t.subject}">
-                                                        ${t.subject}
-                                                    </div>
+                                                    <div class="text-xs text-gray-700 font-medium truncate w-full" title="${t.subject}">${t.subject}</div>
                                                     <div class="text-[9px] text-gray-400 mt-0.5 font-mono">${t.dateDisplay}</div>
                                                 </td>
                                             </tr>`;
+                  })
+                  .join("");
+              } else {
+                show("empty-ticket", true);
+              }
+            }
+          })
+          .catch(function (err) {
+            console.error("Ticket Load Error", err);
+            show("empty-ticket", true);
+          })
+          .finally(() => show("loader-ticket", false));
+      },
 
-                                }).join('');
-                                tbody.innerHTML = html;
-                            } else {
-                                show('empty-ticket', true);
-                            }
-                        }
-                    })
-                    .catch(function (err) { console.error("Ticket Load Error", err); show('empty-ticket', true); })
-                    .finally(() => show('loader-ticket', false));
-            },
+      fetchMatches: function () {
+        var dateVal = el("inputDate").value;
+        show("verify-loader", true);
+        el("verification-tbody").innerHTML = "";
 
-            fetchMatches: function () {
-                var dateVal = el('inputDate').value;
-                show('verify-loader', true);
-                el('verification-tbody').innerHTML = '';
-
-                // 1. Get Stats breakdown
-                var p1 = Server.call({ func: 'getMatchesByDate', silent: true }, dateVal).then(res => {
-                    if (res.success) {
-                        var summaryText = "";
-                        var breakdownHtml = "";
-                        if (res.data) {
-                            for (var league in res.data) {
-                                summaryText += `${league}: ${res.data[league]}\n`;
-                                breakdownHtml += `<div class="badge badge-ghost badge-sm text-[10px] gap-1 whitespace-nowrap border-slate-200">
-                                    ${league}: <span class="font-bold text-slate-700">${res.data[league]}</span>
-                                </div>`;
-                            }
-                        }
-                        if (el('matchSummary')) el('matchSummary').value = summaryText || "ไม่มีรายการแข่งขัน";
-                        var bd = el('league-breakdown');
-                        if (bd) bd.innerHTML = breakdownHtml;
-                    }
-                });
-
-                // 2. Get Verification Table
-                var p2 = Server.call({ func: 'getVerificationReport', silent: true }, dateVal).then(res => {
-                    if (res.success) {
-                        if (el('matchTotalValue')) el('matchTotalValue').value = res.data.stats.totalMatches;
-                        if (el('disp-match-total')) el('disp-match-total').innerText = res.data.stats.totalMatches + " คู่";
-
-                        var list = res.data.list || [];
-                        var endedCount = list.filter(item => item.dashboard && item.dashboard.stopImg).length;
-                        if (el('matchEndedValue')) el('matchEndedValue').value = endedCount;
-
-                        if (list.length === 0) {
-                            show('verify-empty', true);
-                        } else {
-                            show('verify-empty', false);
-                            var html = "";
-                            var currentGroup = "";
-
-                            list.forEach(item => {
-                                var db = item.dashboard;
-                                var isToday = (db.date === dateVal);
-                                var groupKey = isToday ? "today" : "yesterday";
-
-                                if (groupKey !== currentGroup) {
-                                    currentGroup = groupKey;
-                                    var label = isToday
-                                        ? `<span class="text-blue-600 flex items-center gap-1"><i class="fas fa-sun text-yellow-500"></i> หลังเที่ยงคืน (วันนี้)</span>`
-                                        : `<span class="text-gray-500 flex items-center gap-1"><i class="fas fa-moon text-indigo-400"></i> ก่อนเที่ยงคืน (เมื่อวาน)</span>`;
-
-                                    html += `<tr class="bg-gray-50/80 border-b border-gray-200">
-                                            <td colspan="5" class="px-3 py-1.5 font-bold text-[10px] uppercase">${label}</td>
-                                        </tr>`;
-                                }
-
-                                var hasEvidence = !!(db.startImg || db.stopImg);
-                                var badge = hasEvidence
-                                    ? '<div class="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center mx-auto"><i class="fas fa-check text-success text-[10px]"></i></div>'
-                                    : '<div class="w-5 h-5 rounded-full bg-base-200 flex items-center justify-center mx-auto"><i class="fas fa-times text-base-content/30 text-[10px]"></i></div>';
-
-                                var imgBtn = (url, icon, color) => url
-                                    ? `<a href="${formatDriveUrl(url)}" target="_blank" class="btn btn-xs btn-square btn-ghost text-${color}"><i class="fas ${icon}"></i></a>`
-                                    : `<span class="text-gray-300 text-[10px]">-</span>`;
-
-                                html += `<tr class="border-b border-gray-100 hover:bg-white transition-colors">
-                                        <td class="text-center font-mono text-[10px] text-gray-500">${db.time}</td>
-                                        <td class="text-xs py-2">
-                                            <div class="font-bold text-slate-700">${db.home} v ${db.away}</div>
-                                            <div class="text-[9px] text-slate-400">${db.league}</div>
-                                        </td>
-                                        <td class="text-center">${imgBtn(db.startImg, 'fa-play-circle', 'success')}</td>
-                                        <td class="text-center">${imgBtn(db.stopImg, 'fa-stop-circle', 'error')}</td>
-                                        <td class="text-center">${badge}</td>
-                                    </tr>`;
-                            });
-                            el('verification-tbody').innerHTML = html;
-                        }
-                    }
-                });
-                return Promise.all([p1, p2]).finally(() => show('verify-loader', false));
-            },
-
-            fetchStartImages: function () {
-                var dateVal = el('inputDate').value;
-                var autoStartList = el('auto-start-list');
-                if (autoStartList) autoStartList.innerHTML = '';
-                show('auto-start-images', false);
-                _autoStartUrls = [];
-
-                var autoMonoList = el('auto-mono-list');
-                if (autoMonoList) autoMonoList.innerHTML = '';
-                show('auto-mono-images', false);
-                _autoMonoUrls = [];
-
-                return Server.call({ func: 'getDailyProofImages', silent: true }, dateVal).then(res => {
-                    if (res.success) {
-                        if (res.data.start && res.data.start.length > 0) {
-                            show('auto-start-images', true);
-                            res.data.start.forEach(img => ReportManager._renderAutoImage(img, autoStartList, _autoStartUrls));
-                        }
-                        // Force update status (should default to None, but area check will show images)
-                        ReportManager._updateStartStatus();
-
-                        if (res.data.stop && res.data.stop.length > 0) {
-                            show('auto-mono-images', true);
-                            res.data.stop.forEach(img => ReportManager._renderAutoImage(img, autoMonoList, _autoMonoUrls));
-                        }
-                    }
-                });
-            },
-
-            fetchReporters: function () {
-                Server.call({ func: 'getStaffAndAssignees', silent: true }).then(function (res) {
-                    if (res && res.success && res.data && res.data.leaders) {
-                        var select = el('reporterSelect');
-                        if (!select) return;
-
-                        var currentVal = select.value;
-                        var html = '<option value="">-- เลือก --</option>';
-                        res.data.leaders.forEach(function (name) {
-                            html += `<option value="${name}">${name}</option>`;
-                        });
-                        html += '<option value="OTHER">อื่นๆ</option>';
-                        select.innerHTML = html;
-                        if (currentVal) select.value = currentVal;
-                    }
-                }).catch(function (err) { console.error("Fetch Reporters Error", err); });
-            },
-
-            // ✅ บังคับเปลี่ยนสถานะ Start Channel ตามการเลือกรูป
-            _updateStartStatus: function () {
-                var hasImages = (_autoStartUrls.length > 0) || (_files.start && _files.start.length > 0);
-                var statusEl = el('statusStart');
-
-                // 1. ถ้ามีรูปให้เป็น 'เรียบร้อย'
-                if (statusEl) {
-                    if (hasImages) {
-                        statusEl.value = 'เรียบร้อย';
-                    }
-                    // 2. ถ้าไม่มีรูป แต่ค่าเดิมเป็น 'เรียบร้อย' -> ให้กลับเป็น 'ไม่มี'
-                    // (แต่ถ้า user เลือก 'ติดปัญหา' ค้างไว้ เราไม่ควรไปเปลี่ยน)
-                    else if (statusEl.value === 'เรียบร้อย') {
-                        statusEl.value = 'ไม่มี';
-                    }
-                    ReportManager.toggleStartArea(statusEl.value);
+        // เรียกฟังก์ชันเดิม แต่จะได้ผลลัพธ์ควบ 2 งานมาเลย!
+        return Server.call(
+          { func: "getVerificationReport", silent: true },
+          dateVal,
+        )
+          .then((res) => {
+            if (res && res.success) {
+              // --- จัดการข้อมูลสรุปลีก ---
+              var summaryText = "";
+              var breakdownHtml = "";
+              if (res.data && res.data.summary) {
+                for (var league in res.data.summary) {
+                  summaryText += `${league}: ${res.data.summary[league]}\n`;
+                  breakdownHtml += `<div class="badge badge-ghost badge-sm text-[10px] gap-1 whitespace-nowrap border-slate-200">${league}: <span class="font-bold text-slate-700">${res.data.summary[league]}</span></div>`;
                 }
-            },
+              }
+              if (el("matchSummary"))
+                el("matchSummary").value = summaryText || "ไม่มีรายการแข่งขัน";
+              if (el("league-breakdown"))
+                el("league-breakdown").innerHTML = breakdownHtml;
 
-            // ✅ แก้บั๊กรูป Index 0 ไม่แสดง และการเลือกรูป
-            _renderAutoImage: function (img, container, urlArray) {
-                var div = document.createElement('div');
-                div.className = "relative group cursor-pointer border-2 border-slate-200 rounded-lg overflow-hidden w-14 h-14 flex-shrink-0 transition-all hover:shadow-md";
-                div.innerHTML = `<img src="${formatDriveUrl(img.url)}" class="object-cover w-full h-full opacity-60 transition-opacity">
+              // --- จัดการข้อมูลตาราง ---
+              if (el("matchTotalValue"))
+                el("matchTotalValue").value = res.data.stats.totalMatches;
+              if (el("disp-match-total"))
+                el("disp-match-total").innerText =
+                  res.data.stats.totalMatches + " คู่";
+
+              var list = res.data.list || [];
+              var endedCount = list.filter(
+                (item) => item.dashboard && item.dashboard.stopImg,
+              ).length;
+              if (el("matchEndedValue"))
+                el("matchEndedValue").value = endedCount;
+
+              if (list.length === 0) {
+                show("verify-empty", true);
+              } else {
+                show("verify-empty", false);
+                var html = "";
+                var currentGroup = "";
+
+                list.forEach((item) => {
+                  var db = item.dashboard;
+                  var isToday = db.date === dateVal;
+                  var groupKey = isToday ? "today" : "yesterday";
+
+                  if (groupKey !== currentGroup) {
+                    currentGroup = groupKey;
+                    var label = isToday
+                      ? `<span class="text-blue-600 flex items-center gap-1"><i class="fas fa-sun text-yellow-500"></i> หลังเที่ยงคืน (วันนี้)</span>`
+                      : `<span class="text-gray-500 flex items-center gap-1"><i class="fas fa-moon text-indigo-400"></i> ก่อนเที่ยงคืน (เมื่อวาน)</span>`;
+                    html += `<tr class="bg-gray-50/80 border-b border-gray-200"><td colspan="5" class="px-3 py-1.5 font-bold text-[10px] uppercase">${label}</td></tr>`;
+                  }
+
+                  var hasEvidence = !!(db.startImg || db.stopImg);
+                  var badge = hasEvidence
+                    ? '<div class="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center mx-auto"><i class="fas fa-check text-success text-[10px]"></i></div>'
+                    : '<div class="w-5 h-5 rounded-full bg-base-200 flex items-center justify-center mx-auto"><i class="fas fa-times text-base-content/30 text-[10px]"></i></div>';
+                  var imgBtn = (url, icon, color) =>
+                    url
+                      ? `<a href="${formatDriveUrl(url)}" target="_blank" class="btn btn-xs btn-square btn-ghost text-${color}"><i class="fas ${icon}"></i></a>`
+                      : `<span class="text-gray-300 text-[10px]">-</span>`;
+
+                  html += `<tr class="border-b border-gray-100 hover:bg-white transition-colors">
+                            <td class="text-center font-mono text-[10px] text-gray-500">${db.time}</td>
+                            <td class="text-xs py-2"><div class="font-bold text-slate-700">${db.home} v ${db.away}</div><div class="text-[9px] text-slate-400">${db.league}</div></td>
+                            <td class="text-center">${imgBtn(db.startImg, "fa-play-circle", "success")}</td>
+                            <td class="text-center">${imgBtn(db.stopImg, "fa-stop-circle", "error")}</td>
+                            <td class="text-center">${badge}</td>
+                          </tr>`;
+                });
+                el("verification-tbody").innerHTML = html;
+              }
+            } else {
+              if (typeof UIManager !== "undefined")
+                UIManager.showToast(
+                  res.error || "โหลดข้อมูล Match ล้มเหลว",
+                  "error",
+                );
+            }
+          })
+          .catch((err) => {
+            console.error("Fetch Matches Error:", err);
+          })
+          .finally(() => show("verify-loader", false));
+      },
+
+      fetchStartImages: function () {
+        var dateVal = el("inputDate").value;
+        if (el("auto-start-list")) el("auto-start-list").innerHTML = "";
+        show("auto-start-images", false);
+        _autoStartUrls = [];
+        if (el("auto-mono-list")) el("auto-mono-list").innerHTML = "";
+        show("auto-mono-images", false);
+        _autoMonoUrls = [];
+
+        return Server.call(
+          { func: "getDailyProofImages", silent: true },
+          dateVal,
+        ).then((res) => {
+          if (res.success) {
+            if (res.data.start && res.data.start.length > 0) {
+              show("auto-start-images", true);
+              res.data.start.forEach((img) =>
+                ReportManager._renderAutoImage(
+                  img,
+                  el("auto-start-list"),
+                  _autoStartUrls,
+                ),
+              );
+            }
+            ReportManager._updateStartStatus();
+            if (res.data.stop && res.data.stop.length > 0) {
+              show("auto-mono-images", true);
+              res.data.stop.forEach((img) =>
+                ReportManager._renderAutoImage(
+                  img,
+                  el("auto-mono-list"),
+                  _autoMonoUrls,
+                ),
+              );
+            }
+          }
+        });
+      },
+
+      fetchReporters: function () {
+        Server.call({ func: "getStaffAndAssignees", silent: true }).then(
+          function (res) {
+            if (res && res.success && res.data && res.data.leaders) {
+              var select = el("reporterSelect");
+              if (!select) return;
+              var currentVal = select.value;
+              var html = '<option value="">-- เลือก --</option>';
+              res.data.leaders.forEach(function (name) {
+                html += `<option value="${name}">${name}</option>`;
+              });
+              html += '<option value="OTHER">อื่นๆ</option>';
+              select.innerHTML = html;
+              if (currentVal) select.value = currentVal;
+            }
+          },
+        );
+      },
+
+      _updateStartStatus: function () {
+        var hasImages =
+          _autoStartUrls.length > 0 ||
+          (_files.start && _files.start.length > 0);
+        var statusEl = el("statusStart");
+        if (statusEl) {
+          if (hasImages) statusEl.value = "เรียบร้อย";
+          else if (statusEl.value === "เรียบร้อย") statusEl.value = "ไม่มี";
+          ReportManager.toggleStartArea(statusEl.value);
+        }
+      },
+
+      _renderAutoImage: function (img, container, urlArray) {
+        var div = document.createElement("div");
+        div.className =
+          "relative group cursor-pointer border-2 border-slate-200 rounded-lg overflow-hidden w-14 h-14 flex-shrink-0 transition-all hover:shadow-md";
+        div.innerHTML = `<img src="${formatDriveUrl(img.url)}" class="object-cover w-full h-full opacity-60 transition-opacity">
                                  <div class="auto-check absolute top-0 right-0 w-4 h-4 bg-green-500 rounded-bl-lg flex items-center justify-center hidden"><i class="fas fa-check text-white text-[8px]"></i></div>
                                  <div class="auto-hover absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 text-white text-xs transition-opacity"><i class="fas fa-plus-circle"></i></div>
                                  <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-[7px] text-white truncate px-1 py-0.5 leading-tight">${img.label}</div>`;
 
-                div.onclick = () => {
-                    var checkEl = div.querySelector('.auto-check');
-                    if (div.classList.contains('ring-2')) {
-                        // Uncheck
-                        div.classList.remove('ring-2', 'ring-green-500', 'border-green-400');
-                        div.classList.add('border-slate-200');
-                        checkEl.classList.add('hidden');
-                        var idx = urlArray.indexOf(img.url);
-                        if (idx > -1) urlArray.splice(idx, 1);
-                    } else {
-                        // Check
-                        div.classList.add('ring-2', 'ring-green-500', 'border-green-400');
-                        div.classList.remove('border-slate-200');
-                        checkEl.classList.remove('hidden');
-                        urlArray.push(img.url);
-                    }
-                    // Update Counts (Optional UI feedback)
-                    ReportManager.updateImageCounts();
-
-                    // 🔥 Auto Update Status for Start Channel
-                    if (container.id === 'auto-start-list') {
-                        ReportManager._updateStartStatus();
-                    }
-                };
-                container.appendChild(div);
-            },
-
-            updateImageCounts: function () {
-                var startBadge = el('auto-start-count');
-                if (startBadge) startBadge.innerText = _autoStartUrls.length + ' เลือก';
-
-                var monoBadge = el('auto-mono-count');
-                if (monoBadge) monoBadge.innerText = _autoMonoUrls.length + ' เลือก';
-            },
-
-            handleFileUpload: function (input, type) {
-                if (input.files.length > 0) {
-                    _files[type] = _files[type].concat(Array.from(input.files));
-                    this.renderFileList(type);
-                    if (type === 'start') ReportManager._updateStartStatus();
-                }
-            },
-
-            renderFileList: function (type) {
-                var dropzone = el('dropzone-' + type);
-                if (!dropzone) return;
-                var files = _files[type];
-                dropzone.innerHTML = '';
-
-                if (files.length === 0) {
-                    var color = (type === 'start') ? 'amber' : (type === 'mono' ? 'indigo' : 'green');
-                    dropzone.className = `border-2 border-dashed border-${color}-300 hover:border-${color}-400 bg-${color}-50/30 hover:bg-${color}-50 rounded-lg p-2.5 cursor-pointer transition-all group text-center focus:ring-2 focus:ring-${color}-300 focus:outline-none`;
-                    dropzone.innerHTML = `<div class="flex items-center justify-center gap-2 text-${color}-400 group-hover:text-${color}-500 transition-colors">
-                                            <i class="fas fa-cloud-upload-alt text-sm"></i>
-                                            <span class="text-[10px] font-semibold">คลิกอัปโหลด หรือ Ctrl+V วางรูป</span>
-                                          </div>`;
-                } else {
-                    dropzone.className = `border border-gray-200 p-2 rounded-lg bg-white`;
-                    var grid = document.createElement('div');
-                    grid.className = 'flex flex-wrap gap-2 justify-center';
-                    files.forEach((file, idx) => {
-                        var url = URL.createObjectURL(file);
-                        var item = document.createElement('div');
-                        item.className = "relative w-16 h-16 rounded overflow-hidden border shadow-sm";
-                        item.innerHTML = `<img src="${url}" class="w-full h-full object-cover">
-                                          <button onclick="event.stopPropagation(); ReportManager.removeFile('${type}', ${idx})" class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white flex items-center justify-center text-[10px]"><i class="fas fa-times"></i></button>`;
-                        grid.appendChild(item);
-                    });
-                    dropzone.appendChild(grid);
-                }
-            },
-
-            removeFile: function (type, index) {
-                _files[type].splice(index, 1);
-                this.renderFileList(type);
-                if (type === 'start') this._updateStartStatus();
-            },
-
-            submitForm: function (mode) {
-                // 1. Validation
-                var reporter = _isCustomReporter ? el('reporterOther').value : el('reporterSelect').value;
-                if (!reporter) return UIManager.showToast("ระบุชื่อผู้รายงาน", "warning");
-
-                // ตรวจสอบหลักฐาน Mono (ปรับ Logic ให้ยืดหยุ่น: ต้องมีอย่างน้อย 1 อย่าง ไม่ว่าจะ Auto หรือ Upload เอง)
-                // ถ้าต้องการบังคับทั้งคู่ ให้แยก if เหมือนเดิม แต่ถ้าเอาแค่อย่างใดอย่างหนึ่ง ให้ใช้แบบนี้:
-                if (_autoMonoUrls.length === 0 && _files.mono.length === 0) {
-                     return UIManager.showToast("กรุณามีรูปหลักฐาน Mono (เลือกจากรายการ หรือ อัปโหลดเพิ่ม)", "warning");
-                }
-
-                // 2. Prepare UI
-                var btn = el('btn-submit-report');
-                btn.disabled = true; el('spin-btn-send').classList.remove('hidden');
-
-                // 3. Gather Data
-                var formData = {
-                    date: el('inputDate').value,
-                    reporter: reporter,
-                    shift: el('shiftSelect').value,
-                    chatTarget: el('chatTargetSelect').value,
-                    ticketSummary: el('ticketSummary').value,
-                    matchSummary: el('matchSummary').value,
-                    matchTotal: el('matchTotalValue').value,
-                    matchEnded: el('matchEndedValue').value,
-                    transferReport: el('transferReport').value,
-                    statusMono: el('statusMono') ? el('statusMono').value : "เรียบร้อย", // ใช้ค่าจาก Dropdown หรือ Default
-                    statusAis: el('statusAis') ? el('statusAis').value : "ไม่มี",
-                    statusStart: el('statusStart') ? el('statusStart').value : "ไม่มี",
-                    ticketStats: {
-                        total: el('disp-ticket-total').innerText,
-                        new: el('disp-ticket-new').innerText,
-                        open: el('disp-ticket-backlog').innerText,
-                        pending: 0,
-                        resolved: el('disp-ticket-resolved').innerText,
-                        closed: 0,
-                        backlog: el('disp-ticket-backlog').innerText
-                    },
-                    proofImages: {},
-                    autoStartUrls: _autoStartUrls,
-                    autoMonoUrls: _autoMonoUrls,
-                    isDraft: (mode === 'preview')
-                };
-
-                // 4. Image Compression Helper
-                var compress = (file) => new Promise(res => {
-                    var r = new FileReader(); r.readAsDataURL(file);
-                    r.onload = e => {
-                        var i = new Image(); i.src = e.target.result;
-                        i.onload = () => {
-                            var c = document.createElement('canvas'); var ctx = c.getContext('2d');
-                            var m = 1000, w = i.width, h = i.height;
-                            if (w > h && w > m) { h *= m / w; w = m } else if (h > m) { w *= m / h; h = m }
-                            c.width = w; c.height = h; ctx.drawImage(i, 0, 0, w, h);
-                            res(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
-                        }
-                    }
-                });
-
-                // 5. Process & Send
-                (async () => {
-                    try {
-                        if (mode !== 'preview') {
-                            if (_files.mono.length) formData.proofImages.mono = await Promise.all(_files.mono.map(compress));
-                            if (_files.ais.length) formData.proofImages.ais = await Promise.all(_files.ais.map(compress));
-                            if (_files.start.length) formData.proofImages.start = await Promise.all(_files.start.map(compress));
-                        }
-                        
-                        var res = await Server.call({ func: 'processShiftReport' }, formData);
-                        
-                        if (res && res.success) {
-                            if (res.isPreview) {
-                                el('chatPreviewText').innerText = res.chatPreview;
-                                el('preview_modal').showModal();
-                            } else {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'บันทึกสำเร็จ',
-                                    text: 'ระบบได้ส่งรายงานเรียบร้อยแล้ว',
-                                    timer: 1500,
-                                    showConfirmButton: false
-                                }).then(() => {
-                                    // 🔥 FULL RESET LOGIC Starts Here 🔥
-                                    
-                                    // 1. Reset วันที่เป็นปัจจุบัน (เผื่อ User ลืมเปลี่ยนกลับ)
-                                    var today = new Date();
-                                    var yyyy = today.getFullYear();
-                                    var mm = String(today.getMonth() + 1).padStart(2, '0');
-                                    var dd = String(today.getDate()).padStart(2, '0');
-                                    if(el('inputDate')) {
-                                        el('inputDate').value = `${yyyy}-${mm}-${dd}`;
-                                        if(typeof _picker !== 'undefined') _picker.setDate(today);
-                                    }
-
-                                    // 2. Clear Text Inputs
-                                    if (el('transferReport')) el('transferReport').value = "";
-                                    
-                                    // 3. Reset Status Dropdowns to Default
-                                    if (el('statusMono')) el('statusMono').value = "เรียบร้อย";
-                                    if (el('statusAis')) el('statusAis').value = "ไม่มี";
-                                    if (el('statusStart')) el('statusStart').value = "ไม่มี";
-
-                                    // 4. 🔥 สำคัญ: สั่งซ่อนกล่องอัปโหลดตามสถานะใหม่ (Clean UI)
-                                    ReportManager.toggleStartArea('ไม่มี');
-                                    ReportManager.toggleAisActions('ไม่มี');
-
-                                    // 5. Reset File Arrays & Variables
-                                    _files = { mono: [], ais: [], start: [] };
-                                    _autoStartUrls = [];
-                                    _autoMonoUrls = [];
-
-                                    // 6. Clear Rendered Lists (หน้าจอ)
-                                    ReportManager.renderFileList('mono');
-                                    ReportManager.renderFileList('ais');
-                                    ReportManager.renderFileList('start');
-
-                                    if (el('auto-start-list')) el('auto-start-list').innerHTML = '';
-                                    show('auto-start-images', false);
-
-                                    if (el('auto-mono-list')) el('auto-mono-list').innerHTML = '';
-                                    show('auto-mono-images', false);
-                                    
-                                    // อัปเดตตัวเลขจำนวนรูป (ถ้ามีฟังก์ชันนี้)
-                                    if (typeof ReportManager.updateImageCounts === 'function') {
-                                        ReportManager.updateImageCounts();
-                                    }
-
-                                    // 7. Close Preview Modal (ถ้าเปิดค้างไว้)
-                                    if (el('preview_modal')) el('preview_modal').close();
-
-                                    // 8. ดึงข้อมูล Ticket/Match ใหม่ของ "วันนี้" มาแสดง
-                                    ReportManager.autoFetchAll();
-                                });
-                            }
-                        } else UIManager.showToast(res ? res.error : "Unknown Error", "error");
-                    } catch (e) { UIManager.showToast(e.message, "error"); }
-                    finally { btn.disabled = false; el('spin-btn-send').classList.add('hidden'); }
-                })();
-            },
-
-            showTicketInfo: function () {
-                Swal.fire({
-                    title: 'หลักการนับ Ticket',
-                    html: '<div style="text-align:left;font-size:12px;line-height:1.7">' +
-                        '<div style="background:#ecfdf5;padding:10px 12px;border-radius:8px;border:1px solid #bbf7d0;margin-bottom:8px">' +
-                        '<b style="color:#15803d">🟢 งานเข้าใหม่</b><br>' +
-                        '<span style="color:#16a34a">Ticket ที่ <u>สร้าง</u> ในวันที่เลือก</span></div>' +
-                        '<div style="background:#eff6ff;padding:10px 12px;border-radius:8px;border:1px solid #bfdbfe;margin-bottom:8px">' +
-                        '<b style="color:#1d4ed8">🔵 ปิดได้</b><br>' +
-                        '<span style="color:#2563eb">Ticket ที่ <u>ปิดงาน</u> ในวันที่เลือก (รวมงานค้างเก่าที่มาปิดวันนี้)</span></div>' +
-                        '<div style="background:#fef2f2;padding:10px 12px;border-radius:8px;border:1px solid #fecaca">' +
-                        '<b style="color:#b91c1c">🔴 งานค้าง</b><br>' +
-                        '<span style="color:#dc2626">Ticket ที่สถานะ <u>ยังไม่ปิด</u> ทั้งหมด (นับรวมทุกวันที่)</span></div></div>',
-                    icon: 'info',
-                    confirmButtonText: 'เข้าใจแล้ว 👍',
-                    heightAuto: false,
-                    scrollbarPadding: false
-                });
-            },
-
-            showMatchInfo: function () {
-                Swal.fire({
-                    title: 'หลักการนับ Match',
-                    html: '<div style="text-align:left;font-size:12px;line-height:1.7">' +
-                        '<div style="background:#ecfdf5;padding:10px 12px;border-radius:8px;border:1px solid #bbf7d0;margin-bottom:8px">' +
-                        '<b style="color:#15803d">🕒 ช่วงเวลา (Shift)</b><br>' +
-                        '<span style="color:#16a34a">นับตั้งแต่ <u>10:00 (เมื่อวาน)</u> ถึง <u>09:59 (วันนี้)</u></span></div>' +
-                        '<div style="background:#eff6ff;padding:10px 12px;border-radius:8px;border:1px solid #bfdbfe;margin-bottom:8px">' +
-                        '<b style="color:#1d4ed8">📊 แหล่งข้อมูล</b><br>' +
-                        '<span style="color:#2563eb">ต้องตรงกับตาราง <u>DB_Matches</u> ใน Google Sheet เท่านั้น</span></div>' +
-                        '<div style="background:#fef2f2;padding:10px 12px;border-radius:8px;border:1px solid #fecaca">' +
-                        '<b style="color:#b91c1c">✅ การตรวจสอบ</b><br>' +
-                        '<span style="color:#dc2626">ต้องมีหลักฐาน <u>Start</u> หรือ <u>Stop</u> อย่างน้อย 1 อย่าง</span></div></div>',
-                    icon: 'info',
-                    confirmButtonText: 'เข้าใจแล้ว 👍',
-                    heightAuto: false,
-                    scrollbarPadding: false
-                });
-            },
-
-            // Helpers
-            handleReporterChange: function (v) {
-                var isO = v === 'OTHER'; _isCustomReporter = isO; show('wrapper-reporter-other', isO);
-                if (isO) setTimeout(() => el('reporterOther').focus(), 100);
-            },
-            resetReporter: function () { el('reporterSelect').value = ''; el('reporterOther').value = ''; show('wrapper-reporter-other', false); },
-            toggleStartArea: function (v) {
-                var hasCandidates = el('auto-start-list') && el('auto-start-list').children.length > 0;
-                show('start-upload-area', v !== 'ไม่มี' || hasCandidates);
-            },
-            toggleAisActions: function (v) { show('proof-ais-box', v !== 'ไม่มี'); },
-            confirmSend: function () { el('preview_modal').close(); this.submitForm('send'); },
-            setupPasteHandlers: function () {
-                ['mono', 'ais', 'start'].forEach(type => {
-                    var dz = el('dropzone-' + type);
-                    if (dz && !dz.hasAttribute('data-listening')) {
-                        dz.addEventListener('paste', (e) => {
-                            var items = (e.clipboardData || e.originalEvent.clipboardData).items;
-                            for (var i = 0; i < items.length; i++) {
-                                if (items[i].type.indexOf("image") !== -1) {
-                                    var blob = items[i].getAsFile();
-                                    _files[type].push(blob);
-                                    ReportManager.renderFileList(type);
-                                    if (typeof UIManager !== 'undefined') UIManager.showToast("วางรูปเรียบร้อย ✅", "success");
-                                    e.preventDefault();
-                                    return;
-                                }
-                            }
-                        });
-                        dz.setAttribute('data-listening', 'true');
-                    }
-                });
-            }
+        div.onclick = () => {
+          var checkEl = div.querySelector(".auto-check");
+          if (div.classList.contains("ring-2")) {
+            div.classList.remove(
+              "ring-2",
+              "ring-green-500",
+              "border-green-400",
+            );
+            div.classList.add("border-slate-200");
+            checkEl.classList.add("hidden");
+            var idx = urlArray.indexOf(img.url);
+            if (idx > -1) urlArray.splice(idx, 1);
+          } else {
+            div.classList.add("ring-2", "ring-green-500", "border-green-400");
+            div.classList.remove("border-slate-200");
+            checkEl.classList.remove("hidden");
+            urlArray.push(img.url);
+          }
+          ReportManager.updateImageCounts();
+          if (container.id === "auto-start-list")
+            ReportManager._updateStartStatus();
         };
-    })();
+        container.appendChild(div);
+      },
 
-    if (window.ReportManager) {
-        window.ReportManager.init();
-    }
+      updateImageCounts: function () {
+        var startBadge = el("auto-start-count");
+        if (startBadge) startBadge.innerText = _autoStartUrls.length + " เลือก";
+        var monoBadge = el("auto-mono-count");
+        if (monoBadge) monoBadge.innerText = _autoMonoUrls.length + " เลือก";
+      },
+
+      handleFileUpload: function (input, type) {
+        if (input.files.length > 0) {
+          _files[type] = _files[type].concat(Array.from(input.files));
+          this.renderFileList(type);
+          if (type === "start") ReportManager._updateStartStatus();
+        }
+      },
+
+      renderFileList: function (type) {
+        var dropzone = el("dropzone-" + type);
+        if (!dropzone) return;
+        var files = _files[type];
+        dropzone.innerHTML = "";
+
+        if (files.length === 0) {
+          var color =
+            type === "start" ? "amber" : type === "mono" ? "indigo" : "green";
+          dropzone.className = `border-2 border-dashed border-${color}-300 hover:border-${color}-400 bg-${color}-50/30 hover:bg-${color}-50 rounded-lg p-2.5 cursor-pointer transition-all group text-center focus:ring-2 focus:ring-${color}-300 focus:outline-none`;
+          dropzone.innerHTML = `<div class="flex items-center justify-center gap-2 text-${color}-400 group-hover:text-${color}-500 transition-colors">
+                                            <i class="fas fa-cloud-upload-alt text-sm"></i><span class="text-[10px] font-semibold">คลิกเพื่ออัปโหลด หรือ Ctrl+V วางรูป</span>
+                                          </div>`;
+        } else {
+          dropzone.className = `border border-gray-200 p-2 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-300`;
+          var grid = document.createElement("div");
+          grid.className = "flex flex-wrap gap-2 justify-center";
+          files.forEach((file, idx) => {
+            var url = URL.createObjectURL(file);
+            var item = document.createElement("div");
+            item.className =
+              "relative w-16 h-16 rounded overflow-hidden border shadow-sm";
+            item.innerHTML = `<img src="${url}" class="w-full h-full object-cover">
+                                          <button onclick="event.stopPropagation(); ReportManager.removeFile('${type}', ${idx})" class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white flex items-center justify-center text-[10px]"><i class="fas fa-times"></i></button>`;
+            grid.appendChild(item);
+          });
+          dropzone.appendChild(grid);
+        }
+      },
+
+      removeFile: function (type, index) {
+        _files[type].splice(index, 1);
+        this.renderFileList(type);
+        if (type === "start") this._updateStartStatus();
+      },
+
+      submitForm: function (mode) {
+        var reporter = _isCustomReporter
+          ? el("reporterOther").value
+          : el("reporterSelect").value;
+        if (!reporter)
+          return UIManager.showToast("ระบุชื่อผู้รายงาน", "warning");
+
+        if (_autoMonoUrls.length === 0 && _files.mono.length === 0) {
+          return UIManager.showToast(
+            "กรุณามีรูปหลักฐาน Mono (เลือกจากรายการ หรือ อัปโหลดเพิ่ม)",
+            "warning",
+          );
+        }
+
+        var btn = el("btn-submit-report");
+        btn.disabled = true;
+        el("spin-btn-send").classList.remove("hidden");
+
+        var formData = {
+          date: el("inputDate").value,
+          reporter: reporter,
+          shift: el("shiftSelect").value,
+          chatTarget: el("chatTargetSelect").value,
+          ticketSummary: el("ticketSummary").value,
+          matchSummary: el("matchSummary").value,
+          matchTotal: el("matchTotalValue").value,
+          matchEnded: el("matchEndedValue").value,
+          transferReport: el("transferReport").value,
+          statusMono: el("statusMono") ? el("statusMono").value : "เรียบร้อย",
+          statusAis: el("statusAis") ? el("statusAis").value : "ไม่มี",
+          statusStart: el("statusStart") ? el("statusStart").value : "ไม่มี",
+          ticketStats: {
+            total: el("disp-ticket-total").innerText,
+            new: el("disp-ticket-new").innerText,
+            open: el("disp-ticket-backlog").innerText,
+            pending: 0,
+            resolved: el("disp-ticket-resolved").innerText,
+            closed: 0,
+            backlog: el("disp-ticket-backlog").innerText,
+          },
+          proofImages: {},
+          autoStartUrls: _autoStartUrls,
+          autoMonoUrls: _autoMonoUrls,
+          isDraft: mode === "preview",
+        };
+
+        // 🌟 ป้องกันพัง: เช็คไฟล์และลดขนาด
+        var compress = (file) =>
+          new Promise((res) => {
+            if (!file.type.match(/image.*/)) return res(null); // ป้องกันพังถ้าไม่ใช่รูป
+            var r = new FileReader();
+            r.onload = (e) => {
+              var i = new Image();
+              i.onload = () => {
+                var c = document.createElement("canvas");
+                var ctx = c.getContext("2d");
+                var m = 1000,
+                  w = i.width,
+                  h = i.height;
+                if (w > h && w > m) {
+                  h *= m / w;
+                  w = m;
+                } else if (h > m) {
+                  w *= m / h;
+                  h = m;
+                }
+                c.width = w;
+                c.height = h;
+                ctx.drawImage(i, 0, 0, w, h);
+                res(c.toDataURL("image/jpeg", 0.8).split(",")[1]);
+              };
+              i.onerror = () => res(null);
+              i.src = e.target.result;
+            };
+            r.onerror = () => res(null);
+            r.readAsDataURL(file);
+          });
+
+        (async () => {
+          try {
+            if (mode !== "preview") {
+              // ใช้ .filter(Boolean) เพื่อกรองไฟล์เสียออกไป ไม่ให้ส่งค่า null เข้า Server
+              if (_files.mono.length)
+                formData.proofImages.mono = (
+                  await Promise.all(_files.mono.map(compress))
+                ).filter(Boolean);
+              if (_files.ais.length)
+                formData.proofImages.ais = (
+                  await Promise.all(_files.ais.map(compress))
+                ).filter(Boolean);
+              if (_files.start.length)
+                formData.proofImages.start = (
+                  await Promise.all(_files.start.map(compress))
+                ).filter(Boolean);
+            }
+
+            var res = await Server.call(
+              { func: "processShiftReport" },
+              formData,
+            );
+
+            if (res && res.success) {
+              if (res.isPreview) {
+                el("chatPreviewText").innerText = res.chatPreview;
+                el("preview_modal").showModal();
+              } else {
+                Swal.fire({
+                  icon: "success",
+                  title: "บันทึกสำเร็จ",
+                  text: "ระบบได้ส่งรายงานเรียบร้อยแล้ว",
+                  timer: 1500,
+                  showConfirmButton: false,
+                }).then(() => {
+                  var today = new Date();
+                  var yyyy = today.getFullYear();
+                  var mm = String(today.getMonth() + 1).padStart(2, "0");
+                  var dd = String(today.getDate()).padStart(2, "0");
+                  if (el("inputDate")) {
+                    el("inputDate").value = `${yyyy}-${mm}-${dd}`;
+                    if (typeof _picker !== "undefined") _picker.setDate(today);
+                  }
+
+                  if (el("transferReport")) el("transferReport").value = "";
+                  if (el("statusMono")) el("statusMono").value = "เรียบร้อย";
+                  if (el("statusAis")) el("statusAis").value = "ไม่มี";
+                  if (el("statusStart")) el("statusStart").value = "ไม่มี";
+
+                  ReportManager.toggleStartArea("ไม่มี");
+                  ReportManager.toggleAisActions("ไม่มี");
+
+                  _files = { mono: [], ais: [], start: [] };
+                  _autoStartUrls = [];
+                  _autoMonoUrls = [];
+
+                  ReportManager.renderFileList("mono");
+                  ReportManager.renderFileList("ais");
+                  ReportManager.renderFileList("start");
+                  if (el("auto-start-list"))
+                    el("auto-start-list").innerHTML = "";
+                  show("auto-start-images", false);
+                  if (el("auto-mono-list")) el("auto-mono-list").innerHTML = "";
+                  show("auto-mono-images", false);
+
+                  if (typeof ReportManager.updateImageCounts === "function")
+                    ReportManager.updateImageCounts();
+                  if (el("preview_modal")) el("preview_modal").close();
+                  ReportManager.autoFetchAll();
+                });
+              }
+            } else
+              UIManager.showToast(res ? res.error : "Unknown Error", "error");
+          } catch (e) {
+            UIManager.showToast(e.message, "error");
+          } finally {
+            btn.disabled = false;
+            el("spin-btn-send").classList.add("hidden");
+          }
+        })();
+      },
+
+      // แจ้งเตือน Help Dialogs
+      showTicketInfo: function () {
+        Swal.fire({
+          title: "หลักการนับ Ticket",
+          html: '<div style="text-align:left;font-size:12px;line-height:1.7"><div style="background:#ecfdf5;padding:10px 12px;border-radius:8px;border:1px solid #bbf7d0;margin-bottom:8px"><b style="color:#15803d">🟢 งานเข้าใหม่</b><br><span style="color:#16a34a">Ticket ที่ <u>สร้าง</u> ในวันที่เลือก</span></div><div style="background:#eff6ff;padding:10px 12px;border-radius:8px;border:1px solid #bfdbfe;margin-bottom:8px"><b style="color:#1d4ed8">🔵 ปิดได้</b><br><span style="color:#2563eb">Ticket ที่ <u>ปิดงาน</u> ในวันที่เลือก (รวมงานค้างเก่าที่มาปิดวันนี้)</span></div><div style="background:#fef2f2;padding:10px 12px;border-radius:8px;border:1px solid #fecaca"><b style="color:#b91c1c">🔴 งานค้าง</b><br><span style="color:#dc2626">Ticket ที่สถานะ <u>ยังไม่ปิด</u> ทั้งหมด (นับรวมทุกวันที่)</span></div></div>',
+          icon: "info",
+          confirmButtonText: "เข้าใจแล้ว 👍",
+          heightAuto: false,
+          scrollbarPadding: false,
+        });
+      },
+      showMatchInfo: function () {
+        Swal.fire({
+          title: "หลักการนับ Match",
+          html: '<div style="text-align:left;font-size:12px;line-height:1.7"><div style="background:#ecfdf5;padding:10px 12px;border-radius:8px;border:1px solid #bbf7d0;margin-bottom:8px"><b style="color:#15803d">🕒 ช่วงเวลา (Shift)</b><br><span style="color:#16a34a">นับตั้งแต่ <u>10:00 (เมื่อวาน)</u> ถึง <u>09:59 (วันนี้)</u></span></div><div style="background:#eff6ff;padding:10px 12px;border-radius:8px;border:1px solid #bfdbfe;margin-bottom:8px"><b style="color:#1d4ed8">📊 แหล่งข้อมูล</b><br><span style="color:#2563eb">ต้องตรงกับตาราง <u>DB_Matches</u> ใน Google Sheet เท่านั้น</span></div><div style="background:#fef2f2;padding:10px 12px;border-radius:8px;border:1px solid #fecaca"><b style="color:#b91c1c">✅ การตรวจสอบ</b><br><span style="color:#dc2626">ต้องมีหลักฐาน <u>Start</u> หรือ <u>Stop</u> อย่างน้อย 1 อย่าง</span></div></div>',
+          icon: "info",
+          confirmButtonText: "เข้าใจแล้ว 👍",
+          heightAuto: false,
+          scrollbarPadding: false,
+        });
+      },
+
+      // Helpers
+      handleReporterChange: function (v) {
+        var isO = v === "OTHER";
+        _isCustomReporter = isO;
+        show("wrapper-reporter-other", isO);
+        if (isO) setTimeout(() => el("reporterOther").focus(), 100);
+      },
+      resetReporter: function () {
+        el("reporterSelect").value = "";
+        el("reporterOther").value = "";
+        show("wrapper-reporter-other", false);
+      },
+      toggleStartArea: function (v) {
+        var hasCandidates =
+          el("auto-start-list") && el("auto-start-list").children.length > 0;
+        show("start-upload-area", v !== "ไม่มี" || hasCandidates);
+      },
+      toggleAisActions: function (v) {
+        show("proof-ais-box", v !== "ไม่มี");
+      },
+      confirmSend: function () {
+        el("preview_modal").close();
+        this.submitForm("send");
+      },
+
+      // 🌟 ปรับปรุง: รองรับการ Paste (Ctrl+V) ให้ใช้งานได้จริง
+      setupPasteHandlers: function () {
+        ["mono", "ais", "start"].forEach((type) => {
+          var dz = el("dropzone-" + type);
+          if (dz && !dz.hasAttribute("data-listening")) {
+            // เพิ่ม tabindex เพื่อให้ div รับ focus และ event paste ได้
+            dz.setAttribute("tabindex", "0");
+            dz.addEventListener("paste", (e) => {
+              var items = (e.clipboardData || e.originalEvent.clipboardData)
+                .items;
+              for (var i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf("image") !== -1) {
+                  var blob = items[i].getAsFile();
+                  _files[type].push(blob);
+                  ReportManager.renderFileList(type);
+                  if (type === "start") ReportManager._updateStartStatus();
+                  if (typeof UIManager !== "undefined")
+                    UIManager.showToast("วางรูปเรียบร้อย ✅", "success");
+                  e.preventDefault();
+                  return;
+                }
+              }
+            });
+            dz.setAttribute("data-listening", "true");
+          }
+        });
+      },
+    };
+  })();
+
+  if (window.ReportManager) {
+    window.ReportManager.init();
+  }
 </script>

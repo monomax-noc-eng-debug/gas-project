@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <style>
     /* 🔥 1. กำหนดขอบกระดาษด้วย @page 
        วิธีนี้จะทำให้ทุกหน้า (หน้า 1, 2, 3...) เว้นขอบอัตโนมัติ เนื้อหาจะไม่ชิดขอบบน */
-    @page { 
-      size: A4; 
-      margin: 15mm 15mm 15mm 15mm; /* บน ขวา ล่าง ซ้าย */
+    @page {
+      size: A4;
+      margin: 15mm 15mm 15mm 15mm;
+      /* บน ขวา ล่าง ซ้าย */
     }
 
     body {
-      margin: 0; padding: 0;
+      margin: 0;
+      padding: 0;
       background-color: #ffffff;
       font-family: 'Sarabun', sans-serif;
       color: #000000;
@@ -23,73 +26,185 @@
     }
 
     /* --- Typography --- */
-    h1 { font-size: 20px; margin: 0; font-weight: bold; line-height: 1.2; }
-    .report-meta { font-size: 12px; color: #334155; margin-top: 4px; }
-    
+    h1 {
+      font-size: 20px;
+      margin: 0;
+      font-weight: bold;
+      line-height: 1.2;
+    }
+
+    .report-meta {
+      font-size: 12px;
+      color: #334155;
+      margin-top: 4px;
+    }
+
     /* --- Header --- */
     .header-section {
       border-bottom: 2px solid #000000;
       padding-bottom: 10px;
       margin-bottom: 20px;
-      display: flex; justify-content: space-between; align-items: flex-end;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
     }
 
     /* --- Ticket Table (ตารางรายการงาน) --- */
-    table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 10px; }
-    th { background-color: #f1f5f9; border: 1px solid #cbd5e1; padding: 6px; text-align: left; font-weight: bold; color: #1e293b; }
-    td { border: 1px solid #e2e8f0; padding: 6px; vertical-align: top; color: #333; }
-    
-    .status-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
-    .bg-new { background-color: #dbeafe; color: #1e40af; }       /* สีน้ำเงิน (New) */
-    .bg-done { background-color: #dcfce7; color: #166534; }      /* สีเขียว (Resolved/Closed) */
-    .bg-backlog { background-color: #fee2e2; color: #991b1b; }   /* สีแดง (Backlog) */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-bottom: 10px;
+    }
+
+    th {
+      background-color: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      padding: 6px;
+      text-align: left;
+      font-weight: bold;
+      color: #1e293b;
+    }
+
+    td {
+      border: 1px solid #e2e8f0;
+      padding: 6px;
+      vertical-align: top;
+      color: #333;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    .bg-new {
+      background-color: #dbeafe;
+      color: #1e40af;
+    }
+
+    /* สีน้ำเงิน (New) */
+    .bg-done {
+      background-color: #dcfce7;
+      color: #166534;
+    }
+
+    /* สีเขียว (Resolved/Closed) */
+    .bg-backlog {
+      background-color: #fee2e2;
+      color: #991b1b;
+    }
+
+    /* สีแดง (Backlog) */
 
     /* --- Topic Blocks --- */
     .topic-block {
       margin-bottom: 20px;
-      page-break-inside: avoid; /* พยายามไม่ตัดกลางก้อน */
+      page-break-inside: avoid;
+      /* พยายามไม่ตัดกลางก้อน */
       border: 1px solid #e2e8f0;
       border-radius: 6px;
       padding: 10px;
     }
 
-    .topic-header { display: flex; align-items: center; margin-bottom: 8px; }
-    .topic-number {
-      background-color: #000; color: #fff; width: 20px; height: 20px;
-      border-radius: 4px; text-align: center; line-height: 20px; font-size: 12px; font-weight: bold;
-      margin-right: 8px; flex-shrink: 0;
+    .topic-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
     }
-    .topic-title { font-size: 14px; font-weight: bold; color: #000; }
-    .topic-desc { font-size: 12px; margin-left: 28px; white-space: pre-wrap; line-height: 1.5; }
+
+    .topic-number {
+      background-color: #000;
+      color: #fff;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      text-align: center;
+      line-height: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .topic-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #000;
+    }
+
+    .topic-desc {
+      font-size: 12px;
+      margin-left: 28px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
 
     /* Images */
     .image-container {
-      margin-left: 28px; margin-top: 8px;
-      border: 1px solid #cbd5e1; background: #f8fafc;
-      text-align: center; padding: 5px; border-radius: 4px;
+      margin-left: 28px;
+      margin-top: 8px;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      text-align: center;
+      padding: 5px;
+      border-radius: 4px;
     }
-    .evidence-img { max-width: 100%; max-height: 300px; object-fit: contain; }
-    .caption { font-size: 10px; color: #64748b; margin-top: 4px; }
 
-    .badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-left: auto; }
-    .badge-ok { background: #ecfdf5; color: #047857; }
-    .badge-err { background: #fef2f2; color: #b91c1c; }
+    .evidence-img {
+      max-width: 100%;
+      max-height: 300px;
+      object-fit: contain;
+    }
 
+    .caption {
+      font-size: 10px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    .badge {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+      margin-left: auto;
+    }
+
+    .badge-ok {
+      background: #ecfdf5;
+      color: #047857;
+    }
+
+    .badge-err {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
   <div class="content-wrapper">
-    
+
     <div class="header-section">
       <div>
         <h1>รายงานผลการปฏิบัติงาน</h1>
         <div class="report-meta">
-          วันที่: <b><?= data.date ?></b> | กะ: <b><?= data.shift ?></b> | ผู้รายงาน: <b><?= data.reporter ?></b>
+          วันที่: <b>
+            <?= data.date ?>
+          </b> | กะ: <b>
+            <?= data.shift ?>
+          </b> | ผู้รายงาน: <b>
+            <?= data.reporter ?>
+          </b>
         </div>
       </div>
       <div style="text-align: right; font-size:10px; color:#64748b; font-weight: bold;">
-         Shift Report System
+        Shift Report System
       </div>
     </div>
 
@@ -98,85 +213,118 @@
         <div class="topic-number">1</div>
         <div class="topic-title">รายการ Ticket ในระบบ</div>
       </div>
-      
+
       <div style="margin-left: 28px;">
         <? if (data.ticketList && data.ticketList.length > 0) { ?>
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 15%">Ticket ID</th>
-                <th style="width: 50%">หัวข้อ (Subject)</th>
-                <th style="width: 15%">สถานะ</th>
-                <th style="width: 20%">ประเภท</th>
-              </tr>
-            </thead>
-            <tbody>
-              <? for (var i = 0; i < data.ticketList.length; i++) { 
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 15%">Ticket ID</th>
+              <th style="width: 50%">หัวข้อ (Subject)</th>
+              <th style="width: 15%">สถานะ</th>
+              <th style="width: 20%">ประเภท</th>
+            </tr>
+          </thead>
+          <tbody>
+            <? for (var i = 0; i < data.ticketList.length; i++) { 
                    var t = data.ticketList[i];
                    var badgeClass = '';
                    if (t.tag === 'NEW') badgeClass = 'bg-new';
                    else if (t.tag === 'RESOLVED') badgeClass = 'bg-done';
                    else badgeClass = 'bg-backlog';
               ?>
-                <tr>
-                  <td style="font-weight:bold;"><?= t.id ?></td>
-                  <td><?= t.detail ?></td>
-                  <td><span class="status-badge <?= badgeClass ?>"><?= t.status ?></span></td>
-                  <td style="font-size:10px; color:#555;">
-                    <? if (t.tag === 'NEW') { ?> 🟢 งานเข้าใหม่
-                    <? } else if (t.tag === 'RESOLVED') { ?> 🔵 ปิดจบวันนี้
-                    <? } else { ?> 🔴 งานค้าง
-                    <? } ?>
-                  </td>
-                </tr>
-              <? } ?>
-            </tbody>
-          </table>
+            <tr>
+              <td style="font-weight:bold;">
+                <?= t.id ?>
+              </td>
+              <td>
+                <?= t.detail ?>
+              </td>
+              <td><span class="status-badge <?= badgeClass ?>">
+                  <?= t.status ?>
+                </span></td>
+              <td style="font-size:10px; color:#555;">
+                <? if (t.tag === 'NEW') { ?> 🟢 งานเข้าใหม่
+                <? } else if (t.tag === 'RESOLVED') { ?> 🔵 ปิดจบวันนี้
+                <? } else { ?> 🔴 งานค้าง
+                <? } ?>
+              </td>
+            </tr>
+            <? } ?>
+          </tbody>
+        </table>
         <? } else { ?>
-          <div style="padding: 10px; border: 1px dashed #cbd5e1; text-align: center; font-size: 12px; color: #64748b;">
-            - ไม่มีรายการ Ticket ในช่วงเวลานี้ -
-          </div>
+        <div style="padding: 10px; border: 1px dashed #cbd5e1; text-align: center; font-size: 12px; color: #64748b;">
+          - ไม่มีรายการ Ticket ในช่วงเวลานี้ -
+        </div>
         <? } ?>
-        
+
         <? if(data.ticketSummary && data.ticketSummary !== '-') { ?>
-           <div style="margin-top:10px; font-size:11px; background:#f9fafb; padding:8px; border-left:3px solid #94a3b8;">
-             <b>Note:</b> <?= data.ticketSummary ?>
-           </div>
+        <div style="margin-top:10px; font-size:11px; background:#f9fafb; padding:8px; border-left:3px solid #94a3b8;">
+          <b>Note:</b>
+          <?= data.ticketSummary ?>
+        </div>
         <? } ?>
       </div>
     </div>
 
     <? for (var i = 0; i < data.topics.length; i++) { ?>
-      <div class="topic-block">
-        <div class="topic-header">
-          <div class="topic-number"><?= i + 2 ?></div>
-          <div class="topic-title"><?= data.topics[i].title ?></div>
-          <? if(data.topics[i].status) { ?>
-            <span class="badge <?= data.topics[i].status === 'เรียบร้อย' ? 'badge-ok' : 'badge-err' ?>">
-              <?= data.topics[i].status ?>
-            </span>
-          <? } ?>
+    <div class="topic-block">
+      <div class="topic-header">
+        <div class="topic-number">
+          <?= i + 2 ?>
         </div>
-
-        <? if (data.topics[i].description) { ?>
-          <div class="topic-desc"><?= data.topics[i].description ?></div>
-        <? } ?>
-
-        <? if (data.topics[i].image) { ?>
-          <div class="image-container">
-            <img src="data:image/jpeg;base64,<?= data.topics[i].image ?>" class="evidence-img">
-            <? if (data.topics[i].caption) { ?>
-              <div class="caption"><?= data.topics[i].caption ?></div>
-            <? } ?>
-          </div>
+        <div class="topic-title">
+          <?= data.topics[i].title ?>
+        </div>
+        <? if(data.topics[i].status) { ?>
+        <span class="badge <?= data.topics[i].status === 'เรียบร้อย' ? 'badge-ok' : 'badge-err' ?>">
+          <?= data.topics[i].status ?>
+        </span>
         <? } ?>
       </div>
+
+      <? if (data.topics[i].description) { ?>
+      <div class="topic-desc">
+        <?= data.topics[i].description ?>
+      </div>
+      <? } ?>
+
+      <? if (data.topics[i].images && data.topics[i].images.length > 0) { ?>
+      <? for (var j = 0; j < data.topics[i].images.length; j++) { ?>
+      <div class="image-container">
+        <img src="data:image/jpeg;base64,<?= data.topics[i].images[j] ?>" class="evidence-img">
+        <? if (data.topics[i].caption) { ?>
+        <div class="caption">
+          <?= data.topics[i].caption ?>
+          <? if (data.topics[i].images.length > 1) { ?>(
+          <?= j + 1 ?>)
+          <? } ?>
+        </div>
+        <? } ?>
+      </div>
+      <? } ?>
+      <? } else if (data.topics[i].image) { ?>
+      <!-- Fallback for legacy single image -->
+      <div class="image-container">
+        <img src="data:image/jpeg;base64,<?= data.topics[i].image ?>" class="evidence-img">
+        <? if (data.topics[i].caption) { ?>
+        <div class="caption">
+          <?= data.topics[i].caption ?>
+        </div>
+        <? } ?>
+      </div>
+      <? } ?>
+    </div>
     <? } ?>
 
-    <div style="margin-top: 20px; border-top: 1px solid #000; padding-top: 10px; font-size: 10px; text-align: center; color: #555;">
-      ข้อมูล ณ เวลา <?= new Date().toLocaleString('th-TH') ?>
+    <div
+      style="margin-top: 20px; border-top: 1px solid #000; padding-top: 10px; font-size: 10px; text-align: center; color: #555;">
+      ข้อมูล ณ เวลา
+      <?= new Date().toLocaleString('th-TH') ?>
     </div>
 
   </div>
 </body>
+
 </html>
