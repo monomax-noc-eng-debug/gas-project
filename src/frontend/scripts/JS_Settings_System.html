@@ -1,0 +1,173 @@
+<script>
+  const SysSettings = (() => {
+    let _full = {}; // full settings from apiGetAllSettings
+    let _config = { types: [], statuses: [], severities: [], categories: {} };
+    let _tab = 'statuses';
+    let _loaded = false;
+    const el = id => document.getElementById(id);
+
+    function _activeTabStyle() {
+      document.querySelectorAll('.sys-tab-btn').forEach(b => {
+        b.classList.remove('btn-primary', 'text-white');
+        b.classList.add('bg-white', 'text-gray-500');
+        if (b.dataset.systab === _tab) {
+          b.classList.add('btn-primary', 'text-white');
+          b.classList.remove('bg-white', 'text-gray-500');
+        }
+      });
+    }
+
+    function _isSimple() { return _tab !== 'categories'; }
+
+    function _renderTable() {
+      const tbody = el('sys-table-body');
+      const empty = el('sys-empty');
+      const th2 = el('sys-th-col2');
+      if (!tbody) return;
+
+      // Show/hide second column
+      if (_isSimple()) { th2.classList.add('hidden'); el('sys-th-col1').innerText = 'ชื่อ'; }
+      else { th2.classList.remove('hidden'); el('sys-th-col1').innerText = 'หมวดหมู่หลัก'; }
+
+      // Update badge counts
+      el('sys-cnt-statuses').innerText = (_config.statuses || []).length;
+      el('sys-cnt-types').innerText = (_config.types || []).length;
+      el('sys-cnt-severities').innerText = (_config.severities || []).length;
+      el('sys-cnt-categories').innerText = Object.keys(_config.categories || {}).length;
+
+      let rows = [];
+      if (_isSimple()) {
+        const items = _config[_tab] || [];
+        rows = items.map((v, i) => `<tr class="hover:bg-base-50 group">
+        <td class="text-center text-xs text-gray-400 font-mono">${i + 1}</td>
+        <td class="text-sm font-medium text-gray-700">${v}</td>
+        <td class="text-center">
+          <div class="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onclick="SysSettings.openEdit(${i})" class="btn btn-ghost btn-xs btn-square text-blue-400"><i class="fas fa-pencil-alt text-[10px]"></i></button>
+            <button onclick="SysSettings.removeItem(${i})" class="btn btn-ghost btn-xs btn-square text-red-400"><i class="fas fa-trash text-[10px]"></i></button>
+          </div>
+        </td></tr>`);
+      } else {
+        let idx = 0;
+        for (const cat in _config.categories) {
+          const subs = _config.categories[cat] || [];
+          if (subs.length === 0) {
+            rows.push(`<tr class="hover:bg-base-50 group">
+            <td class="text-center text-xs text-gray-400 font-mono">${++idx}</td>
+            <td class="text-sm font-bold text-gray-700">${cat}</td>
+            <td class="hidden md:table-cell text-xs text-gray-400 italic">-</td>
+            <td class="text-center"><div class="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onclick="SysSettings.openEditCat('${cat}','',-1)" class="btn btn-ghost btn-xs btn-square text-blue-400"><i class="fas fa-plus text-[10px]"></i></button>
+              <button onclick="SysSettings.removeCat('${cat}')" class="btn btn-ghost btn-xs btn-square text-red-400"><i class="fas fa-trash text-[10px]"></i></button>
+            </div></td></tr>`);
+          } else {
+            subs.forEach((sub, si) => {
+              rows.push(`<tr class="hover:bg-base-50 group">
+              <td class="text-center text-xs text-gray-400 font-mono">${++idx}</td>
+              <td class="text-sm ${si === 0 ? 'font-bold text-gray-700' : 'pl-6 text-gray-400 text-xs'}">${si === 0 ? cat : '↳'}</td>
+              <td class="text-sm text-gray-600">${sub}</td>
+              <td class="text-center"><div class="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onclick="SysSettings.openEditCat('${cat}','${sub}',${si})" class="btn btn-ghost btn-xs btn-square text-blue-400"><i class="fas fa-pencil-alt text-[10px]"></i></button>
+                <button onclick="SysSettings.removeSubCat('${cat}',${si})" class="btn btn-ghost btn-xs btn-square text-red-400"><i class="fas fa-trash text-[10px]"></i></button>
+              </div></td></tr>`);
+            });
+          }
+        }
+      }
+      tbody.innerHTML = rows.join('');
+      if (empty) { empty.classList.toggle('hidden', rows.length > 0); }
+    }
+
+    return {
+      init() { },
+      onShow() { if (!_loaded) this.loadData(); },
+
+      loadData(force) {
+        const tbody = el('sys-table-body');
+        const empty = el('sys-empty');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center py-12"><span class="loading loading-spinner loading-md text-primary"></span><p class="text-xs text-gray-400 mt-2">กำลังโหลด...</p></td></tr>';
+        if (empty) empty.classList.add('hidden');
+        Server.call({ func: "apiGetAllSettings", silent: true })
+          .then(r => {
+            if (r.success && r.data) {
+              _full = r.data;
+              _config.types = r.data.types || [];
+              _config.statuses = r.data.statuses || [];
+              _config.severities = r.data.severities || [];
+              _config.categories = r.data.categories || {};
+              _loaded = true;
+              this.switchTab(_tab);
+              if (force) UIManager.showToast("โหลดสำเร็จ", "success");
+            }
+          })
+          .catch(() => UIManager.showToast("Load Error", "error"));
+      },
+
+      switchTab(t) { _tab = t; _activeTabStyle(); _renderTable(); },
+
+      openAddModal() {
+        el('sys-edit-index').value = '-1';
+        el('sys-input-1').value = '';
+        el('sys-input-2').value = '';
+        el('sys-modal-title').innerText = _isSimple() ? 'เพิ่มรายการ' : 'เพิ่มหมวดหมู่';
+        el('sys-label-1').innerText = _isSimple() ? 'ชื่อ' : 'หมวดหมู่หลัก (Category)';
+        el('sys-field-2-wrap').classList.toggle('hidden', _isSimple());
+        el('modal-sys-item').showModal();
+      },
+
+      openEdit(i) {
+        const items = _config[_tab] || [];
+        el('sys-edit-index').value = i;
+        el('sys-input-1').value = items[i] || '';
+        el('sys-modal-title').innerText = 'แก้ไขรายการ';
+        el('sys-label-1').innerText = 'ชื่อ';
+        el('sys-field-2-wrap').classList.add('hidden');
+        el('modal-sys-item').showModal();
+      },
+
+      openEditCat(cat, sub, si) {
+        el('sys-edit-index').value = si;
+        el('sys-input-1').value = cat;
+        el('sys-input-2').value = sub;
+        el('sys-modal-title').innerText = si >= 0 ? 'แก้ไขหมวดย่อย' : 'เพิ่มหมวดย่อย';
+        el('sys-label-1').innerText = 'หมวดหมู่หลัก';
+        el('sys-field-2-wrap').classList.remove('hidden');
+        el('modal-sys-item').showModal();
+      },
+
+      saveModal() {
+        const v1 = el('sys-input-1').value.trim();
+        if (!v1) return UIManager.showToast("กรุณากรอกข้อมูล", "warning");
+        const idx = parseInt(el('sys-edit-index').value);
+
+        if (_isSimple()) {
+          const arr = _config[_tab];
+          if (idx >= 0) arr[idx] = v1; else { if (arr.includes(v1)) return UIManager.showToast("มีอยู่แล้ว", "warning"); arr.push(v1); }
+        } else {
+          const v2 = el('sys-input-2').value.trim();
+          if (!_config.categories[v1]) _config.categories[v1] = [];
+          if (v2) {
+            const subs = _config.categories[v1];
+            if (idx >= 0) subs[idx] = v2; else { if (subs.includes(v2)) return UIManager.showToast("มีอยู่แล้ว", "warning"); subs.push(v2); }
+          }
+        }
+        el('modal-sys-item').close();
+        _renderTable();
+      },
+
+      removeItem(i) { _config[_tab].splice(i, 1); _renderTable(); },
+      removeCat(cat) { delete _config.categories[cat]; _renderTable(); },
+      removeSubCat(cat, si) { _config.categories[cat].splice(si, 1); if (_config.categories[cat].length === 0) delete _config.categories[cat]; _renderTable(); },
+
+      saveAll() {
+        UIManager.showLoading("กำลังบันทึก...");
+        const payload = { ..._full, types: _config.types, statuses: _config.statuses, severities: _config.severities, categories: _config.categories };
+        Server.call({ func: "apiSaveAllSettings", silent: true }, payload)
+          .then(r => { if (r.success) UIManager.showToast("บันทึกสำเร็จ", "success"); else UIManager.showToast(r.message || "Error", "error"); })
+          .catch(() => UIManager.showToast("Connection Error", "error"))
+          .finally(() => UIManager.hideLoading());
+      }
+    };
+  })();
+  document.addEventListener("DOMContentLoaded", () => { Router.register("page-settings-system", SysSettings); SysSettings.init(); });
+</script>

@@ -107,59 +107,36 @@
 
         Promise.all([
           TicketService.getAllTickets(),
-          TicketService.getConfig(),
-          TicketService.getEmailProfiles(),
-          TicketService.getSiteProfiles(),
-          TicketService.getMailDrafts(),
+          TicketService.getAppSettings(),
         ])
-          .then(([resTickets, resConfig, resEmails, resSites, resDrafts]) => {
+          .then(([resTickets, resConfig]) => {
             // 2.1 Config & Dropdowns
             if (resConfig.success) {
-              _config = resConfig.data;
-              TicketView.populateSelect("sel-ticket-type", _config.types);
-              TicketView.populateSelect("sel-ticket-status", _config.statuses);
-              TicketView.populateSelect(
-                "sel-ticket-severity",
-                _config.severities,
-              );
-              TicketView.populateSelect(
-                "sel-ticket-category",
-                Object.keys(_config.categories),
-              );
+              _config = resConfig.data || {};
+              TicketView.populateSelect("sel-ticket-type", _config.types || []);
+              TicketView.populateSelect("sel-ticket-status", _config.statuses || []);
+              TicketView.populateSelect("sel-ticket-severity", _config.severities || []);
+              TicketView.populateSelect("sel-ticket-category", Object.keys(_config.categories || {}));
 
               if (_config.staff && _config.staff.length > 0) {
-                TicketView.populateSelect(
-                  "sel-ticket-resp",
-                  _config.staff,
-                  "เลือกหัวหน้าทีม...",
-                );
+                TicketView.populateSelect("sel-ticket-resp", _config.staff, "เลือกหัวหน้าทีม...");
               } else {
-                TicketView.populateSelect(
-                  "sel-ticket-resp",
-                  [],
-                  "เลือกหัวหน้าทีม...",
-                );
+                TicketView.populateSelect("sel-ticket-resp", [], "เลือกหัวหน้าทีม...");
               }
 
               if (_config.assignees && _config.assignees.length > 0) {
-                TicketView.populateSelect(
-                  "sel-ticket-assign-picker",
-                  _config.assignees,
-                  "+ เพิ่มผู้ปฏิบัติงาน",
-                );
+                TicketView.populateSelect("sel-ticket-assign-picker", _config.assignees, "+ เพิ่มผู้ปฏิบัติงาน");
               } else {
-                TicketView.populateSelect(
-                  "sel-ticket-assign-picker",
-                  [],
-                  "+ เพิ่มผู้ปฏิบัติงาน",
-                );
+                TicketView.populateSelect("sel-ticket-assign-picker", [], "+ เพิ่มผู้ปฏิบัติงาน");
               }
-            }
 
-            // 2.2 Profiles (Email/Site/Drafts)
-            if (resEmails.success) _profiles.email = resEmails.data || [];
-            if (resSites.success) _profiles.site = resSites.data || [];
-            if (resDrafts.success) _profiles.drafts = resDrafts.data || [];
+              // 2.2 Profiles (Email/Site/Drafts)
+              _profiles.email = _config.emailProfiles || [];
+              _profiles.site = _config.emailDrafts || [];
+              _profiles.drafts = _config.mailDrafts || [];
+            } else {
+              UIManager.showToast("โหลดตั้งค่าไม่สำเร็จ: " + resConfig.message, "error");
+            }
 
             TicketView.populateSelectObj(
               "sel-email-profile",
@@ -838,7 +815,14 @@
 
         _profiles.drafts.push(newDraft);
 
-        TicketService.saveDraftsList(_profiles.drafts).then((res) => {
+        const payload = {
+          ..._config,
+          emailProfiles: _profiles.email,
+          emailDrafts: _profiles.site,
+          mailDrafts: _profiles.drafts
+        };
+
+        TicketService.saveDraftsList(payload).then((res) => {
           if (res.success) {
             UIManager.showToast("บันทึก Template สำเร็จ", "success");
             TicketView.populateSelectObj(

@@ -1,0 +1,139 @@
+<script>
+  const EmailSettings = (() => {
+    let _full = {};
+    let _profiles = []; let _templates = [];
+    let _tab = 'profiles'; let _loaded = false;
+    const el = id => document.getElementById(id);
+
+    function _activeTab() {
+      document.querySelectorAll('.em-tab-btn').forEach(b => {
+        b.classList.remove('btn-primary', 'text-white');
+        b.classList.add('bg-white', 'text-gray-500');
+        if (b.dataset.emtab === _tab) { b.classList.add('btn-primary', 'text-white'); b.classList.remove('bg-white', 'text-gray-500'); }
+      });
+    }
+
+    function _render() {
+      const tbody = el('em-table-body');
+      const empty = el('em-empty');
+      const thead = el('em-thead');
+      if (!tbody) return;
+
+      el('em-cnt-profiles').innerText = _profiles.length;
+      el('em-cnt-templates').innerText = _templates.length;
+
+      if (_tab === 'profiles') {
+        thead.innerHTML = '<tr><th class="w-12 text-center">#</th><th>ชื่อ</th><th>To</th><th>CC</th><th class="w-28 text-center">จัดการ</th></tr>';
+        const rows = _profiles.map((p, i) => `
+        <tr class="hover:bg-base-50 group">
+          <td class="text-center text-xs text-gray-400 font-mono">${i + 1}</td>
+          <td class="text-sm font-bold text-gray-700">${p.name}</td>
+          <td class="text-xs text-gray-500 font-mono max-w-[200px] truncate">${p.to}</td>
+          <td class="text-xs text-gray-400 font-mono max-w-[150px] truncate">${p.cc || '-'}</td>
+          <td class="text-center"><div class="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onclick="EmailSettings.editProfile(${i})" class="btn btn-ghost btn-xs btn-square text-blue-400"><i class="fas fa-pencil-alt text-[10px]"></i></button>
+            <button onclick="EmailSettings.removeProfile(${i})" class="btn btn-ghost btn-xs btn-square text-red-400"><i class="fas fa-trash text-[10px]"></i></button>
+          </div></td>
+        </tr>`);
+        tbody.innerHTML = rows.join('');
+        if (empty) empty.classList.toggle('hidden', rows.length > 0);
+      } else {
+        thead.innerHTML = '<tr><th class="w-12 text-center">#</th><th>ชื่อ Template</th><th>Company</th><th>Greeting</th><th class="w-28 text-center">จัดการ</th></tr>';
+        const rows = _templates.map((t, i) => `
+        <tr class="hover:bg-base-50 group">
+          <td class="text-center text-xs text-gray-400 font-mono">${i + 1}</td>
+          <td class="text-sm font-bold text-gray-700">${t.name}</td>
+          <td class="text-xs text-gray-500 truncate max-w-[150px]">${t.company || '-'}</td>
+          <td class="text-xs text-gray-400 truncate max-w-[150px]">${t.greeting || '-'}</td>
+          <td class="text-center"><div class="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onclick="EmailSettings.editTmpl(${i})" class="btn btn-ghost btn-xs btn-square text-blue-400"><i class="fas fa-pencil-alt text-[10px]"></i></button>
+            <button onclick="EmailSettings.removeTmpl(${i})" class="btn btn-ghost btn-xs btn-square text-red-400"><i class="fas fa-trash text-[10px]"></i></button>
+          </div></td>
+        </tr>`);
+        tbody.innerHTML = rows.join('');
+        if (empty) empty.classList.toggle('hidden', rows.length > 0);
+      }
+    }
+
+    return {
+      init() { },
+      onShow() { if (!_loaded) this.loadData(); },
+
+      loadData(force) {
+        const tbody = el('em-table-body');
+        const empty = el('em-empty');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center py-12"><span class="loading loading-spinner loading-md text-primary"></span><p class="text-xs text-gray-400 mt-2">กำลังโหลด...</p></td></tr>';
+        if (empty) empty.classList.add('hidden');
+        Server.call({ func: "apiGetAllSettings", silent: true })
+          .then(r => {
+            if (r.success && r.data) {
+              _full = r.data;
+              _profiles = r.data.emailProfiles || [];
+              _templates = r.data.emailDrafts || [];
+              _loaded = true;
+              this.switchTab(_tab);
+              if (force) UIManager.showToast("โหลดสำเร็จ", "success");
+            }
+          })
+          .catch(() => UIManager.showToast("Load Error", "error"));
+      },
+
+      switchTab(t) { _tab = t; _activeTab(); _render(); },
+
+      openAdd() {
+        if (_tab === 'profiles') {
+          el('em-profile-idx').value = '-1'; el('em-in-name').value = ''; el('em-in-to').value = ''; el('em-in-cc').value = '';
+          el('em-profile-title').innerText = 'เพิ่ม Email Profile';
+          el('modal-em-profile').showModal();
+        } else {
+          el('em-tmpl-idx').value = '-1'; el('em-tmpl-name').value = ''; el('em-tmpl-company').value = ''; el('em-tmpl-contact').value = ''; el('em-tmpl-greeting').value = '';
+          el('em-tmpl-title').innerText = 'เพิ่ม Template';
+          el('modal-em-template').showModal();
+        }
+      },
+
+      editProfile(i) {
+        const p = _profiles[i];
+        el('em-profile-idx').value = i; el('em-in-name').value = p.name; el('em-in-to').value = p.to; el('em-in-cc').value = p.cc || '';
+        el('em-profile-title').innerText = 'แก้ไข Profile';
+        el('modal-em-profile').showModal();
+      },
+
+      saveProfileModal() {
+        const name = el('em-in-name').value.trim(); const to = el('em-in-to').value.trim(); const cc = el('em-in-cc').value.trim();
+        if (!name || !to) return UIManager.showToast("กรอก Name และ To", "warning");
+        const idx = parseInt(el('em-profile-idx').value);
+        if (idx >= 0) { _profiles[idx] = { name, to, cc }; } else { _profiles.push({ name, to, cc }); }
+        el('modal-em-profile').close(); _render();
+      },
+      removeProfile(i) { _profiles.splice(i, 1); _render(); },
+
+      editTmpl(i) {
+        const t = _templates[i];
+        el('em-tmpl-idx').value = i; el('em-tmpl-name').value = t.name; el('em-tmpl-company').value = t.company || ''; el('em-tmpl-contact').value = t.contactName || ''; el('em-tmpl-greeting').value = t.greeting || '';
+        el('em-tmpl-title').innerText = 'แก้ไข Template';
+        el('modal-em-template').showModal();
+      },
+
+      saveTmplModal() {
+        const name = el('em-tmpl-name').value.trim();
+        if (!name) return UIManager.showToast("กรอกชื่อ", "warning");
+        const idx = parseInt(el('em-tmpl-idx').value);
+        const obj = { name, company: el('em-tmpl-company').value.trim(), contactName: el('em-tmpl-contact').value.trim(), greeting: el('em-tmpl-greeting').value.trim(), contactNum: '', siteEmail: '', siteAddr: '', action: '' };
+        if (idx >= 0) { _templates[idx] = { ..._templates[idx], ...obj }; } else { _templates.push(obj); }
+        el('modal-em-template').close(); _render();
+      },
+      removeTmpl(i) { _templates.splice(i, 1); _render(); },
+
+      saveAll() {
+        UIManager.showLoading("กำลังบันทึก...");
+        const payload = { ..._full, emailProfiles: _profiles, emailDrafts: _templates };
+        Server.call({ func: "apiSaveAllSettings", silent: true }, payload)
+          .then(r => { if (r.success) UIManager.showToast("บันทึกสำเร็จ", "success"); else UIManager.showToast(r.message || "Error", "error"); })
+          .catch(() => UIManager.showToast("Connection Error", "error"))
+          .finally(() => UIManager.hideLoading());
+      }
+    };
+  })();
+  document.addEventListener("DOMContentLoaded", () => { Router.register("page-settings-email", EmailSettings); EmailSettings.init(); });
+</script>

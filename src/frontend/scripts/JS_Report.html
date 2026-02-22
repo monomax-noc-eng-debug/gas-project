@@ -471,14 +471,14 @@
       },
 
       fetchReporters: function () {
-        Server.call({ func: "getStaffAndAssignees", silent: true }).then(
+        Server.call({ func: "apiGetAllSettings", silent: true }).then(
           function (res) {
-            if (res && res.success && res.data && res.data.leaders) {
+            if (res && res.success && res.data && res.data.staff) {
               var select = el("reporterSelect");
               if (!select) return;
               var currentVal = select.value;
               var html = '<option value="">-- เลือก --</option>';
-              res.data.leaders.forEach(function (name) {
+              res.data.staff.forEach(function (name) {
                 html += `<option value="${name}">${name}</option>`;
               });
               html += '<option value="OTHER">อื่นๆ</option>';

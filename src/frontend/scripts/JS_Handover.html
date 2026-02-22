@@ -1,0 +1,567 @@
+<script>
+  let currentTeamMembers = [];
+  let handoverItems = [];
+  let filteredItems = [];
+  let handoverTags = [];
+  let selectedHandoverId = null;
+  let selectedFormTags = [];
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const hoPage = document.getElementById('page-handover');
+    if (hoPage) {
+      let isFirstLoad = true;
+      const observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (mutation) {
+          if (mutation.attributeName === "class" && !hoPage.classList.contains('hidden') && isFirstLoad) {
+            loadHandovers();
+            isFirstLoad = false;
+          }
+        });
+      });
+      observer.observe(hoPage, { attributes: true });
+    }
+  });
+
+  // ==================== [ระบบโหลดข้อมูล & ปุ่มโหลด] ====================
+
+  function loadHandoversWithBtn() {
+    const btn = document.getElementById('btn-load-handovers');
+    if (btn) btn.classList.add('is-loading');
+
+    loadHandovers(false, function () {
+      if (btn) btn.classList.remove('is-loading');
+    });
+  }
+
+  function loadHandovers(keepSelection = false, callback = null) {
+    const listContainer = document.getElementById('ho_list_container');
+
+    if (!callback && listContainer) {
+      listContainer.innerHTML = `
+        <div class="flex flex-col items-center justify-center py-10 text-gray-400">
+          <span class="loading loading-spinner loading-md text-primary mb-2"></span>
+          <p class="text-xs font-bold">กำลังซิงค์ข้อมูล...</p>
+        </div>`;
+    }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (callback) callback();
+        try {
+          const response = typeof res === 'string' ? JSON.parse(res) : res;
+          if (response.success) {
+            currentTeamMembers = response.data.team || [];
+            handoverTags = response.data.tags || [];
+            handoverItems = response.data.items || [];
+            filteredItems = [...handoverItems];
+
+            updateTagsDropdown(handoverTags);
+            populateCreatorDropdown();
+
+            const searchInput = document.getElementById('ho_search_input');
+            if (keepSelection && searchInput && searchInput.value.trim() !== '') {
+              filterHandovers();
+            } else {
+              if (!keepSelection && searchInput) searchInput.value = '';
+              renderHandoverCards(filteredItems, keepSelection);
+            }
+          }
+        } catch (e) { console.error(e); }
+      })
+      .apiHandler({ func: "getHandovers", data: null });
+  }
+
+  function filterHandovers() {
+    const searchInput = document.getElementById('ho_search_input');
+    if (!searchInput) return;
+    const searchText = searchInput.value.toLowerCase().trim();
+    if (searchText === '') {
+      filteredItems = [...handoverItems];
+    } else {
+      filteredItems = handoverItems.filter(item => {
+        const topicMatch = (item.topic || '').toLowerCase().includes(searchText);
+        let tagMatch = false;
+        if (Array.isArray(item.tags)) tagMatch = item.tags.some(t => t.toLowerCase().includes(searchText));
+        return topicMatch || tagMatch;
+      });
+    }
+    renderHandoverCards(filteredItems, true);
+  }
+
+  // ==================== [Tag & Creator Management] ====================
+  function updateTagsDropdown(tags) {
+    const select = document.getElementById('ho_tags_select');
+    if (!select) return;
+    select.innerHTML = '<option value="" disabled selected>-- เลือก Tag --</option>';
+    tags.forEach(tag => select.innerHTML += `<option value="${tag}">${tag}</option>`);
+  }
+
+  function populateCreatorDropdown() {
+    const select = document.getElementById('ho_creator_select');
+    if (!select) return;
+    select.innerHTML = '<option value="Unknown">-- เลือกผู้รายงาน --</option>';
+    currentTeamMembers.forEach(name => {
+      select.innerHTML += `<option value="${name}">${name}</option>`;
+    });
+  }
+
+  function addSelectedTag() {
+    const select = document.getElementById('ho_tags_select');
+    const val = select.value;
+    if (val && !selectedFormTags.includes(val)) {
+      selectedFormTags.push(val);
+      renderFormTagsUI();
+    }
+    select.value = "";
+  }
+
+  function removeSelectedTag(val) {
+    selectedFormTags = selectedFormTags.filter(t => t !== val);
+    renderFormTagsUI();
+  }
+
+  function renderFormTagsUI() {
+    const container = document.getElementById('ho_selected_tags_container');
+    if (!container) return;
+    if (selectedFormTags.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+    container.innerHTML = selectedFormTags.map(t => `
+      <span class="badge badge-primary badge-sm font-bold flex items-center gap-1 shadow-sm">
+        ${t} <i class="fas fa-times cursor-pointer hover:text-white" onclick="removeSelectedTag('${t}')"></i>
+      </span>
+    `).join('');
+  }
+
+  // ==================== [✨ ระบบ Dynamic Rows (ปุ่มเพิ่มแถวใหม่)] ====================
+
+  function addDynamicRow(containerId, placeholderStr, type = 'textarea', valueStr = '') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const rowId = `row_${Math.random().toString(36).substr(2, 9)}`;
+
+    let inputHTML = '';
+    if (type === 'textarea') {
+      inputHTML = `<textarea class="textarea textarea-bordered w-full min-h-[60px] text-xs bg-slate-50 focus:bg-white focus:outline-primary leading-relaxed" placeholder="${placeholderStr}">${valueStr}</textarea>`;
+    } else {
+      inputHTML = `<input type="text" class="input input-sm input-bordered w-full text-xs bg-slate-50 focus:bg-white focus:outline-primary" placeholder="${placeholderStr}" value="${valueStr}" />`;
+    }
+
+    const html = `
+      <div id="${rowId}" class="flex gap-2 items-start relative group">
+        <div class="flex-1">${inputHTML}</div>
+        <button type="button" class="btn btn-sm btn-square btn-ghost text-red-400 hover:text-red-600 hover:bg-red-50" onclick="document.getElementById('${rowId}').remove()" title="ลบข้อมูลนี้"><i class="fas fa-trash-alt"></i></button>
+      </div>`;
+
+    container.insertAdjacentHTML('beforeend', html);
+  }
+
+  function getDynamicValues(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return '[]';
+    const inputs = container.querySelectorAll('input, textarea');
+    const values = [];
+    inputs.forEach(input => {
+      if (input.value.trim() !== '') values.push(input.value.trim());
+    });
+    return JSON.stringify(values);
+  }
+
+  function renderDynamicValues(containerId, jsonStr, placeholderStr, type) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    let values = [];
+    try {
+      const parsed = JSON.parse(jsonStr);
+      values = Array.isArray(parsed) ? parsed : [jsonStr];
+    } catch (e) {
+      if (jsonStr && jsonStr.trim() !== '') values = [jsonStr];
+    }
+
+    if (values.length === 0) {
+      addDynamicRow(containerId, placeholderStr, type);
+    } else {
+      values.forEach(val => addDynamicRow(containerId, placeholderStr, type, val));
+    }
+  }
+
+  // ==================== [UI Rendering] ====================
+
+  function renderHandoverCards(items, keepSelection) {
+    const container = document.getElementById('ho_list_container');
+    const badge = document.getElementById('ho_count_badge');
+    if (badge) badge.innerText = items.length;
+
+    if (items.length === 0) {
+      container.innerHTML = `<div class="text-center py-10 text-xs text-gray-400">ไม่มีรายการ</div>`;
+      showEmptyState();
+      return;
+    }
+
+    let html = '';
+    items.forEach(item => {
+      const isSelected = selectedHandoverId === item.id;
+      const cardClass = isSelected ? "border-primary bg-indigo-50/30 ring-1 ring-primary/20" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50";
+
+      const shiftIcon = item.shift === 'Day' ? '<i class="fas fa-sun text-amber-500"></i>' : '<i class="fas fa-moon text-indigo-500"></i>';
+      const timeStr = new Date(item.timestamp).toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      const statusIcon = item.status === 'Succeed' ? '<i class="fas fa-check-circle text-green-500"></i>' : '<i class="fas fa-clock text-amber-500"></i>';
+
+      let tagsHtml = '';
+      if (Array.isArray(item.tags) && item.tags.length > 0) {
+        tagsHtml = item.tags.slice(0, 2).map(t => `<span class="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">${t}</span>`).join('');
+        if (item.tags.length > 2) tagsHtml += `<span class="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">+${item.tags.length - 2}</span>`;
+      }
+
+      html += `
+        <div class="p-3 rounded-xl cursor-pointer transition-all border ${cardClass}" onclick="selectHandover('${item.id}')" id="card_${item.id}">
+          <div class="flex justify-between items-start mb-1.5">
+            <div class="flex gap-1 flex-wrap">${tagsHtml}</div>
+            <span class="text-[10px] text-gray-500 font-mono flex items-center gap-1">${shiftIcon} ${timeStr}</span>
+          </div>
+          <h3 class="font-bold text-xs text-gray-800 leading-snug line-clamp-2 mb-2">${item.topic || '-'}</h3>
+          <div class="flex justify-between items-center text-[10px] font-bold text-gray-500">
+            <span class="flex items-center gap-1">${statusIcon} ${item.status}</span>
+            <span class="truncate max-w-[80px]"><i class="fas fa-user-edit opacity-50"></i> ${item.creator || ''}</span>
+          </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+
+    if (keepSelection && selectedHandoverId && items.find(i => i.id === selectedHandoverId)) {
+      selectHandover(selectedHandoverId);
+    } else {
+      showEmptyState();
+    }
+  }
+
+  function showEmptyState() {
+    selectedHandoverId = null;
+    document.getElementById('ho_empty_state').classList.remove('hidden');
+
+    const detailContent = document.getElementById('ho_detail_content');
+    detailContent.classList.add('hidden');
+    detailContent.classList.remove('flex');
+
+    document.querySelectorAll('#ho_list_container > div').forEach(card => {
+      card.classList.remove('border-primary', 'bg-indigo-50/30', 'ring-1', 'ring-primary/20');
+      card.classList.add('border-slate-200', 'bg-white');
+    });
+
+    if (window.innerWidth < 1024) {
+      const wrap = document.getElementById('ho_detail_wrapper');
+      wrap.classList.remove('flex', 'absolute', 'inset-0', 'z-50', 'bg-base-200', 'p-4');
+      wrap.classList.add('hidden');
+    }
+  }
+
+  function selectHandover(id) {
+    selectedHandoverId = id;
+
+    document.querySelectorAll('#ho_list_container > div').forEach(card => {
+      card.classList.remove('border-primary', 'bg-indigo-50/30', 'ring-1', 'ring-primary/20');
+      card.classList.add('border-slate-200', 'bg-white');
+    });
+    const activeCard = document.getElementById(`card_${id}`);
+    if (activeCard) {
+      activeCard.classList.remove('border-slate-200', 'bg-white');
+      activeCard.classList.add('border-primary', 'bg-indigo-50/30', 'ring-1', 'ring-primary/20');
+    }
+
+    document.getElementById('ho_empty_state').classList.add('hidden');
+    const detailContent = document.getElementById('ho_detail_content');
+    detailContent.classList.remove('hidden');
+    detailContent.classList.add('flex');
+
+    const wrap = document.getElementById('ho_detail_wrapper');
+    if (window.innerWidth < 1024) {
+      wrap.classList.remove('hidden');
+      wrap.classList.add('flex', 'absolute', 'inset-0', 'z-50', 'bg-base-200', 'p-4');
+    } else {
+      wrap.classList.remove('hidden');
+      wrap.classList.add('flex');
+    }
+
+    const item = handoverItems.find(i => i.id === id);
+    if (item) renderDetailData(item);
+  }
+
+  function closeDetail() {
+    showEmptyState();
+  }
+
+  function renderDetailData(item) {
+    document.getElementById('ho_detail_topic').innerText = item.topic || '-';
+    document.getElementById('ho_detail_time_text').innerText = new Date(item.timestamp).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
+    document.getElementById('ho_detail_creator_text').innerText = item.creator || 'Unknown';
+
+    const tagsContainer = document.getElementById('ho_detail_tags_container');
+    if (Array.isArray(item.tags) && item.tags.length > 0) {
+      tagsContainer.innerHTML = item.tags.map(t => `<span class="badge badge-sm badge-outline border-slate-300 font-bold text-slate-600 bg-white">${t}</span>`).join('');
+    } else {
+      tagsContainer.innerHTML = ``;
+    }
+
+    const statusEl = document.getElementById('ho_detail_status');
+    if (item.status === 'Succeed') {
+      statusEl.className = 'badge badge-sm font-bold border-0 bg-green-100 text-green-700';
+      statusEl.innerText = 'Succeed';
+    } else {
+      statusEl.className = 'badge badge-sm font-bold border-0 bg-amber-100 text-amber-700';
+      statusEl.innerText = 'Pending';
+    }
+
+    document.getElementById('ho_detail_shift').innerText = item.shift || '-';
+
+    // วาด Timeline
+    let detailsArr = [];
+    try { detailsArr = JSON.parse(item.detail); } catch (e) { detailsArr = [item.detail]; }
+    const timelineContainer = document.getElementById('ho_detail_timeline');
+    timelineContainer.innerHTML = '';
+
+    if (Array.isArray(detailsArr) && detailsArr.length > 0) {
+      detailsArr.forEach((txt, idx) => {
+        timelineContainer.innerHTML += `
+          <div class="flex gap-3 items-start">
+            <div class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 mt-0.5 text-[10px]">${idx + 1}</div>
+            <div class="bg-slate-50/50 p-3 rounded-xl border border-slate-200 text-xs text-gray-700 leading-relaxed w-full whitespace-pre-line">${txt}</div>
+          </div>`;
+      });
+    } else {
+      timelineContainer.innerHTML = '<span class="text-xs text-gray-400 italic">- ไม่มีข้อมูล -</span>';
+    }
+
+    // วาด Contact
+    let contactsArr = [];
+    try { contactsArr = JSON.parse(item.contact); } catch (e) { contactsArr = [item.contact]; }
+    const contactWrap = document.getElementById('ho_detail_contact_wrap');
+    const contactGrid = document.getElementById('ho_detail_contact_grid');
+    contactGrid.innerHTML = '';
+
+    if (Array.isArray(contactsArr) && contactsArr.length > 0 && contactsArr[0].trim() !== '') {
+      contactWrap.classList.remove('hidden');
+      contactsArr.forEach(txt => {
+        contactGrid.innerHTML += `
+          <div class="flex items-center gap-3 bg-info/5 border border-info/20 p-2.5 rounded-xl">
+            <div class="w-8 h-8 rounded-full bg-info/20 text-info flex items-center justify-center shrink-0 text-sm"><i class="fas fa-phone"></i></div>
+            <p class="text-xs font-semibold text-slate-700">${txt}</p>
+          </div>`;
+      });
+    } else {
+      contactWrap.classList.add('hidden');
+    }
+
+    renderAcknowledgeSection(item);
+  }
+
+  function renderAcknowledgeSection(item) {
+    const container = document.getElementById('ho_ack_container');
+    let html = '';
+
+    if (currentTeamMembers.length === 0) {
+      html = `<div class="col-span-full text-[10px] text-error">ไม่พบข้อมูลทีม</div>`;
+    }
+
+    currentTeamMembers.forEach(fullName => {
+      const shortName = fullName.split(' ')[0];
+      const ackTime = item.acknowledged[fullName];
+
+      if (ackTime) {
+        html += `
+          <button onclick="ackHandover('${item.id}', '${fullName}', this)" class="btn btn-sm h-auto py-2 px-3 flex items-center justify-start gap-2 w-full bg-green-50 border-green-200 hover:bg-red-50 hover:border-red-200 group text-left rounded-lg transition-colors shadow-none">
+            <i class="fas fa-check-circle text-green-500 group-hover:hidden"></i>
+            <i class="fas fa-times-circle text-red-500 hidden group-hover:inline"></i>
+            <div class="flex flex-col leading-none">
+              <span class="text-xs font-bold text-green-700 group-hover:text-red-600">${shortName}</span>
+              <span class="text-[9px] text-green-600/70 mt-0.5">${ackTime}</span>
+            </div>
+          </button>`;
+      } else {
+        html += `
+          <button onclick="ackHandover('${item.id}', '${fullName}', this)" class="btn btn-sm h-auto py-2 px-3 flex items-center justify-start gap-2 w-full bg-white border-slate-200 hover:bg-green-50 hover:border-green-300 text-left rounded-lg transition-colors shadow-none">
+            <i class="fas fa-user-circle text-slate-300"></i>
+            <div class="flex flex-col leading-none">
+              <span class="text-xs font-bold text-slate-600">${shortName}</span>
+              <span class="text-[9px] text-slate-400 mt-0.5">รอรับทราบ</span>
+            </div>
+          </button>`;
+      }
+    });
+    container.innerHTML = html;
+  }
+
+  let isAcknowledging = false;
+
+  function ackHandover(id, name, btnObj) {
+    if (isAcknowledging) return;
+    isAcknowledging = true;
+
+    const container = document.getElementById('ho_ack_container');
+    if (container) {
+      const allBtns = container.querySelectorAll('button');
+      allBtns.forEach(b => {
+        if (b !== btnObj) {
+          b.disabled = true;
+          b.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+      });
+    }
+
+    let originalHtml = '';
+    if (btnObj) {
+      originalHtml = btnObj.innerHTML;
+      btnObj.innerHTML = '<div class="flex items-center justify-center w-full py-0.5"><span class="loading loading-spinner loading-sm text-primary"></span></div>';
+    }
+
+    const Toast = Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 1500 });
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        isAcknowledging = false;
+        Toast.fire({ icon: 'success', title: res.message });
+        loadHandovers(true);
+      })
+      .withFailureHandler(function (err) {
+        isAcknowledging = false;
+        Toast.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด' });
+
+        if (btnObj) btnObj.innerHTML = originalHtml;
+        if (container) {
+          const allBtns = container.querySelectorAll('button');
+          allBtns.forEach(b => {
+            b.disabled = false;
+            b.classList.remove('opacity-50', 'cursor-not-allowed');
+          });
+        }
+      })
+      .apiHandler({ func: "acknowledgeHandover", data: { id: id, name: name } });
+  }
+
+  // ==================== [Modal Management] ====================
+
+  function openCreateModal() {
+    document.getElementById('ho_edit_id').value = '';
+    document.getElementById('ho_topic').value = '';
+
+    selectedFormTags = [];
+    document.getElementById('ho_tags_select').value = "";
+    renderFormTagsUI();
+
+    renderDynamicValues('dynamic_detail_container', '[]', 'ระบุรายละเอียดหรือสิ่งที่ต้องทำ...', 'textarea');
+    renderDynamicValues('dynamic_contact_container', '[]', 'ชื่อ - เบอร์โทร', 'input');
+
+    let currentUser = "Unknown";
+    try {
+      const storedUser = localStorage.getItem("gas_app_user");
+      if (storedUser) currentUser = JSON.parse(storedUser).userName || "Unknown";
+    } catch (e) { }
+    const creatorSelect = document.getElementById('ho_creator_select');
+    for (let i = 0; i < creatorSelect.options.length; i++) {
+      if (creatorSelect.options[i].value === currentUser) {
+        creatorSelect.selectedIndex = i;
+        break;
+      }
+    }
+
+    const hour = new Date().getHours();
+    const isDay = hour >= 8 && hour < 20;
+    const shiftHtml = isDay ? '<i class="fas fa-sun text-amber-500"></i> Day Shift' : '<i class="fas fa-moon text-indigo-500"></i> Night Shift';
+    document.getElementById('ho_modal_shift_display').innerHTML = shiftHtml;
+
+    document.getElementById('ho_modal_title').innerHTML = '<i class="fas fa-plus-circle text-success"></i> <span class="text-base">สร้างรายการส่งกะ</span>';
+    document.getElementById('ho_modal').showModal();
+  }
+
+  function openEditModal() {
+    if (!selectedHandoverId) return;
+    const item = handoverItems.find(i => i.id === selectedHandoverId);
+    if (!item) return;
+
+    document.getElementById('ho_edit_id').value = item.id;
+    document.getElementById('ho_topic').value = item.topic;
+
+    selectedFormTags = Array.isArray(item.tags) ? [...item.tags] : [];
+    document.getElementById('ho_tags_select').value = "";
+    renderFormTagsUI();
+
+    renderDynamicValues('dynamic_detail_container', item.detail, 'ระบุรายละเอียดหรือสิ่งที่ต้องทำ...', 'textarea');
+    renderDynamicValues('dynamic_contact_container', item.contact, 'ชื่อ - เบอร์โทร', 'input');
+
+    const creatorSelect = document.getElementById('ho_creator_select');
+    creatorSelect.value = item.creator || "Unknown";
+
+    const shiftHtml = item.shift === 'Day' ? '<i class="fas fa-sun text-amber-500"></i> Day Shift' : '<i class="fas fa-moon text-indigo-500"></i> Night Shift';
+    document.getElementById('ho_modal_shift_display').innerHTML = shiftHtml;
+
+    document.getElementById('ho_modal_title').innerHTML = '<i class="fas fa-edit text-warning"></i> <span class="text-base">แก้ไขรายการส่งกะ</span>';
+    document.getElementById('ho_modal').showModal();
+  }
+
+  function deleteHandover() {
+    if (!selectedHandoverId) return;
+    Swal.fire({
+      title: 'ลบรายการนี้?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#e3242b',
+      cancelButtonColor: '#9ca3af',
+      confirmButtonText: 'ลบทิ้ง',
+      cancelButtonText: 'ยกเลิก'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({ title: 'กำลังลบ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        google.script.run
+          .withSuccessHandler(function (res) {
+            Swal.fire({ icon: 'success', title: 'ลบเรียบร้อย', timer: 1500, showConfirmButton: false });
+            loadHandovers(false);
+          })
+          .apiHandler({ func: "deleteHandover", data: selectedHandoverId });
+      }
+    });
+  }
+
+  function submitHandover() {
+    const detailJSON = getDynamicValues('dynamic_detail_container');
+    const contactJSON = getDynamicValues('dynamic_contact_container');
+    const creatorVal = document.getElementById('ho_creator_select').value;
+
+    const data = {
+      id: document.getElementById('ho_edit_id').value,
+      tags: selectedFormTags,
+      topic: document.getElementById('ho_topic').value.trim(),
+      detail: detailJSON,
+      contact: contactJSON,
+      creator: creatorVal === "Unknown" ? "" : creatorVal
+    };
+
+    if (!data.topic || detailJSON === '[]') {
+      Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบ', text: 'กรุณาระบุหัวข้อและรายละเอียดอย่างน้อย 1 ขั้นตอน', timer: 2000, showConfirmButton: false });
+      return;
+    }
+
+    const btnText = document.getElementById('submit-ho-text');
+    const btnSpinner = document.getElementById('submit-ho-spinner');
+    const btn = document.getElementById('btn_submit_ho');
+
+    if (btnText) btnText.classList.replace('opacity-100', 'opacity-0');
+    if (btnSpinner) btnSpinner.classList.replace('opacity-0', 'opacity-100');
+    btn.disabled = true;
+
+    const apiFunc = data.id ? "updateHandover" : "createHandover";
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (btnText) btnText.classList.replace('opacity-0', 'opacity-100');
+        if (btnSpinner) btnSpinner.classList.replace('opacity-100', 'opacity-0');
+        btn.disabled = false;
+
+        document.getElementById('ho_modal').close();
+        Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', timer: 1500, showConfirmButton: false });
+        loadHandovers(!!data.id);
+      })
+      .apiHandler({ func: apiFunc, data: data });
+  }
+</script>

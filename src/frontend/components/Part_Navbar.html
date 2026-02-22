@@ -27,7 +27,8 @@
           <div
             class="w-9 md:w-10 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2 transition-all duration-300 hover:scale-105">
             <img id="nav-avatar-img" class="hidden" src="" alt="Avatar" />
-            <span id="nav-avatar-text" class="text-lg font-bold bg-neutral text-neutral-content w-full h-full flex items-center justify-center">U</span>
+            <span id="nav-avatar-text"
+              class="text-lg font-bold bg-neutral text-neutral-content w-full h-full flex items-center justify-center">U</span>
           </div>
         </div>
 
@@ -42,7 +43,8 @@
             <div class="avatar mb-2">
               <div class="w-16 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
                 <img id="nav-menu-avatar-img" class="hidden" src="" alt="Avatar" />
-                <span id="nav-menu-avatar-text" class="text-3xl font-bold bg-neutral text-neutral-content w-full h-full flex items-center justify-center">U</span>
+                <span id="nav-menu-avatar-text"
+                  class="text-3xl font-bold bg-neutral text-neutral-content w-full h-full flex items-center justify-center">U</span>
               </div>
             </div>
             <div>
@@ -52,15 +54,15 @@
         </li>
 
         <li>
-          <a onclick="Router.navigateTo('page-settings')"
+          <a onclick="Router.navigateTo('page-settings-system')"
             class="flex gap-3 py-3 font-medium hover:bg-base-200 rounded-lg group">
             <div
               class="w-8 h-8 rounded-full bg-base-200 flex items-center justify-center text-base-content/70 group-hover:bg-primary group-hover:text-primary-content transition-colors duration-200">
-              <i class="fas fa-cog"></i>
+              <i class="fas fa-user-circle"></i>
             </div>
             <div class="flex flex-col">
-              <span class="text-sm">ตั้งค่าระบบ</span>
-              <span class="text-[10px] opacity-60 font-normal">จัดการข้อมูลและการแจ้งเตือน</span>
+              <span class="text-sm">จัดการโปรไฟล์</span>
+              <span class="text-[10px] opacity-60 font-normal">จัดการข้อมูลต่างๆ แก้ไขรหัสผ่าน</span>
             </div>
           </a>
         </li>
@@ -90,12 +92,12 @@
    */
   window.updateNavbarUI = (user) => {
     if (!user) return;
-    
+
     // 1. อัปเดตชื่อแสดงผล
     const nameEl = document.getElementById('nav-user-name');
     const menuNameEl = document.getElementById('nav-menu-name-display');
     const menuEmailEl = document.getElementById('nav-menu-email-display');
-    
+
     const displayName = user.userName || user.name || 'Unknown';
     if (nameEl) nameEl.innerText = displayName;
     if (menuNameEl) menuNameEl.innerText = displayName;
@@ -108,13 +110,13 @@
     // เนื่องจากใช้ Login ผ่าน Sheet ปกติจะไม่มีรูปภาพ (Picture) 
     // เราจะใช้ตัวอักษรแรกของชื่อแทน
     const initial = displayName.charAt(0).toUpperCase();
-    
-    imgEls.forEach(el => { if(el) el.classList.add('hidden'); });
-    textEls.forEach(el => { 
-      if(el) {
+
+    imgEls.forEach(el => { if (el) el.classList.add('hidden'); });
+    textEls.forEach(el => {
+      if (el) {
         el.classList.remove('hidden');
         el.innerText = initial;
-      } 
+      }
     });
   };
 

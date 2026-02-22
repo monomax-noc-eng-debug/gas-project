@@ -8,14 +8,8 @@
     return {
       // --- Config & Profiles ---
       // ปลอดภัยที่จะ Retry ได้ 2 รอบ หากเน็ตหลุดระหว่างโหลดหน้า
-      getConfig: () =>
-        Server.call({ func: "getTicketConfig", silent: true, retries: 2 }),
-      getEmailProfiles: () =>
-        Server.call({ func: "getEmailProfiles", silent: true, retries: 2 }),
-      getSiteProfiles: () =>
-        Server.call({ func: "getEmailDrafts", silent: true, retries: 2 }), // Site Info
-      getMailDrafts: () =>
-        Server.call({ func: "getMailDrafts", silent: true, retries: 2 }), // Saved Drafts
+      getAppSettings: () =>
+        Server.call({ func: "apiGetAllSettings", silent: true, retries: 2 }),
 
       // --- Ticket Operations ---
       getAllTickets: () =>
@@ -44,8 +38,8 @@
         Server.call({ func: "saveBatchTickets", silent: true }, payloads),
 
       // --- Saved Drafts ---
-      saveDraftsList: (drafts) =>
-        Server.call({ func: "saveMailDrafts", silent: true }, drafts),
+      saveDraftsList: (payload) =>
+        Server.call({ func: "apiSaveAllSettings", silent: true }, payload),
     };
   })();
 </script>

@@ -100,17 +100,12 @@ function apiHandler(request) {
     createTicket: (d) => TicketController.createTicket(d),
     updateTicket: (d) => TicketController.updateTicket(d),
     deleteTicket: (id) => TicketController.deleteTicket(id),
-    getTicketConfig: () => TicketController.getTicketConfig(),
-    saveTicketConfig: (d) => TicketController.saveTicketConfig(d),
-    getEmailProfiles: () => TicketController.getEmailProfiles(),
-    saveEmailProfiles: (d) => TicketController.saveEmailProfiles(d),
-    getEmailDrafts: (d) => TicketController.getEmailDrafts(d),
-    saveEmailDrafts: (d) => TicketController.saveEmailDrafts(d),
-    getMailDrafts: (d) => TicketController.getMailDrafts(d),
-    saveMailDrafts: (d) => TicketController.saveMailDrafts(d),
     createTicketAndDraft: (d) => TicketController.createTicketAndDraft(d),
-    getStaffAndAssignees: () => TicketController.getStaffAndAssignees(),
-    saveStaffAndAssignees: (d) => TicketController.saveStaffAndAssignees(d),
+
+    // Unified Settings
+    apiResetSettings: () => SettingController.resetSettingSheets(),
+    apiGetAllSettings: () => SettingController.apiGetAllSettings(),
+    apiSaveAllSettings: (d) => SettingController.apiSaveAllSettings(d),
 
     // Gmail & Import
     getEmailPreviews: () => GmailService.getUnsyncedEmails(),
@@ -124,7 +119,13 @@ function apiHandler(request) {
     apiStopWorkItem: (d) => MatchController.apiStopWorkItem(d),
     getCalendarEvents: (d) => MatchController.apiGetCalendarEvents(d),
     apiGetCalendarEvents: (d) => MatchController.apiGetCalendarEvents(d),
-    apiCheckMatchUpdate: (d) => MatchController.apiCheckMatchUpdate(d), // เพิ่ม Polling ของรอบที่แล้ว
+    apiCheckMatchUpdate: (d) => MatchController.apiCheckMatchUpdate(d),
+
+    // ✨ Shift Handover
+    getHandovers: () => HandoverController.getHandovers(),
+    createHandover: (d) => HandoverController.createHandover(d),
+    acknowledgeHandover: (d) => HandoverController.acknowledgeHandover(d),
+
 
     // Report Page Logic
     getTicketDetails: (d) => TicketService.getTicketDetails(d),
