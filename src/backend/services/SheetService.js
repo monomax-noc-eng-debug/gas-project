@@ -1,22 +1,20 @@
 /**
  * SheetService
  * Handles all interactions with Google Sheets (CRUD)
- * Implements Caching and Locking mechanisms.
+ * Implements Caching, Locking mechanisms, and High-Performance Batch Operations.
  */
 
 const SheetService = (() => {
-
   // --- Private Helpers ---
 
   function _getDbId() {
-    if (typeof CONFIG !== 'undefined' && CONFIG.DB_ID) return CONFIG.DB_ID;
-    return PropertiesService.getScriptProperties().getProperty('DB_SHEET_ID');
+    if (typeof CONFIG !== "undefined" && CONFIG.DB_ID) return CONFIG.DB_ID;
+    return PropertiesService.getScriptProperties().getProperty("DB_SHEET_ID");
   }
 
   function _getSpreadsheet(spreadsheetId = null) {
     const id = spreadsheetId || _getDbId();
     if (!id) throw new Error("Database ID not configured.");
-    console.log(`[SheetService] Opening Spreadsheet: ${id}`);
     return SpreadsheetApp.openById(id);
   }
 
@@ -24,14 +22,18 @@ const SheetService = (() => {
     const ss = _getSpreadsheet(spreadsheetId);
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
-      const availableSheets = ss.getSheets().map(s => s.getName()).join(', ');
-      throw new Error(`Sheet '${sheetName}' not found in spreadsheet. Available sheets: [${availableSheets}]`);
+      const availableSheets = ss
+        .getSheets()
+        .map((s) => s.getName())
+        .join(", ");
+      throw new Error(
+        `Sheet '${sheetName}' not found in spreadsheet. Available sheets: [${availableSheets}]`,
+      );
     }
-    console.log(`[SheetService] Opened Sheet: ${sheetName}`);
     return sheet;
   }
 
-  // --- Caching Logic (Moved from Main.js) ---
+  // --- Caching Logic ---
 
   function _getChunkedCache(cache, key) {
     const countStr = cache.get(key);
@@ -83,46 +85,37 @@ const SheetService = (() => {
   return {
     /**
      * Get all data from a sheet with caching
-     * @param {string} sheetName 
-     * @param {number} cacheTime (Seconds, default 1200)
-     * @param {string} spreadsheetId (Optional) Specific spreadsheet ID to use
-     * @return {Array<Array<any>>}
      */
-    getAll: function (sheetName, cacheTime = 1200, spreadsheetId = null, skipCache = false) {
+    getAll: function (
+      sheetName,
+      cacheTime = 1200,
+      spreadsheetId = null,
+      skipCache = false,
+    ) {
       const ssId = spreadsheetId || _getDbId();
       const cache = CacheService.getScriptCache();
       const CACHE_KEY = `SHEET_DATA_${ssId}_${sheetName}`;
 
-      // Try Cache (unless skipped)
       if (!skipCache) {
         const cached = _getChunkedCache(cache, CACHE_KEY);
-        if (cached) {
-          console.log(`⚡ Cache Hit: ${sheetName} (SS: ${ssId})`);
-          return JSON.parse(cached);
-        }
+        if (cached) return JSON.parse(cached);
       }
 
-      console.log(`💤 Cache Miss (Skip=${skipCache}): Reading ${sheetName} (SS: ${ssId})`);
       const sheet = _getSheet(sheetName, spreadsheetId);
       const data = sheet.getDataRange().getValues();
 
-      // Write Cache
       _putChunkedCache(cache, CACHE_KEY, JSON.stringify(data), cacheTime);
       return data;
     },
 
     /**
      * Ensure a sheet exists, create if not
-     * @param {string} sheetName 
-     * @param {Array<string>} headers 
-     * @param {string} spreadsheetId 
      */
     ensureSheet: function (sheetName, headers, spreadsheetId = null) {
       const ssId = spreadsheetId || _getDbId();
       const ss = SpreadsheetApp.openById(ssId);
       let sheet = ss.getSheetByName(sheetName);
       if (!sheet) {
-        console.log(`[SheetService] Creating new sheet: ${sheetName}`);
         sheet = ss.insertSheet(sheetName);
         if (headers && headers.length > 0) {
           sheet.appendRow(headers);
@@ -132,98 +125,23 @@ const SheetService = (() => {
     },
 
     /**
-     * Add a row to the sheet (Thread-safe)
-     * @param {string} sheetName 
-     * @param {Array<any>} rowData 
-     * @param {string} spreadsheetId (Optional) Specific spreadsheet ID to use
-     * @return {boolean} success
+     * Add a single row to the sheet
      */
     add: function (sheetName, rowData, spreadsheetId = null) {
       const ssId = spreadsheetId || _getDbId();
       const lock = LockService.getScriptLock();
-      console.log(`[SheetService.add] Adding to ${sheetName} in SS: ${ssId}`);
-      console.log(`[SheetService.add] Row data length: ${rowData.length}`);
-      try {
-        if (lock.tryLock(10000)) { // Wait up to 10s
-          const sheet = _getSheet(sheetName, spreadsheetId);
-          sheet.appendRow(rowData);
-          console.log(`[SheetService.add] ✅ Row appended successfully`);
-
-          // Invalidate Cache
-          CacheService.getScriptCache().remove(`SHEET_DATA_${ssId}_${sheetName}`);
-          return true;
-        } else {
-          console.error(`[SheetService.add] ❌ Lock timeout`);
-          throw new Error("Could not obtain lock for adding data.");
-        }
-      } catch (e) {
-        console.error(`[SheetService.add] ❌ Error: ${e.toString()}`);
-        throw e; // Re-throw so caller can handle
-      } finally {
-        lock.releaseLock();
-      }
-    },
-
-    /**
-     * Update a row by ID (Thread-safe)
-     * Assumes Header Row is 1, ID is in a specific column (default Column A / Index 0)
-     * @param {string} sheetName 
-     * @param {string|number} id - The value to match
-     * @param {Object} dataMap - Key-Value pair of { "HeaderName": "Value" }
-     * @param {string} idColumnName - (Optional) Header name of the ID column, defaults to first column if null.
-     * @param {string} spreadsheetId (Optional) Specific spreadsheet ID to use
-     */
-    update: function (sheetName, id, dataMap, idColumnName = null, spreadsheetId = null) {
-      const ssId = spreadsheetId || _getDbId();
-      const lock = LockService.getScriptLock();
-      console.log(`[SheetService.update] Updating ${id} in ${sheetName} (SS: ${ssId})`);
       try {
         if (lock.tryLock(10000)) {
           const sheet = _getSheet(sheetName, spreadsheetId);
-          const data = sheet.getDataRange().getValues();
-          if (data.length < 2) throw new Error("Sheet is empty or only has headers");
-
-          const headers = data[0];
-          let idColIndex = 0;
-
-          if (idColumnName) {
-            idColIndex = headers.indexOf(idColumnName);
-            if (idColIndex === -1) throw new Error(`Header '${idColumnName}' not found`);
-          }
-
-          // Find Row (1-based index for API, but data is 0-based)
-          // data[i] corresponds to row i+1
-          let rowIndex = -1;
-          for (let i = 1; i < data.length; i++) {
-            if (String(data[i][idColIndex]) === String(id)) {
-              rowIndex = i + 1; // logical row index
-              break;
-            }
-          }
-
-          if (rowIndex === -1) throw new Error(`ID '${id}' not found`);
-
-          // Prepare Updates
-          Object.keys(dataMap).forEach(key => {
-            const colIndex = headers.indexOf(key);
-            if (colIndex !== -1) {
-              // getRange(row, col).setValue(val)
-              // row is rowIndex, col is colIndex + 1
-              sheet.getRange(rowIndex, colIndex + 1).setValue(dataMap[key]);
-            }
-          });
-
-          // Invalidate Cache
-          CacheService.getScriptCache().remove(`SHEET_DATA_${ssId}_${sheetName}`);
-          console.log(`[SheetService.update] ✅ Updated successfully`);
+          sheet.appendRow(rowData);
+          CacheService.getScriptCache().remove(
+            `SHEET_DATA_${ssId}_${sheetName}`,
+          );
           return true;
-
         } else {
-          console.error(`[SheetService.update] ❌ Lock timeout`);
-          throw new Error("Could not obtain lock for updating data.");
+          throw new Error("Could not obtain lock for adding data.");
         }
       } catch (e) {
-        console.error(`[SheetService.update] ❌ Error: ${e.toString()}`);
         throw e;
       } finally {
         lock.releaseLock();
@@ -231,46 +149,155 @@ const SheetService = (() => {
     },
 
     /**
-     * Delete a row by ID (Thread-safe)
-     * @param {string} sheetName 
-     * @param {string|number} id 
-     * @param {string} idColumnName (Optional)
-     * @param {string} spreadsheetId (Optional) Specific spreadsheet ID to use
+     * ✨ NEW: Add multiple rows at once (Batch Insert for High Performance)
      */
-    delete: function (sheetName, id, idColumnName = null, spreadsheetId = null) {
+    addBatch: function (sheetName, multipleRowData, spreadsheetId = null) {
+      if (!multipleRowData || multipleRowData.length === 0) return true;
       const ssId = spreadsheetId || _getDbId();
       const lock = LockService.getScriptLock();
-      console.log(`[SheetService.delete] Deleting ${id} from ${sheetName} (SS: ${ssId})`);
+      try {
+        if (lock.tryLock(15000)) {
+          const sheet = _getSheet(sheetName, spreadsheetId);
+          const startRow = sheet.getLastRow() + 1;
+          const numRows = multipleRowData.length;
+          const numCols = multipleRowData[0].length;
+
+          sheet
+            .getRange(startRow, 1, numRows, numCols)
+            .setValues(multipleRowData);
+          CacheService.getScriptCache().remove(
+            `SHEET_DATA_${ssId}_${sheetName}`,
+          );
+          return true;
+        } else {
+          throw new Error("Could not obtain lock for batch adding data.");
+        }
+      } catch (e) {
+        throw e;
+      } finally {
+        lock.releaseLock();
+      }
+    },
+
+    /**
+     * ⚡ OPTIMIZED: Update a row by ID (Uses memory array and 1 API call)
+     */
+    update: function (
+      sheetName,
+      id,
+      dataMap,
+      idColumnName = null,
+      spreadsheetId = null,
+    ) {
+      const ssId = spreadsheetId || _getDbId();
+      const lock = LockService.getScriptLock();
       try {
         if (lock.tryLock(10000)) {
           const sheet = _getSheet(sheetName, spreadsheetId);
-          const data = sheet.getDataRange().getValues();
-          const headers = data[0];
+          const lastRow = sheet.getLastRow();
+          const lastCol = sheet.getLastColumn();
+
+          if (lastRow < 2)
+            throw new Error("Sheet is empty or only has headers");
+
+          // 1. ดึงแค่แถว Header มาเพื่อหาตำแหน่งคอลัมน์
+          const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
           let idColIndex = 0;
 
           if (idColumnName) {
             idColIndex = headers.indexOf(idColumnName);
-            if (idColIndex === -1) throw new Error(`Header '${idColumnName}' not found`);
+            if (idColIndex === -1)
+              throw new Error(`Header '${idColumnName}' not found`);
           }
 
-          // Find Row
-          for (let i = 1; i < data.length; i++) {
-            if (String(data[i][idColIndex]) === String(id)) {
-              sheet.deleteRow(i + 1);
+          // 2. ดึงเฉพาะคอลัมน์ ID มาหาบรรทัด (ประหยัด Memory และเร็วมาก)
+          const idData = sheet
+            .getRange(1, idColIndex + 1, lastRow, 1)
+            .getValues();
+          let rowIndex = -1;
+          for (let i = 1; i < idData.length; i++) {
+            if (String(idData[i][0]) === String(id)) {
+              rowIndex = i + 1;
+              break;
+            }
+          }
 
-              // Invalidate Cache
-              CacheService.getScriptCache().remove(`SHEET_DATA_${ssId}_${sheetName}`);
-              console.log(`[SheetService.delete] ✅ Deleted successfully`);
+          if (rowIndex === -1) throw new Error(`ID '${id}' not found`);
+
+          // 3. ดึงข้อมูลของแถวนั้นมาปรับแก้ใน Memory
+          const rowRange = sheet.getRange(rowIndex, 1, 1, lastCol);
+          const rowValues = rowRange.getValues()[0];
+
+          Object.keys(dataMap).forEach((key) => {
+            const colIndex = headers.indexOf(key);
+            if (colIndex !== -1) {
+              rowValues[colIndex] = dataMap[key];
+            }
+          });
+
+          // 4. บันทึกทับรวดเดียว (1 API Call แทนที่จะเป็น N Calls)
+          rowRange.setValues([rowValues]);
+
+          CacheService.getScriptCache().remove(
+            `SHEET_DATA_${ssId}_${sheetName}`,
+          );
+          return true;
+        } else {
+          throw new Error("Could not obtain lock for updating data.");
+        }
+      } catch (e) {
+        throw e;
+      } finally {
+        lock.releaseLock();
+      }
+    },
+
+    /**
+     * ⚡ OPTIMIZED: Delete a row by ID
+     */
+    delete: function (
+      sheetName,
+      id,
+      idColumnName = null,
+      spreadsheetId = null,
+    ) {
+      const ssId = spreadsheetId || _getDbId();
+      const lock = LockService.getScriptLock();
+      try {
+        if (lock.tryLock(10000)) {
+          const sheet = _getSheet(sheetName, spreadsheetId);
+          const lastRow = sheet.getLastRow();
+          if (lastRow < 2) throw new Error("Sheet is empty");
+
+          const headers = sheet
+            .getRange(1, 1, 1, sheet.getLastColumn())
+            .getValues()[0];
+          let idColIndex = 0;
+
+          if (idColumnName) {
+            idColIndex = headers.indexOf(idColumnName);
+            if (idColIndex === -1)
+              throw new Error(`Header '${idColumnName}' not found`);
+          }
+
+          // ดึงเฉพาะคอลัมน์ ID มาหาบรรทัดที่จะลบ
+          const idData = sheet
+            .getRange(1, idColIndex + 1, lastRow, 1)
+            .getValues();
+          for (let i = 1; i < idData.length; i++) {
+            if (String(idData[i][0]) === String(id)) {
+              sheet.deleteRow(i + 1);
+              CacheService.getScriptCache().remove(
+                `SHEET_DATA_${ssId}_${sheetName}`,
+              );
               return true;
             }
           }
           throw new Error(`ID '${id}' not found`);
         } else {
-          console.error(`[SheetService.delete] ❌ Lock timeout`);
           throw new Error("Could not obtain lock for deleting data.");
         }
       } catch (e) {
-        console.error(`[SheetService.delete] ❌ Error: ${e.toString()}`);
         throw e;
       } finally {
         lock.releaseLock();
@@ -279,47 +306,33 @@ const SheetService = (() => {
 
     /**
      * Overwrite entire sheet context (Clear & Replace)
-     * @param {string} sheetName 
-     * @param {Array<Array<any>>} data - Data rows (excluding headers)
-     * @param {Array<string>} headers - Header row
-     * @param {string} spreadsheetId 
      */
     overwriteAll: function (sheetName, data, headers, spreadsheetId = null) {
       const ssId = spreadsheetId || _getDbId();
-      console.log(`[SheetService.overwriteAll] Target SS: ${ssId} | Sheet: ${sheetName}`);
-
       const lock = LockService.getScriptLock();
-      if (lock.tryLock(10000)) {
-        try {
-          // 1. Ensure Sheet Exists
-          const sheet = this.ensureSheet(sheetName, headers, ssId);
 
-          // 2. Clear Content
+      if (lock.tryLock(15000)) {
+        try {
+          const sheet = this.ensureSheet(sheetName, headers, ssId);
           sheet.clear();
 
-          // 3. Set Headers
           if (headers && headers.length > 0) {
             sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
           }
 
-          // 4. Write Data
           if (data && data.length > 0) {
-            console.log(`[SheetService.overwriteAll] Writing ${data.length} rows...`);
-            // data is array of arrays. check dimensions
             const numRows = data.length;
             const numCols = data[0].length;
             if (numRows > 0 && numCols > 0) {
               sheet.getRange(2, 1, numRows, numCols).setValues(data);
             }
-          } else {
-            console.log(`[SheetService.overwriteAll] No data to write (Header only).`);
           }
 
-          // Invalidate Cache
-          CacheService.getScriptCache().remove(`SHEET_DATA_${ssId}_${sheetName}`);
+          CacheService.getScriptCache().remove(
+            `SHEET_DATA_${ssId}_${sheetName}`,
+          );
           return true;
         } catch (e) {
-          console.error(`[SheetService.overwriteAll] Error: ${e.toString()}`);
           throw e;
         } finally {
           lock.releaseLock();
@@ -327,6 +340,6 @@ const SheetService = (() => {
       } else {
         throw new Error("System Busy (Lock timeout)");
       }
-    }
+    },
   };
 })();

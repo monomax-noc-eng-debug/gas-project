@@ -1,36 +1,51 @@
 <script>
-/**
- * SERVICE LAYER
- * หน้าที่: ติดต่อ Server, ดึงข้อมูล, บันทึกข้อมูล
- */
-const TicketService = (() => {
+  /**
+   * SERVICE LAYER
+   * หน้าที่: ติดต่อ Server, ดึงข้อมูล, บันทึกข้อมูล
+   * อัปเดต: นำระบบ Retry มาใช้กับฝั่ง Read Operations
+   */
+  const TicketService = (() => {
     return {
-        // --- Config & Profiles ---
-        getConfig: () => Server.call({ func: 'getTicketConfig', silent: true }),
-        getEmailProfiles: () => Server.call({ func: 'getEmailProfiles', silent: true }),
-        getSiteProfiles: () => Server.call({ func: 'getEmailDrafts', silent: true }), // Site Info
-        getMailDrafts: () => Server.call({ func: 'getMailDrafts', silent: true }),     // Saved Drafts
+      // --- Config & Profiles ---
+      // ปลอดภัยที่จะ Retry ได้ 2 รอบ หากเน็ตหลุดระหว่างโหลดหน้า
+      getConfig: () =>
+        Server.call({ func: "getTicketConfig", silent: true, retries: 2 }),
+      getEmailProfiles: () =>
+        Server.call({ func: "getEmailProfiles", silent: true, retries: 2 }),
+      getSiteProfiles: () =>
+        Server.call({ func: "getEmailDrafts", silent: true, retries: 2 }), // Site Info
+      getMailDrafts: () =>
+        Server.call({ func: "getMailDrafts", silent: true, retries: 2 }), // Saved Drafts
 
-        // --- Ticket Operations ---
-        getAllTickets: () => Server.call({ func: 'getTickets', silent: true }),
-        
-        saveTicket: (data, isUpdate) => {
-            const func = isUpdate ? 'updateTicket' : 'createTicket';
-            return Server.call({ func: func, silent: false }, data);
-        },
+      // --- Ticket Operations ---
+      getAllTickets: () =>
+        Server.call({ func: "getTickets", silent: true, retries: 2 }),
 
-        saveAndDraft: (ticketData, emailData) => {
-            return Server.call({ func: 'createTicketAndDraft', silent: false }, { ticket: ticketData, email: emailData });
-        },
+      saveTicket: (data, isUpdate) => {
+        const func = isUpdate ? "updateTicket" : "createTicket";
+        // การบันทึก/แก้ไข ไม่ใส่ retries เพื่อป้องกันบันทึกข้อมูลเบิ้ล
+        return Server.call({ func: func, silent: false }, data);
+      },
 
-        deleteTicket: (id) => Server.call({ func: 'deleteTicket', silent: false }, id),
+      saveAndDraft: (ticketData, emailData) => {
+        return Server.call(
+          { func: "createTicketAndDraft", silent: false },
+          { ticket: ticketData, email: emailData },
+        );
+      },
 
-        // --- Email Sync ---
-        fetchEmailPreviews: () => Server.call({ func: 'getEmailPreviews', silent: true }),
-        importEmails: (payloads) => Server.call({ func: 'saveBatchTickets', silent: true }, payloads),
-        
-        // --- Saved Drafts ---
-        saveDraftsList: (drafts) => Server.call({ func: 'saveMailDrafts', silent: true }, drafts),
+      deleteTicket: (id) =>
+        Server.call({ func: "deleteTicket", silent: false }, id),
+
+      // --- Email Sync ---
+      fetchEmailPreviews: () =>
+        Server.call({ func: "getEmailPreviews", silent: true, retries: 2 }),
+      importEmails: (payloads) =>
+        Server.call({ func: "saveBatchTickets", silent: true }, payloads),
+
+      // --- Saved Drafts ---
+      saveDraftsList: (drafts) =>
+        Server.call({ func: "saveMailDrafts", silent: true }, drafts),
     };
-})();
+  })();
 </script>

@@ -4,6 +4,7 @@
  * 1. ใช้ Composite Key (Date + Team) เพื่อจับคู่รายการที่ ID ไม่ตรงกัน
  * 2. ใช้ Batch Operation อ่าน/เขียน ครั้งเดียวเพื่อความเร็ว
  * 3. ส่ง Return ค่ากลับไป Frontend เพื่อแก้ปัญหา Log Fail
+ * 4. ✨ Trigger Match Update Flag สำหรับหน้า Dashboard (Lightweight Polling)
  */
 
 function syncCalendarToSheet() {
@@ -23,7 +24,7 @@ function syncCalendarToSheet() {
   let allEvents = [];
 
   // 2. Fetch Events: ดึงข้อมูลจากทุก Calendar
-  calendars.forEach(calConf => {
+  calendars.forEach((calConf) => {
     try {
       if (!calConf.id) return;
       const cal = CalendarApp.getCalendarById(calConf.id);
@@ -32,13 +33,13 @@ function syncCalendarToSheet() {
         const events = cal.getEvents(startDate, endDate);
         console.log(`[Sync] ${calConf.name}: Found ${events.length} events`);
 
-        events.forEach(evt => {
+        events.forEach((evt) => {
           allEvents.push({
             id: evt.getId(),
             league: calConf.name,
             title: evt.getTitle(),
             start: evt.getStartTime(),
-            desc: evt.getDescription() || ""
+            desc: evt.getDescription() || "",
           });
         });
       } else {
@@ -50,7 +51,6 @@ function syncCalendarToSheet() {
   });
 
   // 3. Process & Save: ส่งข้อมูลไปประมวลผลและบันทึก
-  // ✅ สำคัญ: ต้องมี return เพื่อส่งผลลัพธ์กลับไปให้ Frontend
   return saveMatchesToDB(allEvents);
 }
 
@@ -68,7 +68,21 @@ function saveMatchesToDB(events) {
 
   // สร้าง Header หากยังไม่มีข้อมูล
   if (data.length === 0) {
-    data = [["Match ID", "Date", "Time", "League", "Home", "Away", "Channel", "Signal", "Status", "Image In", "Image Out"]];
+    data = [
+      [
+        "Match ID",
+        "Date",
+        "Time",
+        "League",
+        "Home",
+        "Away",
+        "Channel",
+        "Signal",
+        "Status",
+        "Image In",
+        "Image Out",
+      ],
+    ];
   }
   const headers = data[0];
 
@@ -83,7 +97,7 @@ function saveMatchesToDB(events) {
     AWAY: getIdx("Away"),
     CHANNEL: getIdx("Channel"),
     STATUS: getIdx("Status"),
-    SIGNAL: getIdx("Signal")
+    SIGNAL: getIdx("Signal"),
   };
 
   // Validation: ตรวจสอบคอลัมน์สำคัญ
@@ -92,7 +106,7 @@ function saveMatchesToDB(events) {
   }
 
   // 3. สร้าง Index เพื่อค้นหาข้อมูลเก่า (Smart Matching Map)
-  const idMap = new Map();        // ค้นหาด้วย ID (Google ID)
+  const idMap = new Map(); // ค้นหาด้วย ID (Google ID)
   const signatureMap = new Map(); // ค้นหาด้วย "วันที่_ทีมเหย้า_ทีมเยือน"
 
   for (let i = 1; i < data.length; i++) {
@@ -121,10 +135,14 @@ function saveMatchesToDB(events) {
   let insertCount = 0;
   const processedIndices = new Set(); // กันการแก้ไขแถวเดิมซ้ำในรอบเดียว
 
-  events.forEach(evt => {
+  events.forEach((evt) => {
     // เตรียมข้อมูลใหม่
     const googleId = evt.id;
-    const dateStr = Utilities.formatDate(evt.start, CONFIG.TIMEZONE, "yyyy-MM-dd");
+    const dateStr = Utilities.formatDate(
+      evt.start,
+      CONFIG.TIMEZONE,
+      "yyyy-MM-dd",
+    );
     const timeStr = Utilities.formatDate(evt.start, CONFIG.TIMEZONE, "HH:mm");
 
     let channel = "-";
@@ -205,16 +223,37 @@ function saveMatchesToDB(events) {
     const finalData = [headerRow, ...bodyRows];
 
     // เขียนทับทั้งหมด (วิธีนี้ปลอดภัยและเร็วที่สุดสำหรับข้อมูล < 5000 แถว)
-    sheet.getRange(1, 1, finalData.length, finalData[0].length).setValues(finalData);
+    sheet
+      .getRange(1, 1, finalData.length, finalData[0].length)
+      .setValues(finalData);
+
+    // ✨ แจ้งเตือนระบบ Dashboard ว่ามีรายการอัปเดตใหม่ (Lightweight Polling)
+    try {
+      const dbId =
+        typeof CONFIG !== "undefined"
+          ? CONFIG.DB_ID
+          : PropertiesService.getScriptProperties().getProperty(
+              "CORE_SHEET_ID",
+            );
+      CacheService.getScriptCache().put(
+        `MATCH_UPDATE_${dbId}`,
+        Date.now().toString(),
+        21600,
+      );
+    } catch (e) {
+      console.warn("Match Update Trigger Failed", e);
+    }
   }
 
-  console.log(`✅ Sync Complete: Updated ${updateCount}, Inserted ${insertCount}`);
+  console.log(
+    `✅ Sync Complete: Updated ${updateCount}, Inserted ${insertCount}`,
+  );
 
   // ส่งผลลัพธ์กลับไปให้ Frontend
   return {
     success: true,
     message: `Sync Complete: Updated ${updateCount}, Inserted ${insertCount}`,
-    log: [`Updated: ${updateCount}`, `New: ${insertCount}`]
+    log: [`Updated: ${updateCount}`, `New: ${insertCount}`],
   };
 }
 
@@ -222,7 +261,8 @@ function saveMatchesToDB(events) {
 
 // แปลงวันที่เป็น String YYYY-MM-DD
 function normalizeDateISO(val) {
-  if (val instanceof Date) return Utilities.formatDate(val, CONFIG.TIMEZONE, "yyyy-MM-dd");
+  if (val instanceof Date)
+    return Utilities.formatDate(val, CONFIG.TIMEZONE, "yyyy-MM-dd");
   if (!val) return "";
   return String(val).split(" ")[0];
 }
@@ -230,7 +270,7 @@ function normalizeDateISO(val) {
 // แปลงชื่อทีมให้เป็นมาตรฐาน (ตัวเล็ก, ตัดช่องว่าง)
 function normalizeTeamName(name) {
   if (!name) return "";
-  return String(name).toLowerCase().replace(/\s+/g, '');
+  return String(name).toLowerCase().replace(/\s+/g, "");
 }
 
 /**

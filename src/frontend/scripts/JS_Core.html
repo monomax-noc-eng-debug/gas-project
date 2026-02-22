@@ -100,7 +100,7 @@
   }
 
   // ----------------------------------------------------------------------
-  // 2. SERVER (Routes { func } calls through apiHandler)
+  // 2. SERVER (Routes { func } calls through apiHandler with Retry Mechanism)
   // ----------------------------------------------------------------------
   const Server = {
     call: function (target) {
@@ -113,48 +113,67 @@
         }
 
         var funcName = target;
-        var options = { silent: false, loadingMsg: null };
+        // ✨ กำหนดจำนวนรอบที่จะลองใหม่ (retries) เป็น 2
+        var options = { silent: false, loadingMsg: null, retries: 2 };
         var useApiHandler = false;
 
         if (typeof target === "object" && target !== null) {
           funcName = target.func;
           if (target.silent) options.silent = true;
           if (target.loadingMsg) options.loadingMsg = target.loadingMsg;
-          useApiHandler = true; // Object-style → route through apiHandler
+          if (target.retries !== undefined) options.retries = target.retries;
+          useApiHandler = true;
         }
 
         if (!options.silent) UIManager.showLoading(options.loadingMsg);
 
-        var runner = google.script.run
-          .withSuccessHandler(function (res) {
-            if (!options.silent) UIManager.hideLoading();
-            try {
-              var data = typeof res === "string" ? JSON.parse(res) : res;
-              resolve(data);
-            } catch (e) {
-              resolve(res);
-            }
-          })
-          .withFailureHandler(function (err) {
-            if (!options.silent) UIManager.hideLoading();
-            console.error("Server Error:", err);
-            if (typeof UIManager !== "undefined")
-              UIManager.showToast(err.message, "error");
-            reject(err);
-          });
+        // ✨ สร้างฟังก์ชันสำหรับลองเรียก API
+        const attempt = function (currentTry) {
+          var runner = google.script.run
+            .withSuccessHandler(function (res) {
+              if (!options.silent) UIManager.hideLoading();
+              try {
+                var data = typeof res === "string" ? JSON.parse(res) : res;
+                resolve(data);
+              } catch (e) {
+                resolve(res);
+              }
+            })
+            .withFailureHandler(function (err) {
+              // ✨ ระบบ Retry อัตโนมัติหากเชื่อมต่อ Google ไม่สำเร็จ
+              if (currentTry < options.retries) {
+                console.warn(
+                  "Connection issue, retrying... (" +
+                    (currentTry + 1) +
+                    "/" +
+                    options.retries +
+                    ")",
+                );
+                setTimeout(function () {
+                  attempt(currentTry + 1);
+                }, 1500); // รอ 1.5 วิแล้วลองใหม่
+              } else {
+                if (!options.silent) UIManager.hideLoading();
+                console.error("Server Error:", err);
+                if (typeof UIManager !== "undefined")
+                  UIManager.showToast(err.message, "error");
+                reject(err);
+              }
+            });
 
-        if (useApiHandler) {
-          // ✅ Route through apiHandler (centralized backend router)
-          runner.apiHandler({ func: funcName, data: args[0] });
-        } else {
-          // Legacy: direct global function call (e.g., getUserSettings)
-          if (typeof runner[funcName] !== "function") {
-            if (!options.silent) UIManager.hideLoading();
-            reject(new Error("Function not found: " + funcName));
-            return;
+          if (useApiHandler) {
+            runner.apiHandler({ func: funcName, data: args[0] });
+          } else {
+            if (typeof runner[funcName] !== "function") {
+              if (!options.silent) UIManager.hideLoading();
+              reject(new Error("Function not found: " + funcName));
+              return;
+            }
+            runner[funcName].apply(runner, args);
           }
-          runner[funcName].apply(runner, args);
-        }
+        };
+
+        attempt(0); // เริ่มเรียกครั้งแรก
       });
     },
   };

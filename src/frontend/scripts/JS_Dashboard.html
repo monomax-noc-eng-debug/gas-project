@@ -1,7 +1,7 @@
 <script>
   /**
    * JS_Dashboard.html
-   * Version: Multi-Image Support & Grid Preview
+   * Version: Multi-Image Support & Grid Preview + Lightweight Polling
    */
   const Dashboard = (function () {
     // --- Helpers ---
@@ -12,7 +12,7 @@
     let _allWorkData = [];
     let _pickers = {};
 
-    // ✨ NEW: Store array of images objects: { type: 'url'|'file', source: string|File }
+    // Store array of images objects: { type: 'url'|'file', source: string|File }
     let _workImages = { start: [], stop: [], "stop-quick": [] };
 
     let _editMode = "all"; // 'new', 'all', 'start', 'stop'
@@ -21,6 +21,9 @@
 
     let _galleryList = [];
     let _galleryIndex = 0;
+
+    // ✨ NEW: เก็บเวลาที่ดึงข้อมูลล่าสุด เพื่อใช้เทียบว่ามีข้อมูลใหม่หรือไม่
+    let _lastSyncTime = Date.now();
 
     // --- Date Helpers ---
     const toDisplayDate = (date) => {
@@ -157,23 +160,38 @@
         document.addEventListener("page-change", function (e) {
           if (e.detail.pageId === "page-dashboard") {
             if (_pickers.main) _pickers.main.setDate(_currentDate);
-
-            // ✨ [แก้ไขข้อ 2] เปลี่ยนเป็น true!
-            // เพื่อบังคับให้ดึงข้อมูลจาก Server ใหม่ทุกครั้งที่สลับกลับมาหน้าแดชบอร์ด
             Dashboard.loadWorkList(true);
           }
         });
 
-        // ระบบอัปเดต UI ป้ายสถานะแบบเรียลไทม์ (ถ้าคุณใส่ไว้ตามที่คุยกันรอบที่แล้ว)
+        // ✨ ระบบอัปเดต UI และ Lightweight Polling (ทุก 30 วินาที)
         setInterval(() => {
           if (
             typeof Router !== "undefined" &&
             Router.activePage === "page-dashboard" &&
             _isLoaded
           ) {
+            // 1. อัปเดต UI (ป้ายเวลาและสถานะ) แบบเรียลไทม์
             Dashboard.renderFilteredList();
+
+            // 2. ถามเซิร์ฟเวอร์เบาๆ ว่ามีอะไรอัปเดตไหม (ประหยัด Quota API)
+            Server.call(
+              { func: "apiCheckMatchUpdate", silent: true },
+              _lastSyncTime,
+            )
+              .then((res) => {
+                if (res && res.success && res.data === true) {
+                  console.log(
+                    "🔄 New data detected on server, auto-refreshing...",
+                  );
+                  Dashboard.loadWorkList(true);
+                }
+              })
+              .catch((e) => {
+                /* เงียบไว้ถ้าเน็ตมีปัญหา */
+              });
           }
-        }, 60000);
+        }, 30000);
       },
 
       initDatePickers: function () {
@@ -216,6 +234,7 @@
           .then(function (res) {
             if (res && res.success) {
               _allWorkData = res.data || [];
+              _lastSyncTime = Date.now(); // ✨ เก็บเวลาล่าสุดที่ซิงค์สำเร็จ
               Dashboard.renderFilteredList();
               _isLoaded = true;
             } else {
@@ -252,7 +271,6 @@
         return str.substring(0, 5);
       },
 
-      // --- Updated Logic: Handle Multiple Images in Table (Show first one or count) ---
       renderTable: function (data) {
         var tbody = getEl("work-list-body");
         var empty = getEl("dash-empty");
@@ -319,8 +337,6 @@
             '\', \'all\')" class="btn btn-ghost btn-xs text-base-content/40 hover:text-primary hover:bg-base-200 gap-1 w-full max-w-[80px]"><i class="fas fa-pencil-alt"></i> แก้ไข</button>';
           actionWidget += "</div>";
 
-          // --- Proof Button Logic (View Work Images) ---
-          // ✅ Updated: Call viewWorkImages with ID and Type
           var btnProof = function (imgData, label) {
             var count = 0;
             var firstUrl = "";
@@ -334,7 +350,6 @@
             }
 
             if (count === 0) {
-              // 🟡 No Image: Use "No Img" thumbnail, No Animation
               return (
                 "<div onclick=\"Dashboard.openEditModal('" +
                 itemJson +
@@ -356,7 +371,6 @@
                   "</span>"
                 : "";
 
-            // ✅ Use viewWorkImages to lookup array (No Animation)
             return (
               "<div onclick=\"Dashboard.viewWorkImages('" +
               item.id +
@@ -416,17 +430,14 @@
         if (doneEl) doneEl.innerText = done;
       },
 
-      // --- ✨ NEW: Image Management Functions ---
+      // --- Image Management Functions ---
 
-      // Clear all images for a mode
       resetImages: function (mode) {
         _workImages[mode] = [];
         this.renderGallery(mode);
       },
 
-      // Add images (from file input or DB URLs)
       addImages: function (mode, items) {
-        // items can be array of Files or Strings (URLs)
         if (!items || items.length === 0) return;
 
         Array.from(items).forEach((item) => {
@@ -439,7 +450,6 @@
         this.renderGallery(mode);
       },
 
-      // --- Updated Gallery Render (Click to View Gallery) ---
       renderGallery: function (mode) {
         const container = getEl("gallery-" + mode);
         const countEl = getEl(mode === "stop-quick" ? "" : "count-" + mode);
@@ -458,8 +468,6 @@
               ? URL.createObjectURL(imgObj.source)
               : formatDriveUrl(imgObj.source);
 
-          // ✅ Click to open gallery at specific index
-          // We need to resolve all URLs first to pass to viewImage
           div.innerHTML = `
                         <img src="${src}" class="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity" onclick="Dashboard.viewGalleryFromEdit('${mode}', ${index})">
                         <button type="button" onclick="Dashboard.removeImage('${mode}', ${index})" class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-md hover:bg-red-600 transition-colors z-10">
@@ -470,23 +478,19 @@
         });
       },
 
-      // --- ✨ NEW: View Image & Gallery Functions ---
+      // --- View Image & Gallery Functions ---
 
-      // 1. Helper to open gallery from Edit Modal (where we have mixed File/URL objects)
       viewGalleryFromEdit: function (mode, startIndex) {
         const images = _workImages[mode];
         if (!images || images.length === 0) return;
 
-        // Convert all to URLs
         const urlList = images.map((img) =>
           img.type === "file" ? URL.createObjectURL(img.source) : img.source,
         );
         this.viewImage(urlList, startIndex);
       },
 
-      // 2. Helper to open gallery from Dashboard Table (lookup by ID)
       viewWorkImages: function (id, type) {
-        // type = 'start' or 'stop'
         const item = _allWorkData.find((d) => d.id === id);
         if (!item) return;
 
@@ -499,33 +503,27 @@
         if (list.length > 0) this.viewImage(list, 0);
       },
 
-      // 3. Core Viewer Function (Accepts Array or String)
       viewImage: function (source, startIndex = 0) {
         if (!source) return;
 
-        // Reset State
         _galleryList = Array.isArray(source) ? source : [source];
         _galleryIndex = startIndex;
 
         if (_galleryList.length === 0) return;
 
-        // Initial Render
         this.updatePreviewUI();
         getEl("modal-view-image").showModal();
       },
 
-      // 4. Update UI (Image, Arrows, Counter)
       updatePreviewUI: function () {
         const imgEl = getEl("img-preview-target");
         const prevBtn = getEl("btn-gallery-prev");
         const nextBtn = getEl("btn-gallery-next");
         const counter = getEl("gallery-counter");
 
-        // Set Image
         const currentUrl = _galleryList[_galleryIndex];
         imgEl.src = formatDriveUrl(currentUrl);
 
-        // Handle Arrows
         if (_galleryList.length > 1) {
           prevBtn.classList.remove("hidden");
           nextBtn.classList.remove("hidden");
@@ -538,10 +536,8 @@
         }
       },
 
-      // 5. Navigation Logic
       navGallery: function (direction) {
         let newIndex = _galleryIndex + direction;
-        // Loop functionality
         if (newIndex < 0) newIndex = _galleryList.length - 1;
         if (newIndex >= _galleryList.length) newIndex = 0;
 
@@ -557,7 +553,7 @@
       handleFileSelect: function (input, mode) {
         if (input.files && input.files.length > 0) {
           this.addImages(mode, input.files);
-          input.value = ""; // Reset input to allow re-selecting same file
+          input.value = "";
         }
       },
 
@@ -590,7 +586,6 @@
             );
             for (const type of imageTypes) {
               const blob = await item.getType(type);
-              // Convert Blob to File for consistency
               const file = new File([blob], "pasted_image.png", {
                 type: "image/png",
               });
@@ -647,11 +642,9 @@
         var ii = String(now.getMinutes()).padStart(2, "0");
         getEl("input-time").value = HH + ":" + ii;
 
-        // Reset Images
         this.resetImages("start");
         this.resetImages("stop");
 
-        // Calendar Logic
         getEl("import-date-picker").value = toInputDate(now);
         if (_lastCalendarFetchDate !== toInputDate(now)) {
           this.fetchCalendarEvents();
@@ -661,7 +654,7 @@
         }
 
         getEl("modal-add-work").showModal();
-        this.checkFormInput(); // Initial visibility check
+        this.checkFormInput();
       },
 
       openEditModal: function (itemEncoded, mode) {
@@ -683,23 +676,20 @@
         getEl("btn-submit-start").innerHTML =
           '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกการแก้ไข</span>';
 
-        // Reset & Load Existing Images
         this.resetImages("start");
         this.resetImages("stop");
 
-        // Helper to push images (array or single string)
         const pushToGallery = (mode, data) => {
           if (Array.isArray(data)) {
             this.addImages(mode, data);
           } else if (data) {
-            this.addImages(mode, [data]); // Convert single URL to array
+            this.addImages(mode, [data]);
           }
         };
 
         pushToGallery("start", item.start_img);
         pushToGallery("stop", item.stop_img);
 
-        // Visibility logic based on mode
         var startSection = getEl("section-img-start");
         var stopSection = getEl("section-img-stop");
 
@@ -793,8 +783,8 @@
           home: getEl("input-home").value,
           away: getEl("input-away").value,
           channel: getEl("input-channel").value,
-          startImages: [], // For Backend Array
-          stopImages: [], // For Backend Array
+          startImages: [],
+          stopImages: [],
         };
 
         var btn = getEl("btn-submit-start");
@@ -802,7 +792,6 @@
         btn.disabled = true;
         spinner.classList.remove("hidden");
 
-        // ✨ PROCESS IMAGES (Compress Files, Keep URLs)
         const processImages = async (mode) => {
           const results = [];
           for (const item of _workImages[mode]) {
@@ -821,8 +810,6 @@
             payload.startImages = startRes;
             payload.stopImages = stopRes;
 
-            // Compatibility with old backend (Send first Base64 if exists, for legacy support)
-            // Note: Backend SHOULD be updated to use payload.startImages array.
             const startB64 = startRes.find((x) => x.type === "base64");
             if (startB64) payload.imageBase64 = startB64.data;
 
@@ -892,7 +879,7 @@
             { func: "apiStopWorkItem", silent: true },
             {
               id: id,
-              stopImages: images, // Array of {type:'base64', data: '...'}
+              stopImages: images,
               isSkipImage: skipImage,
             },
           )
