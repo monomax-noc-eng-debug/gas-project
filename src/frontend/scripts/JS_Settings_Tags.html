@@ -1,5 +1,5 @@
 <script>
-  const TagSettings = (() => {
+  window.TagSettings = (() => {
     let _full = {};
     let _tags = [];
     let _loaded = false;
@@ -27,13 +27,19 @@
     }
 
     return {
-      init() { },
+      init() {
+        if (typeof Router !== "undefined") {
+          Router.register("page-settings-tags", this);
+        }
+      },
       onShow() { if (!_loaded) this.loadData(); },
 
       loadData(force) {
         const tbody = el('tag-tbody');
         const empty = el('tag-empty');
-        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center py-12"><span class="loading loading-spinner loading-md text-primary"></span><p class="text-xs text-gray-400 mt-2">กำลังโหลด...</p></td></tr>';
+        const loader = el('tag-loader');
+        if (tbody) tbody.innerHTML = '';
+        if (loader) loader.classList.remove('hidden');
         if (empty) empty.classList.add('hidden');
         Server.call({ func: "apiGetAllSettings", silent: true })
           .then(r => {
@@ -45,7 +51,10 @@
               if (force) UIManager.showToast("โหลดสำเร็จ", "success");
             }
           })
-          .catch(() => UIManager.showToast("Load Error", "error"));
+          .catch(() => UIManager.showToast("Load Error", "error"))
+          .finally(() => {
+            if (loader) loader.classList.add('hidden');
+          });
       },
 
       openAdd() {
@@ -84,5 +93,4 @@
       }
     };
   })();
-  document.addEventListener("DOMContentLoaded", () => { Router.register("page-settings-tags", TagSettings); TagSettings.init(); });
 </script>

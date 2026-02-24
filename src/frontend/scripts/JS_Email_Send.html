@@ -1,0 +1,445 @@
+<script>
+  /**
+   * ==========================================
+   * MODULE: EMAIL SEND MANAGER
+   * ==========================================
+   */
+  const EmailSendManager = (() => {
+
+    const getEl = (id) => document.getElementById(id);
+    const getVal = (id) => (getEl(id) || {}).value || '';
+
+    const MONTH_NAMES_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const MONTH_NAMES_EN_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const SEVERITY_MAP = {
+      'low': 'P4 - Low',
+      'medium': 'P3 - Medium',
+      'high': 'P2 - High',
+      'critical': 'P1 - Critical',
+      'normal': 'P4 - Normal'
+    };
+
+    let _currentConfig = null;
+    let _initialized = false;
+
+    /** Helper: populate a <select> element with an array of strings */
+    function _populateSelect(id, list, placeholder) {
+      const el = getEl(id);
+      if (!el) return;
+      const cur = el.value;
+      el.innerHTML = `<option value="">${placeholder || 'เลือก...'}</option>` + list.map(i => `<option value="${i}">${i}</option>`).join('');
+      if (cur && list.includes(cur)) el.value = cur;
+    }
+
+    /** Format date to full English string: 24 February 2026 */
+    function _formatDateFull(dateStr) {
+      if (!dateStr) return '-';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const day = d.getDate();
+      const month = MONTH_NAMES_EN_FULL[d.getMonth()];
+      const year = d.getFullYear();
+      return `${day} ${month} ${year}`;
+    }
+
+    /** Load dropdown option */
+    function _loadDropdowns() {
+      Server.call({ func: "apiGetAllSettings", silent: true, retries: 2 }).then(res => {
+        if (!res.success) {
+          UIManager.showToast("โหลดตั้งค่าไม่สำเร็จ", "error");
+          return;
+        }
+        const config = res.data || {};
+        _currentConfig = config;
+
+        // 1. Email Profiles (To/CC rules)
+        const profiles = config.emailProfiles || [];
+        const selProfile = getEl('es-sel-profile');
+        if (selProfile) {
+          selProfile.innerHTML = '<option value="">-- โหลดรายชื่อผู้รับ (To/Cc) --</option>';
+          profiles.forEach(p => {
+            selProfile.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+          });
+        }
+
+        // 2. Draft Profiles (Email Templates type Mail)
+        const drafts = config.mailDrafts || [];
+        const selDraft = getEl('es-sel-draft');
+        if (selDraft) {
+          selDraft.innerHTML = '<option value="">-- โหลด Template ร่างอีเมล --</option>';
+          drafts.forEach(d => {
+            selDraft.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+          });
+        }
+
+        // 3. Site Profiles (Email Templates type Email)
+        const sites = config.emailDrafts || [];
+        const selSite = getEl('es-sel-site');
+        if (selSite) {
+          selSite.innerHTML = '<option value="">-- โหลดข้อมูลบริษัท (Site) --</option>';
+          sites.forEach(t => {
+            selSite.innerHTML += `<option value="${t.name}">${t.name}</option>`;
+          });
+        }
+
+        // 4. Category
+        if (config.categories && getEl('es-ticket-category')) {
+          const cateSelect = getEl('es-ticket-category');
+          cateSelect.innerHTML = '<option value="">เลือก... (Category)</option>';
+          Object.keys(config.categories).forEach(cat => {
+            cateSelect.innerHTML += `<option value="${cat}">${cat}</option>`;
+          });
+        }
+
+        // 5. Severity, Status, Type — use local _populateSelect helper
+        if (config.severities && config.severities.length > 0) {
+          _populateSelect('es-ticket-severity', config.severities, 'เลือก... (ความรุนแรง)');
+        }
+        if (config.statuses && config.statuses.length > 0) {
+          _populateSelect('es-ticket-status', config.statuses, 'เลือก... (สถานะ)');
+        }
+        if (config.types && config.types.length > 0) {
+          _populateSelect('es-ticket-type', config.types, 'เลือก... (ประเภท)');
+        }
+
+        // 6. Staff (Constructing options with EngName if available)
+        const staffUsers = config.staffUsers || [];
+        const staffList = staffUsers.length > 0
+          ? staffUsers.filter(u => u.role === 'Responsibility' || String(u.role).toLowerCase().includes('leader'))
+          : (config.staff || []).map(s => ({ name: s, engName: '' }));
+
+        const buildOptText = (u) => u.engName ? `${u.name} (${u.engName})` : u.name;
+        const buildOptVal = (u) => u.engName ? u.engName : u.name;
+        const staffOpts = '<option value="">เลือกผู้ติดต่อ...</option>' + staffList.map(u => `<option value="${buildOptVal(u)}">${buildOptText(u)}</option>`).join('');
+
+        if (getEl('es-contact-name')) getEl('es-contact-name').innerHTML = staffOpts;
+        if (getEl('es-site-name')) getEl('es-site-name').innerHTML = staffOpts;
+
+        // ✅ Trigger preview after all data loaded
+        EmailSendManager.updatePreview();
+
+      }).catch(err => {
+        console.error(err);
+      });
+    }
+
+    // Auto-generate subject similarly to ticket
+    function _generateSubject() {
+      const type = getVal('es-ticket-type');
+      const sev = getVal('es-ticket-severity');
+      const cat = getVal('es-ticket-category');
+      const sub = getVal('es-ticket-subcat');
+      let subj = getVal('es-ticket-subject');
+
+      if (subj && subj.trim().startsWith("Mono Max |")) {
+        const parts = subj.split('|');
+        if (parts.length >= 6) subj = parts[5].trim();
+      }
+
+      let dateDisplay = '-';
+      const dRaw = getVal('es-ticket-date');
+      if (dRaw && dRaw !== '-') {
+        const parts = dRaw.split('-');
+        if (parts.length === 3) {
+          const year = parts[0].slice(2);
+          const monthIdx = parseInt(parts[1]) - 1;
+          const day = parts[2];
+          dateDisplay = `${day}-${MONTH_NAMES_EN[monthIdx] || parts[1]}-${year}`;
+        }
+      }
+
+      const sevDisplay = SEVERITY_MAP[sev.toLowerCase()] || sev || '-';
+
+      // การแก้ไขที่ 2: ใช้ Default Fallback ให้สวยงามหากช่องกรอกว่างเปล่า
+      const safeType = type || '-';
+      const safeCat = cat || '-';
+      const safeSub = sub || '-';
+      const safeSubj = subj || 'No Subject';
+
+      return `Mono Max | ${safeType} | ${sevDisplay} | ${safeCat} | ${safeSub} | ${safeSubj} | ${dateDisplay}`;
+    }
+
+    return {
+      init: function () {
+        if (typeof Router !== 'undefined') {
+          Router.register('page-email-send', this);
+        }
+        _loadDropdowns();
+        if (!_initialized) {
+          EmailSendManager.setupListeners();
+          _initialized = true;
+        }
+        // Render preview immediately with current values (even though empty)
+        EmailSendManager.updatePreview();
+      },
+
+      setupListeners: () => {
+        const inputs = document.querySelectorAll('#page-email-send input, #page-email-send textarea, #page-email-send select');
+        inputs.forEach(el => {
+          if (el.id && el.id.startsWith('es-')) {
+            el.addEventListener('input', EmailSendManager.updatePreview);
+            el.addEventListener('change', EmailSendManager.updatePreview);
+          }
+        });
+      },
+
+      resetForm: () => {
+        document.querySelectorAll('#page-email-send input[type="text"], #page-email-send textarea, #page-email-send input[type="date"]').forEach(el => el.value = '');
+        document.querySelectorAll('#page-email-send select').forEach(el => el.selectedIndex = 0);
+        EmailSendManager.updatePreview();
+      },
+
+      toggleBold: (id) => {
+        const el = getEl(id);
+        const btn = getEl(`btn-bold-${id}`);
+        if (!el) return;
+        const isBold = el.getAttribute('data-bold') === 'true';
+        if (isBold) {
+          el.setAttribute('data-bold', 'false');
+          el.classList.remove('font-bold');
+          if (btn) { btn.classList.remove('text-indigo-800', 'bg-indigo-100', 'border-indigo-400'); btn.classList.add('text-indigo-400', 'border-indigo-200'); }
+        } else {
+          el.setAttribute('data-bold', 'true');
+          el.classList.add('font-bold');
+          if (btn) { btn.classList.add('text-indigo-800', 'bg-indigo-100', 'border-indigo-400'); btn.classList.remove('text-indigo-400', 'border-indigo-200'); }
+        }
+        EmailSendManager.updatePreview();
+      },
+
+      updatePreview: () => {
+        const subj = _generateSubject();
+        if (getEl('es-preview-subject')) getEl('es-preview-subject').innerText = subj;
+        if (getEl('es-preview-to')) getEl('es-preview-to').innerText = getVal('es-to') || '-';
+
+        const isChecked = (id) => (getEl(id) ? getEl(id).checked : true);
+        const showGreeting = isChecked('es-chk-greeting');
+        const showNote = isChecked('es-chk-note');
+        const showSignature = isChecked('es-chk-signature');
+
+        const st = {
+          container: "font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.5; background: #fff;",
+          table: "width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;",
+          th: "background-color: #0033cc; color: white; font-weight: bold; padding: 6px 10px; border: 1px solid #fff; text-align: left; width: 30%; vertical-align: top;",
+          td: "background-color: #dbe4f7; color: black; padding: 6px 10px; border: 1px solid #fff; vertical-align: top;",
+          link: "color: #0033cc; text-decoration: underline;",
+          footer: "margin-top: 20px; color: #555; font-size: 13px; border-top: 1px solid #eee; padding-top: 10px;"
+        };
+
+        const row = (label, val) => `<tr><td style="${st.th}">${label}</td><td style="${st.td}">${val || '-'}</td></tr>`;
+        const sevDisp = SEVERITY_MAP[(getVal('es-ticket-severity') || '').toLowerCase()] || getVal('es-ticket-severity') || '-';
+
+        // Site email
+        const siteMail = getVal('es-site-email');
+        const siteMailHtml = siteMail ? `<a href="mailto:${siteMail}" style="${st.link}">${siteMail}</a>` : '-';
+
+        // Schedule date – display in full English format
+        const scheduleVal = getVal('es-schedule');
+        const scheduleDisplay = scheduleVal ? _formatDateFull(scheduleVal) : '-';
+
+        const isBoldText = (id) => {
+          const el = getEl(id);
+          return el ? el.getAttribute('data-bold') === 'true' : false;
+        };
+
+        const grVal = getVal('es-greeting') || '';
+        const greetHtml = showGreeting ? `<p style="margin-bottom: 10px;">${isBoldText('es-greeting') ? `<b>${grVal}</b>` : grVal}</p>` : '';
+
+        const noVal = getVal('es-note') || '';
+        const noteHtml = showNote ? `<p style="margin-bottom: 15px;">${isBoldText('es-note') ? `<b>${noVal}</b>` : noVal}</p>` : '';
+
+        const sigVal = (getVal('es-signature') || '').replace(/\n/g, '<br>');
+        const sigHtml = showSignature ? `<div style="${st.footer}"><p>Best Regards,<br>${isBoldText('es-signature') ? `<b>${sigVal}</b>` : sigVal}</p></div>` : '';
+
+        // Contact Name/Site Name dropdown values are already English names (or Thai fallback)
+
+        const html = `
+             <div style="${st.container}">
+                 ${greetHtml}
+                 ${noteHtml}
+                 <table style="${st.table}">
+                     <thead>
+                         <tr>
+                             <td style="${st.th}">Field Name</td>
+                             <td style="${st.th.replace('width: 30%;', '')}">Detail Information</td>
+                         </tr>
+                     </thead>
+                     <tbody>
+                         ${row('Company Name', getVal('es-company'))}
+                         ${row('Contact Name', getVal('es-contact-name'))}
+                         ${row('Contact Number', getVal('es-contact-num'))}
+                         ${row('Site Contact Name', getVal('es-site-name'))}
+                         ${row('Site Contact Number', getVal('es-site-num'))}
+                         ${row('Site Contact Email', siteMailHtml)}
+                         ${row('Site Address', getVal('es-site-addr'))}
+                         ${row('Problem Details', (getVal('es-ticket-detail') || '').replace(/\n/g, '<br>'))}
+                         ${row('Root Cause', getVal('es-root-cause'))}
+                         ${row('Action Taken', getVal('es-action'))}
+                         ${row('Status', getVal('es-ticket-status'))}
+                         ${row('Case Type', getVal('es-ticket-type'))}
+                         ${row('Severity', sevDisp)}
+                         ${row('Client Business Impact', getVal('es-impact'))}
+                         ${row('Schedule Onsite', scheduleDisplay)}
+                     </tbody>
+                 </table>
+                 ${sigHtml}
+             </div>
+          `;
+        if (getEl('es-preview-body')) getEl('es-preview-body').innerHTML = html;
+      },
+
+      applyEmailProfile: (profName) => {
+        if (!profName || !_currentConfig) return;
+        const item = (_currentConfig.emailProfiles || []).find(e => e.name === profName);
+        if (!item) return;
+        if (getEl('es-to')) getEl('es-to').value = item.to || '';
+        if (getEl('es-cc')) getEl('es-cc').value = item.cc || '';
+        EmailSendManager.updatePreview();
+      },
+
+      applySiteProfile: (siteName) => {
+        if (!siteName || !_currentConfig) return;
+        const item = (_currentConfig.emailDrafts || []).find(e => e.name === siteName);
+        if (!item) return;
+        if (getEl('es-company')) getEl('es-company').value = item.company || '';
+        if (getEl('es-contact-name')) getEl('es-contact-name').value = item.contactName || '';
+        if (getEl('es-contact-num')) getEl('es-contact-num').value = item.contactNum || '';
+        if (getEl('es-site-name')) getEl('es-site-name').value = item.siteName || '';
+        if (getEl('es-site-num')) getEl('es-site-num').value = item.siteNum || '';
+        if (getEl('es-site-email')) getEl('es-site-email').value = item.siteEmail || '';
+        if (getEl('es-site-addr')) getEl('es-site-addr').value = item.siteAddr || '';
+        if (getEl('es-impact')) getEl('es-impact').value = item.impact || '';
+        EmailSendManager.updatePreview();
+      },
+
+      applyDraft: (draftName) => {
+        if (!draftName || !_currentConfig) return;
+        const d = (_currentConfig.mailDrafts || []).find(x => x.name === draftName);
+        if (!d) return;
+
+        const setV = (id, v) => { if (getEl(id)) getEl(id).value = v || ''; }
+
+        setV('es-greeting', d.greeting);
+
+        // การแก้ไขที่ 1: เพิ่มการโหลดข้อมูล Site กลับมาจาก Draft (ถ้ามี)
+        setV('es-company', d.company);
+        setV('es-contact-name', d.contactName);
+        setV('es-contact-num', d.contactNum);
+        setV('es-site-email', d.siteEmail);
+        setV('es-site-addr', d.siteAddr);
+
+        try {
+          const extra = JSON.parse(d.action || "{}");
+          setV('es-note', extra.note || '');
+          setV('es-root-cause', extra.rootCause || '');
+          setV('es-action', extra.action || '');
+          setV('es-impact', extra.impact || '');
+          setV('es-schedule', extra.schedule || '');
+        } catch (e) {
+          setV('es-action', d.action);
+        }
+
+        EmailSendManager.updatePreview();
+      },
+
+      saveCurrentDraft: () => {
+        if (getEl('modal-es-save-draft')) getEl('modal-es-save-draft').showModal();
+      },
+
+      confirmSaveDraft: () => {
+        const name = getEl('inp-es-draft-name').value.trim();
+        if (!name) {
+          UIManager.showToast('กรุณาตั้งชื่อ Template', 'warning');
+          return;
+        }
+
+        if (!_currentConfig) _currentConfig = {};
+        if (!_currentConfig.mailDrafts) _currentConfig.mailDrafts = [];
+
+        const extraFields = {
+          note: getVal('es-note'),
+          rootCause: getVal('es-root-cause'),
+          action: getVal('es-action'),
+          impact: getVal('es-impact'),
+          schedule: getVal('es-schedule')
+        };
+
+        const newDraft = {
+          name: name,
+          greeting: getVal('es-greeting'),
+          company: getVal('es-company'),
+          contactName: getVal('es-contact-name'),
+          contactNum: getVal('es-contact-num'),
+          siteEmail: getVal('es-site-email'),
+          siteAddr: getVal('es-site-addr'),
+          action: JSON.stringify(extraFields)
+        };
+
+        let index = _currentConfig.mailDrafts.findIndex(d => d.name === name);
+        if (index >= 0) _currentConfig.mailDrafts[index] = newDraft;
+        else _currentConfig.mailDrafts.push(newDraft);
+
+        UIManager.showLoading('กำลังบันทึก Draft...');
+
+        Server.call({ func: 'apiSaveAllSettings', silent: true }, _currentConfig)
+          .then(res => {
+            UIManager.hideLoading();
+            if (res.success) {
+              _loadDropdowns();
+              getEl('modal-es-save-draft').close();
+              UIManager.showToast('บันทึก Draft สำเร็จ', 'success');
+            } else {
+              UIManager.showToast('Error: ' + res.message, 'error');
+            }
+          })
+          .catch(err => {
+            UIManager.hideLoading();
+            UIManager.showToast('Error Connect', 'error');
+          });
+      },
+
+      handleCategory: () => {
+        const cat = getVal('es-ticket-category');
+        const subSelect = getEl('es-ticket-subcat');
+        subSelect.innerHTML = '<option value="">-</option>';
+        if (!cat || !_currentConfig || !_currentConfig.categories) { EmailSendManager.updatePreview(); return; }
+
+        const subs = _currentConfig.categories[cat];
+        if (subs && Array.isArray(subs)) {
+          subs.forEach(s => { subSelect.innerHTML += `<option value="${s}">${s}</option>`; });
+        }
+        EmailSendManager.updatePreview();
+      },
+
+      saveAndDraft: () => {
+        const payload = {
+          to: getVal('es-to'),
+          cc: getVal('es-cc'),
+          subject: getEl('es-preview-subject').innerText,
+          bodyHtml: getEl('es-preview-body').innerHTML
+        };
+
+        if (!payload.to && !payload.cc) {
+          UIManager.showToast('ต้องระบุผู้รับ (To, Cc)', 'warning'); return;
+        }
+
+        UIManager.showLoading('กำลังสร้าง Draft ใน Gmail...');
+        Server.call({ func: 'apiCreateDraftEmail' }, payload)
+          .then(res => {
+            UIManager.hideLoading();
+            if (res.success) {
+              Swal.fire({
+                icon: 'success',
+                title: 'สร้าง Draft สำเร็จ',
+                html: `สร้างร่างอีเมลสำเร็จ กดเพื่อเปิดร่างใน Gmail<br><br><a href="${res.draftUrl}" target="_blank" class="btn btn-primary w-full text-white">เปิด Gmail Draft</a>`
+              });
+            } else {
+              UIManager.showToast('Error: ' + res.message, 'error');
+            }
+          }).catch(e => {
+            UIManager.hideLoading();
+            UIManager.showToast('Cannot connect to server', 'error');
+          })
+      }
+    };
+  })();
+</script>

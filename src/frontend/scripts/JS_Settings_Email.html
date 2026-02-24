@@ -1,7 +1,7 @@
 <script>
-  const EmailSettings = (() => {
+  window.EmailSettings = (() => {
     let _full = {};
-    let _profiles = []; let _templates = [];
+    let _profiles = []; let _templates = []; let _staff = [];
     let _tab = 'profiles'; let _loaded = false;
     const el = id => document.getElementById(id);
 
@@ -56,13 +56,19 @@
     }
 
     return {
-      init() { },
+      init() {
+        if (typeof Router !== "undefined") {
+          Router.register("page-settings-email", this);
+        }
+      },
       onShow() { if (!_loaded) this.loadData(); },
 
       loadData(force) {
         const tbody = el('em-table-body');
         const empty = el('em-empty');
-        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center py-12"><span class="loading loading-spinner loading-md text-primary"></span><p class="text-xs text-gray-400 mt-2">กำลังโหลด...</p></td></tr>';
+        const loader = el('em-loader');
+        if (tbody) tbody.innerHTML = '';
+        if (loader) loader.classList.remove('hidden');
         if (empty) empty.classList.add('hidden');
         Server.call({ func: "apiGetAllSettings", silent: true })
           .then(r => {
@@ -70,12 +76,29 @@
               _full = r.data;
               _profiles = r.data.emailProfiles || [];
               _templates = r.data.emailDrafts || [];
+              _staff = r.data.staff || [];
               _loaded = true;
+
+              const staffUsers = r.data.staffUsers || [];
+              const staffList = staffUsers.length > 0
+                ? staffUsers.filter(u => u.role === 'Responsibility' || String(u.role).toLowerCase().includes('leader'))
+                : _staff.map(s => ({ name: s, engName: '' }));
+
+              const buildOptText = (u) => u.engName ? `${u.name} (${u.engName})` : u.name;
+              const buildOptVal = (u) => u.engName ? u.engName : u.name;
+              const staffOpts = '<option value="">เลือกผู้ติดต่อ...</option>' + staffList.map(u => `<option value="${buildOptVal(u)}">${buildOptText(u)}</option>`).join('');
+
+              if (el('em-tmpl-contact')) el('em-tmpl-contact').innerHTML = staffOpts;
+              if (el('em-tmpl-siteName')) el('em-tmpl-siteName').innerHTML = staffOpts;
+
               this.switchTab(_tab);
               if (force) UIManager.showToast("โหลดสำเร็จ", "success");
             }
           })
-          .catch(() => UIManager.showToast("Load Error", "error"));
+          .catch(() => UIManager.showToast("Load Error", "error"))
+          .finally(() => {
+            if (loader) loader.classList.add('hidden');
+          });
       },
 
       switchTab(t) { _tab = t; _activeTab(); _render(); },
@@ -86,7 +109,11 @@
           el('em-profile-title').innerText = 'เพิ่ม Email Profile';
           el('modal-em-profile').showModal();
         } else {
-          el('em-tmpl-idx').value = '-1'; el('em-tmpl-name').value = ''; el('em-tmpl-company').value = ''; el('em-tmpl-contact').value = ''; el('em-tmpl-greeting').value = '';
+          el('em-tmpl-idx').value = '-1';
+          el('em-tmpl-name').value = ''; el('em-tmpl-company').value = ''; el('em-tmpl-contact').value = '';
+          el('em-tmpl-contactNum').value = ''; el('em-tmpl-siteName').value = ''; el('em-tmpl-siteNum').value = '';
+          el('em-tmpl-siteEmail').value = ''; el('em-tmpl-siteAddr').value = ''; el('em-tmpl-greeting').value = '';
+          el('em-tmpl-impact').value = '';
           el('em-tmpl-title').innerText = 'เพิ่ม Template';
           el('modal-em-template').showModal();
         }
@@ -110,7 +137,17 @@
 
       editTmpl(i) {
         const t = _templates[i];
-        el('em-tmpl-idx').value = i; el('em-tmpl-name').value = t.name; el('em-tmpl-company').value = t.company || ''; el('em-tmpl-contact').value = t.contactName || ''; el('em-tmpl-greeting').value = t.greeting || '';
+        el('em-tmpl-idx').value = i;
+        el('em-tmpl-name').value = t.name;
+        el('em-tmpl-company').value = t.company || '';
+        el('em-tmpl-contact').value = t.contactName || '';
+        el('em-tmpl-contactNum').value = t.contactNum || '';
+        el('em-tmpl-siteName').value = t.siteName || '';
+        el('em-tmpl-siteNum').value = t.siteNum || '';
+        el('em-tmpl-siteEmail').value = t.siteEmail || '';
+        el('em-tmpl-siteAddr').value = t.siteAddr || '';
+        el('em-tmpl-greeting').value = t.greeting || '';
+        el('em-tmpl-impact').value = t.impact || '';
         el('em-tmpl-title').innerText = 'แก้ไข Template';
         el('modal-em-template').showModal();
       },
@@ -119,7 +156,19 @@
         const name = el('em-tmpl-name').value.trim();
         if (!name) return UIManager.showToast("กรอกชื่อ", "warning");
         const idx = parseInt(el('em-tmpl-idx').value);
-        const obj = { name, company: el('em-tmpl-company').value.trim(), contactName: el('em-tmpl-contact').value.trim(), greeting: el('em-tmpl-greeting').value.trim(), contactNum: '', siteEmail: '', siteAddr: '', action: '' };
+        const obj = {
+          name,
+          company: el('em-tmpl-company').value.trim(),
+          contactName: el('em-tmpl-contact').value.trim(),
+          contactNum: el('em-tmpl-contactNum').value.trim(),
+          siteName: el('em-tmpl-siteName').value.trim(),
+          siteNum: el('em-tmpl-siteNum').value.trim(),
+          siteEmail: el('em-tmpl-siteEmail').value.trim(),
+          siteAddr: el('em-tmpl-siteAddr').value.trim(),
+          greeting: el('em-tmpl-greeting').value.trim(),
+          impact: el('em-tmpl-impact').value.trim(),
+          action: _templates[idx] ? _templates[idx].action : ''
+        };
         if (idx >= 0) { _templates[idx] = { ..._templates[idx], ...obj }; } else { _templates.push(obj); }
         el('modal-em-template').close(); _render();
       },
@@ -135,5 +184,4 @@
       }
     };
   })();
-  document.addEventListener("DOMContentLoaded", () => { Router.register("page-settings-email", EmailSettings); EmailSettings.init(); });
 </script>

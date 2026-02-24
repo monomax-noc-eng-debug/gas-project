@@ -207,12 +207,12 @@
                console.error("View Detail Error", e);
                if (typeof UIManager !== 'undefined') UIManager.showToast("เกิดข้อผิดพลาดในการแสดงผล", "error");
             }
+         },
+         init: function () {
+            if (typeof Router !== 'undefined') {
+               Router.register('page-history', this);
+            }
          }
       };
    })();
-
-   // Register with Router for lifecycle hooks
-   document.addEventListener('DOMContentLoaded', () => {
-      Router.register('page-history', HistoryManager);
-   });
 </script>

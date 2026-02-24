@@ -1,300 +1,470 @@
-<div id="page-report" class="page-section hidden h-full w-full p-4 flex flex-col gap-4 bg-base-200 overflow-hidden">
-    <div
-        class="flex justify-between items-center bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
-        <div class="flex items-center gap-3">
-            <div class="bg-primary/10 p-2 rounded-xl text-primary"><i class="fas fa-file-invoice text-xl"></i></div>
-            <div>
-                <h2 class="text-base font-bold text-gray-800">รายงานประจำกะ (Daily Report)</h2>
-                <p class="text-[10px] text-gray-400">สรุปงาน Ticket และ ผลการแข่งขัน</p>
-            </div>
-        </div>
-        <div class="flex items-center gap-2">
-            <div class="relative cursor-pointer" onclick="ReportManager.openDatePicker()">
-                <i class="fas fa-calendar-alt absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-                <input type="text" id="inputDate"
-                    class="input input-sm input-bordered pl-9 w-40 font-bold text-center cursor-pointer rounded-lg text-xs"
-                    readonly>
-            </div>
-            <button id="btn-load-data" onclick="ReportManager.autoFetchAll()"
-                class="btn btn-sm btn-neutral text-white shadow-sm btn-loading-overlay min-w-[90px]">
-                <span class="default-content flex items-center gap-2">
-                    <i class="fas fa-sync-alt text-xs"></i>
-                    <span class="hidden sm:inline text-xs">โหลดข้อมูล</span>
-                </span>
-                <span class="loading-content">
-                    <span class="custom-loader"></span>
-                </span>
+<div id="page-report" class="page-section hidden h-full w-full p-3 flex flex-col gap-2 bg-base-200 overflow-hidden">
+    <!-- Compact Header: all controls in 1 slim row -->
+    <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-base-300 shrink-0">
+        <i class="fas fa-file-invoice text-primary text-sm"></i>
+        <div class="flex items-center gap-1">
+            <span class="font-bold text-xs text-gray-700 hidden sm:inline whitespace-nowrap">รายงานประจำกะ</span>
+            <button onclick="ReportManager.showPageInfo()"
+                class="btn btn-xs btn-circle btn-ghost text-slate-400 w-5 h-5 min-h-0">
+                <i class="fas fa-info-circle text-[10px]"></i>
             </button>
         </div>
-    </div>
-
-    <div class="flex-1 overflow-hidden min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4">
-
-        <div class="lg:col-span-8 flex flex-col gap-4 overflow-hidden h-full">
-
-            <div
-                class="card bg-white shadow-sm border border-base-300 flex-[2] flex flex-col overflow-hidden rounded-2xl min-h-0">
-                <div class="px-5 py-3 border-b border-base-100 bg-white flex flex-col gap-2 shrink-0">
-                    <div class="flex justify-between items-center">
-                        <h3 class="font-bold text-sm text-gray-700 flex items-center gap-2">
-                            <i class="fas fa-clipboard-list text-indigo-500"></i> สรุปจำนวนแมตซ์การแข่งขัน
-                            <button onclick="ReportManager.showMatchInfo()"
-                                class="btn btn-xs btn-circle btn-ghost text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50"
-                                title="ดูหลักการนับ">
-                                <i class="fas fa-info-circle"></i>
-                            </button>
-                        </h3>
-                        <span class="badge badge-neutral badge-sm whitespace-nowrap" id="disp-match-total">0 คู่</span>
+        <div class="relative cursor-pointer ml-auto" onclick="ReportManager.openDatePicker()">
+            <i class="fas fa-calendar-alt absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]"></i>
+            <input type="text" id="inputDate"
+                class="input input-xs input-bordered pl-7 w-32 font-bold text-center cursor-pointer rounded-lg text-[10px]"
+                readonly>
+        </div>
+        <button id="btn-load-data" onclick="ReportManager.autoFetchAll()"
+            class="btn btn-xs btn-neutral text-white shadow-sm btn-loading-overlay">
+            <span class="default-content flex items-center gap-1">
+                <i class="fas fa-sync-alt text-[9px]"></i>
+                <span class="hidden sm:inline text-[10px]">โหลด</span>
+            </span>
+            <span class="loading-content">
+                <span class="custom-loader"></span>
+            </span>
+        </button>
+        <div class="w-px h-5 bg-gray-200"></div>
+        <div class="border-l border-base-200 pl-2 ml-1 flex items-center gap-1.5 shrink-0">
+            <div class="form-control">
+                <div class="relative">
+                    <select id="reporterSelect" onchange="ReportManager.handleReporterChange(this.value)"
+                        class="select select-bordered select-xs w-24 text-[10px] bg-slate-50">
+                        <option value="">-- ผู้รายงาน --</option>
+                        <option value="OTHER">อื่นๆ</option>
+                    </select>
+                    <div id="wrapper-reporter-other"
+                        class="hidden absolute inset-0 bg-white flex gap-1 z-10 w-32 shadow-lg rounded-md outline outline-1 outline-base-200">
+                        <input type="text" id="reporterOther" class="input input-bordered input-xs w-full text-[10px]"
+                            placeholder="ระบุชื่อ...">
+                        <button onclick="ReportManager.resetReporter()" class="btn btn-xs btn-square btn-ghost"><i
+                                class="fas fa-times"></i></button>
                     </div>
-                    <div id="date-range-label" class="text-[10px] text-gray-400 font-mono"></div>
-                    <div id="league-breakdown" class="flex flex-wrap gap-1.5 justify-start text-[10px] min-h-[24px]">
-                    </div>
-                </div>
-
-                <div class="overflow-y-auto flex-1 p-0 bg-gray-50/30 custom-scrollbar">
-                    <table class="table table-xs w-full table-pin-rows">
-                        <thead class="bg-gray-50 text-gray-500 font-medium">
-                            <tr>
-                                <th class="w-16 text-center">เวลา</th>
-                                <th>คู่แข่งขัน (Match End)</th>
-                                <th class="w-16 text-center">Start</th>
-                                <th class="w-16 text-center">Stop</th>
-                                <th class="w-24 text-center">NOC OPEN</th>
-                            </tr>
-                        </thead>
-                        <tbody id="verification-tbody" class="bg-white"></tbody>
-                    </table>
-                    <div id="verify-loader" class="hidden py-10 text-center"><span
-                            class="loading loading-spinner text-primary"></span></div>
-                    <div id="verify-empty" class="hidden py-10 text-center text-gray-300 text-xs">
-                        ไม่มีรายการแข่งขันในช่วงเวลานี้</div>
                 </div>
             </div>
+            <select id="shiftSelect" class="select select-bordered select-xs w-20 text-[10px] bg-slate-50">
+                <option value="Night Shift">Night Shift</option>
+                <option value="Day Shift">Day Shift</option>
+            </select>
+            <select id="chatTargetSelect" class="select select-bordered select-xs w-24 text-[10px] bg-slate-50">
+                <option value="">Save Only</option>
+                <option value="group_all">Group All</option>
+                <option value="group_dev">Group Dev</option>
+            </select>
+        </div>
+        <div class="w-px h-5 bg-gray-200 hidden md:block"></div>
+        <button onclick="ReportManager.submitForm('preview')"
+            class="btn btn-xs btn-outline border-slate-300 text-slate-500 gap-1"><i class="fas fa-eye text-[9px]"></i>
+            <span class="text-[10px]">ตัวอย่าง</span></button>
+        <button id="btn-submit-report" onclick="ReportManager.submitForm('send')"
+            class="btn btn-xs btn-neutral text-white shadow-sm gap-1">
+            <span id="spin-btn-send" class="loading loading-spinner loading-xs hidden"></span>
+            <i class="fas fa-paper-plane text-[9px]"></i> <span class="text-[10px]">ส่งรายงาน</span>
+        </button>
+    </div>
 
-            <div
-                class="card bg-white shadow-sm border border-base-300 flex-[1] flex flex-col overflow-hidden rounded-2xl min-h-0">
-                <div
-                    class="px-5 py-3 border-b border-base-100 bg-white flex flex-col md:flex-row justify-between items-start md:items-center shrink-0 gap-2">
-                    <h3 class="font-bold text-sm text-gray-700 flex items-center gap-2">
-                        <i class="fas fa-ticket-alt text-error"></i> สรุปจำนวนทิคเก็ต
-                        <button onclick="ReportManager.showTicketInfo()"
-                            class="btn btn-xs btn-circle btn-ghost text-amber-400 hover:text-amber-600 hover:bg-amber-50"
-                            title="ดูหลักการนับ">
-                            <i class="fas fa-info-circle"></i>
+    <!-- Hidden fields -->
+    <textarea id="matchSummary" class="hidden"></textarea>
+    <textarea id="ticketSummary" class="hidden"></textarea>
+    <input type="hidden" id="matchTotalValue" value="0">
+    <input type="hidden" id="matchEndedValue" value="0">
+
+    <!-- Grid Layout: 12 Columns, 2 Rows Fixed -->
+    <div class="flex-1 overflow-hidden min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-2 gap-3 pb-1">
+
+        <!-- 1. Match Summary (Top-Left): 50% Width (col-span-6) -->
+        <div
+            class="card bg-white shadow-sm border border-base-300 flex flex-col overflow-hidden rounded-xl min-h-0 min-w-0 lg:col-span-6 lg:row-span-1">
+            <div class="px-3 py-1.5 border-b border-base-100 bg-white shrink-0">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-[11px] text-gray-700 flex items-center gap-1.5 uppercase tracking-wide">
+                        <i class="fas fa-clipboard-list text-indigo-500 text-[10px]"></i> สรุปแมตซ์
+                        <button onclick="ReportManager.showMatchInfo()"
+                            class="btn btn-xs btn-circle btn-ghost text-slate-400 hover:text-primary w-5 h-5 min-h-0"
+                            title="คำอธิบาย">
+                            <i class="fas fa-info-circle text-[10px]"></i>
                         </button>
                     </h3>
-                    <div class="flex flex-wrap gap-2 text-[10px] font-bold items-center">
-                        <span class="text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-200">🟢
-                            งานเข้าใหม่:
-                            <span id="disp-ticket-new">0</span></span>
-                        <span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">🔵 ปิดได้:
-                            <span id="disp-ticket-resolved">0</span></span>
-                        <span class="text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200">🔴 งานค้าง:
-                            <span id="disp-ticket-backlog">0</span></span>
-                        <span class="text-gray-400 text-[9px] font-normal ml-1">(Total: <span
-                                id="disp-ticket-total">0</span>)</span>
-                    </div>
+                    <span class="badge badge-neutral badge-xs scale-90" id="disp-match-total">0 คู่</span>
                 </div>
-                <div class="overflow-y-auto flex-1 p-0 custom-scrollbar">
-                    <table class="table table-xs w-full table-pin-rows table-fixed">
-                        <thead class="bg-gray-50 text-gray-500">
-                            <tr>
-                                <th class="w-24 text-center">ID</th>
-                                <th class="w-24 text-center">Status</th>
-                                <th>Short Description & Subject</th>
-                            </tr>
-                        </thead>
-                        <tbody id="disp-ticket-tbody"></tbody>
-                    </table>
-                    <div id="loader-ticket" class="hidden py-10 text-center"><span
-                            class="loading loading-spinner text-gray-400"></span></div>
-                    <div id="empty-ticket" class="hidden py-10 text-center text-gray-300 text-xs">ไม่มี Ticket
-                        ที่ต้องจัดการ</div>
+                <div id="league-breakdown" class="flex flex-wrap gap-1 mt-0.5 min-h-[14px]"></div>
+            </div>
+            <div class="overflow-y-auto flex-1 p-0 bg-gray-50/30 custom-scrollbar">
+                <table class="table table-xs w-full table-pin-rows table-fixed">
+                    <thead class="bg-gray-50 text-gray-500">
+                        <tr>
+                            <th class="w-12 text-center text-[10px] px-1 font-bold">เวลา</th>
+                            <th class="text-[10px] px-1 font-bold">คู่แข่งขัน</th>
+                            <th class="w-10 text-center text-[10px] px-1 font-bold">Start</th>
+                            <th class="w-10 text-center text-[10px] px-1 font-bold">Stop</th>
+                            <th class="w-10 text-center text-[10px] px-1 font-bold">NOC</th>
+                        </tr>
+                    </thead>
+                    <tbody id="verification-tbody" class="bg-white"></tbody>
+                </table>
+                <div id="verify-loader" class="hidden p-3 space-y-2">
+                    <div class="skeleton h-4 w-full rounded"></div>
+                    <div class="skeleton h-4 w-full rounded"></div>
+                </div>
+                <div id="verify-empty" class="hidden py-4 text-center text-gray-300 text-[10px]">ไม่มีรายการแข่งขัน
                 </div>
             </div>
         </div>
 
-        <div class="lg:col-span-4 flex flex-col h-full overflow-hidden relative">
-
-            <div class="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3 pb-2 pr-1">
-
-                <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-3 shrink-0">
-                    <div class="form-control">
-                        <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">ผู้รายงาน</span>
-                        <div class="relative">
-                            <select id="reporterSelect" onchange="ReportManager.handleReporterChange(this.value)"
-                                class="select select-bordered select-sm w-full text-xs bg-slate-50 focus:bg-white transition-colors">
-                                <option value="">-- เลือก --</option>
-                                <option value="OTHER">อื่นๆ</option>
-                            </select>
-                            <div id="wrapper-reporter-other" class="hidden absolute inset-0 bg-white flex gap-1">
-                                <input type="text" id="reporterOther"
-                                    class="input input-bordered input-sm w-full text-xs" placeholder="ระบุชื่อ...">
-                                <button onclick="ReportManager.resetReporter()"
-                                    class="btn btn-sm btn-square btn-ghost"><i class="fas fa-times"></i></button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div class="form-control">
-                            <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">กะ (Shift)</span>
-                            <select id="shiftSelect"
-                                class="select select-bordered select-sm w-full text-xs bg-slate-50">
-                                <option value="Night Shift">Night Shift</option>
-                                <option value="Day Shift">Day Shift</option>
-                            </select>
-                        </div>
-                        <div class="form-control">
-                            <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">ส่งเข้าแชท</span>
-                            <select id="chatTargetSelect"
-                                class="select select-bordered select-sm w-full text-xs bg-slate-50">
-                                <option value="">Save Only</option>
-                                <option value="group_all">Group All</option>
-                                <option value="group_dev">Group Dev</option>
-                            </select>
-                        </div>
-                    </div>
+        <!-- 2. Evidence (Top-Right): 50% Width (col-span-6) -->
+        <div
+            class="card bg-white shadow-sm border border-base-300 flex flex-col overflow-hidden rounded-xl min-h-0 min-w-0 lg:col-span-6 lg:row-span-1">
+            <div class="px-3 py-1.5 border-b border-base-100 bg-white shrink-0 flex items-center">
+                <h3 class="font-bold text-[11px] text-gray-700 flex items-center gap-1.5 uppercase tracking-wide">
+                    <i class="fas fa-image text-gray-400"></i> หลักฐานประกอบ
+                    <button onclick="ReportManager.showEvidenceInfo()"
+                        class="btn btn-xs btn-circle btn-ghost text-slate-400 hover:text-primary w-5 h-5 min-h-0"
+                        title="คำอธิบาย">
+                        <i class="fas fa-info-circle text-[10px]"></i>
+                    </button>
+                </h3>
+            </div>
+            <div class="flex-1 overflow-hidden flex flex-col bg-gray-50/20">
+                <div class="flex border-b border-base-200 bg-white shrink-0">
+                    <button onclick="ReportManager.switchProofTab('mono')" id="proof-tab-mono"
+                        class="flex-1 py-1.5 text-[10px] font-bold uppercase border-b-2 border-primary text-primary transition-colors">
+                        Mono <span class="text-red-500">*</span>
+                    </button>
+                    <button onclick="ReportManager.switchProofTab('ais')" id="proof-tab-ais"
+                        class="flex-1 py-1.5 text-[10px] font-bold uppercase border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors">
+                        AIS
+                    </button>
                 </div>
-
-                <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-2 shrink-0">
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
-                            <i class="fas fa-play-circle text-yellow-500"></i> หลักฐาน Start Channel
-                        </span>
-                        <select id="statusStart" class="select select-xs select-bordered w-auto text-xs"
-                            onchange="ReportManager.toggleStartArea(this.value)">
-                            <option value="ไม่มี">ไม่มี</option>
-                            <option value="เรียบร้อย">เรียบร้อย</option>
-                            <option value="ติดปัญหา">ติดปัญหา</option>
-                        </select>
-                    </div>
-
-                    <div id="start-upload-area" class="hidden space-y-2">
-                        <div id="auto-start-images"
-                            class="hidden bg-amber-50/50 p-2 rounded-lg border border-amber-200/60">
-                            <div class="text-[9px] text-amber-600 mb-1.5 flex items-center justify-between">
-                                <span class="flex items-center gap-1">
-                                    <i class="fas fa-hand-pointer text-amber-500"></i>
-                                    <b>คลิกเลือก</b>รูปที่ต้องการใส่ใน PDF
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-2">
+                    <div id="proof-panel-mono" class="space-y-3">
+                        <!-- Mono Start -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center px-1">
+                                <span
+                                    class="text-[10px] font-bold text-indigo-600 uppercase tracking-tight flex items-center gap-1">
+                                    <i class="fas fa-play-circle text-[10px]"></i> Start (Mono)
                                 </span>
-                                <span id="auto-start-count" class="badge badge-xs badge-warning font-mono">0
-                                    เลือก</span>
-                            </div>
-                            <div id="auto-start-list" class="flex flex-wrap gap-2"></div>
-                        </div>
-
-                        <div id="dropzone-start" onclick="document.getElementById('fileStart').click()"
-                            onpaste="ReportManager.handlePasteEvent(event, 'start')" tabindex="0"
-                            class="border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/30 hover:bg-amber-50 rounded-lg p-2.5 cursor-pointer transition-all group text-center focus:ring-2 focus:ring-amber-300 focus:outline-none">
-                            <div
-                                class="flex items-center justify-center gap-2 text-amber-400 group-hover:text-amber-500 transition-colors">
-                                <i class="fas fa-cloud-upload-alt text-sm"></i>
-                                <span class="text-[10px] font-semibold">คลิกอัปโหลด หรือ Ctrl+V วางรูป</span>
-                            </div>
-                        </div>
-
-                        <input type="file" id="fileStart" class="hidden" multiple accept="image/*"
-                            onchange="ReportManager.handleFileUpload(this, 'start')">
-                    </div>
-                </div>
-
-                <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-2xl gap-3 shrink-0">
-
-                    <div>
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
-                                <span class="w-2 h-2 rounded-full bg-indigo-500"></span> หลักฐาน Mono <span
-                                    class="text-red-500">*</span>
-                            </span>
-                        </div>
-
-                        <div id="auto-mono-images"
-                            class="hidden bg-indigo-50/50 p-2 rounded-lg border border-indigo-200/60 mb-2">
-                            <div class="text-[9px] text-indigo-600 mb-1.5 flex items-center justify-between">
-                                <span class="flex items-center gap-1">
-                                    <i class="fas fa-hand-pointer text-indigo-500"></i>
-                                    <b>คลิกเลือก</b>รูปที่ต้องการใส่ใน PDF
-                                </span>
-                                <span id="auto-mono-count" class="badge badge-xs badge-primary font-mono">0 เลือก</span>
-                            </div>
-                            <div id="auto-mono-list" class="flex flex-wrap gap-2"></div>
-                        </div>
-
-                        <input type="file" id="fileMono" multiple accept="image/*" class="hidden"
-                            onchange="ReportManager.handleFileUpload(this, 'mono')">
-
-                        <div id="dropzone-mono" onclick="document.getElementById('fileMono').click()"
-                            onpaste="ReportManager.handlePasteEvent(event, 'mono')" tabindex="0"
-                            class="border-2 border-dashed border-indigo-300 hover:border-indigo-400 bg-indigo-50/30 hover:bg-indigo-50 rounded-lg p-2.5 cursor-pointer transition-all group text-center focus:ring-2 focus:ring-indigo-300 focus:outline-none">
-                            <div
-                                class="flex items-center justify-center gap-2 text-indigo-400 group-hover:text-indigo-500 transition-colors">
-                                <i class="fas fa-cloud-upload-alt text-sm"></i>
-                                <span class="text-[10px] font-semibold">คลิกอัปโหลด หรือ Ctrl+V วางรูป</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="divider my-0 h-px bg-slate-100"></div>
-
-                    <div>
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="text-xs font-bold flex items-center gap-1 text-slate-700">
-                                <span class="w-2 h-2 rounded-full bg-green-500"></span> หลักฐาน AIS
-                            </span>
-                            <div class="flex items-center gap-1">
-                                <select id="statusAis" onchange="ReportManager.toggleAisActions(this.value)"
-                                    class="select select-xs select-bordered w-auto text-xs">
+                                <select id="statusStartMono"
+                                    class="select select-bordered select-xs h-6 min-h-0 text-[10px] py-0 px-1 w-20"
+                                    onchange="ReportManager.toggleStartMonoArea(this.value)">
                                     <option value="ไม่มี">ไม่มี</option>
                                     <option value="เรียบร้อย">เรียบร้อย</option>
                                     <option value="ติดปัญหา">ติดปัญหา</option>
                                 </select>
                             </div>
-                        </div>
-                        <div id="proof-ais-box" class="hidden">
-                            <input type="file" id="fileAis" multiple accept="image/*" class="hidden"
-                                onchange="ReportManager.handleFileUpload(this, 'ais')">
+                            <div id="start-mono-area"
+                                class="hidden flex flex-col gap-1.5 bg-white p-2 rounded-lg border border-slate-200">
+                                <div id="auto-start-mono-images" class="hidden min-w-0">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span
+                                            class="text-[8px] text-indigo-500 font-bold italic uppercase">รูปจากหน้าเปิดรับสัญญาณ</span>
+                                        <span id="auto-start-mono-count" class="badge badge-xs badge-primary scale-75">0
+                                            เลือก</span>
+                                    </div>
+                                    <div id="auto-start-mono-list"
+                                        class="flex flex-nowrap overflow-x-auto gap-2 p-1 custom-scrollbar-h min-h-[84px] bg-slate-50/50 rounded">
+                                    </div>
+                                </div>
+                                <div class="flex gap-2 items-stretch min-w-0 h-[84px]">
+                                    <!-- Combined Preview and Paste Zone -->
+                                    <div id="dropzone-start-mono"
+                                        onpaste="ReportManager.handlePasteEvent(event, 'startMono')" tabindex="0"
+                                        class="flex-1 flex flex-nowrap overflow-x-auto gap-2 p-1 custom-scrollbar-h border-2 border-dashed border-slate-200 hover:border-primary bg-slate-50/10 hover:bg-white rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer group relative">
 
-                            <div id="dropzone-ais" onclick="document.getElementById('fileAis').click()"
-                                onpaste="ReportManager.handlePasteEvent(event, 'ais')" tabindex="0"
-                                class="border-2 border-dashed border-green-300 hover:border-green-400 bg-green-50/30 hover:bg-green-50 rounded-lg p-2 cursor-pointer transition-all group text-center mt-1 focus:ring-2 focus:ring-green-300 focus:outline-none">
-                                <div
-                                    class="flex items-center justify-center gap-2 text-green-400 group-hover:text-green-500 transition-colors">
-                                    <i class="fas fa-cloud-upload-alt text-sm"></i>
-                                    <span class="text-[10px] font-semibold">คลิกอัปโหลด หรือ Ctrl+V วางรูป</span>
+                                        <!-- Placeholder text -->
+                                        <div id="placeholder-startMono"
+                                            class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <span
+                                                class="text-[10px] text-slate-400 group-hover:text-primary font-medium tracking-tight">
+                                                <i class="fas fa-paste mr-1 opacity-50"></i>กด Ctrl+V เพื่อวางรูป
+                                            </span>
+                                        </div>
+
+                                        <div id="preview-startMono" class="flex flex-nowrap gap-2"></div>
+                                    </div>
+
+                                    <!-- Add Button on the Right -->
+                                    <div class="shrink-0 flex flex-col justify-center">
+                                        <button type="button" onclick="document.getElementById('fileStartMono').click()"
+                                            class="btn btn-sm btn-primary h-full w-14 flex flex-col items-center justify-center gap-1 rounded-xl shadow-sm">
+                                            <i class="fas fa-plus text-[12px]"></i>
+                                            <span class="text-[8px] leading-none">เพิ่มรูป</span>
+                                        </button>
+                                        <input type="file" id="fileStartMono" multiple accept="image/*" class="hidden"
+                                            onchange="ReportManager.handleFileUpload(this, 'startMono')">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Mono Stop -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center px-1">
+                                <span
+                                    class="text-[10px] font-bold text-red-600 uppercase tracking-tight flex items-center gap-1">
+                                    <i class="fas fa-stop-circle text-[10px]"></i> Stop (Mono)
+                                </span>
+                                <select id="statusStopMono"
+                                    class="select select-bordered select-xs h-6 min-h-0 text-[10px] py-0 px-1 w-20"
+                                    onchange="ReportManager.toggleStopMonoArea(this.value)">
+                                    <option value="ไม่มี">ไม่มี</option>
+                                    <option value="เรียบร้อย">เรียบร้อย</option>
+                                    <option value="ติดปัญหา">ติดปัญหา</option>
+                                </select>
+                            </div>
+                            <div id="stop-mono-area"
+                                class="hidden flex flex-col gap-1.5 bg-white p-2 rounded-lg border border-slate-200">
+                                <div id="auto-stop-mono-images" class="hidden min-w-0">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="text-[8px] text-indigo-500 font-bold italic uppercase">Auto from
+                                            Dashboard</span>
+                                        <span id="auto-stop-mono-count" class="badge badge-xs badge-primary scale-75">0
+                                            เลือก</span>
+                                    </div>
+                                    <div id="auto-stop-mono-list"
+                                        class="flex flex-nowrap overflow-x-auto gap-2 p-1 custom-scrollbar-h min-h-[84px] bg-slate-50/50 rounded">
+                                    </div>
+                                </div>
+                                <div class="flex gap-2 items-stretch min-w-0 h-[84px]">
+                                    <!-- Combined Preview and Paste Zone -->
+                                    <div id="dropzone-stop-mono"
+                                        onpaste="ReportManager.handlePasteEvent(event, 'stopMono')" tabindex="0"
+                                        class="flex-1 flex flex-nowrap overflow-x-auto gap-2 p-1 custom-scrollbar-h border-2 border-dashed border-slate-200 hover:border-primary bg-slate-50/10 hover:bg-white rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer group relative">
+
+                                        <!-- Placeholder text -->
+                                        <div id="placeholder-stopMono"
+                                            class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <span
+                                                class="text-[10px] text-slate-400 group-hover:text-primary font-medium tracking-tight">
+                                                <i class="fas fa-paste mr-1 opacity-50"></i>กด Ctrl+V เพื่อวางรูป
+                                            </span>
+                                        </div>
+
+                                        <div id="preview-stopMono" class="flex flex-nowrap gap-2"></div>
+                                    </div>
+
+                                    <!-- Add Button on the Right -->
+                                    <div class="shrink-0 flex flex-col justify-center">
+                                        <button type="button" onclick="document.getElementById('fileStopMono').click()"
+                                            class="btn btn-sm btn-primary h-full w-14 flex flex-col items-center justify-center gap-1 rounded-xl shadow-sm">
+                                            <i class="fas fa-plus text-[12px]"></i>
+                                            <span class="text-[8px] leading-none">เพิ่มรูป</span>
+                                        </button>
+                                        <input type="file" id="fileStopMono" multiple accept="image/*" class="hidden"
+                                            onchange="ReportManager.handleFileUpload(this, 'stopMono')">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AIS Panel -->
+                    <div id="proof-panel-ais" class="hidden space-y-3">
+                        <!-- Start AIS -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center px-1">
+                                <span
+                                    class="text-[10px] font-bold text-green-600 uppercase tracking-tight flex items-center gap-1">
+                                    <i class="fas fa-play-circle text-[10px]"></i> Start (AIS)
+                                </span>
+                                <select id="statusStartAis"
+                                    class="select select-bordered select-xs h-6 min-h-0 text-[10px] py-0 px-1 w-20"
+                                    onchange="ReportManager.toggleStartAisArea(this.value)">
+                                    <option value="ไม่มี">ไม่มี</option>
+                                    <option value="เรียบร้อย">เรียบร้อย</option>
+                                    <option value="ติดปัญหา">ติดปัญหา</option>
+                                </select>
+                            </div>
+                            <div id="start-ais-area"
+                                class="hidden flex flex-col gap-1.5 bg-white p-2 rounded-lg border border-slate-200">
+                                <div id="auto-start-ais-images" class="hidden min-w-0">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="text-[8px] text-green-500 font-bold italic uppercase">Auto from
+                                            Dashboard</span>
+                                        <span id="auto-start-ais-count" class="badge badge-xs badge-success scale-75">0
+                                            เลือก</span>
+                                    </div>
+                                    <div id="auto-start-ais-list"
+                                        class="flex flex-nowrap overflow-x-auto gap-2 p-1 custom-scrollbar-h min-h-[84px] bg-slate-50/50 rounded">
+                                    </div>
+                                </div>
+                                <div class="flex gap-2 items-stretch min-w-0 h-[84px]">
+                                    <!-- Combined Preview and Paste Zone -->
+                                    <div id="dropzone-start-ais"
+                                        onpaste="ReportManager.handlePasteEvent(event, 'startAis')" tabindex="0"
+                                        class="flex-1 flex flex-nowrap overflow-x-auto gap-2 p-1 custom-scrollbar-h border-2 border-dashed border-slate-200 hover:border-success bg-slate-50/10 hover:bg-white rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-success/20 cursor-pointer group relative">
+
+                                        <!-- Placeholder text -->
+                                        <div id="placeholder-startAis"
+                                            class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <span
+                                                class="text-[10px] text-slate-400 group-hover:text-success font-medium tracking-tight">
+                                                <i class="fas fa-paste mr-1 opacity-50"></i>กด Ctrl+V เพื่อวางรูป
+                                            </span>
+                                        </div>
+
+                                        <div id="preview-startAis" class="flex flex-nowrap gap-2"></div>
+                                    </div>
+
+                                    <!-- Add Button on the Right -->
+                                    <div class="shrink-0 flex flex-col justify-center">
+                                        <button type="button" onclick="document.getElementById('fileStartAis').click()"
+                                            class="btn btn-sm btn-success h-full w-14 flex flex-col items-center justify-center gap-1 rounded-xl shadow-sm text-white">
+                                            <i class="fas fa-plus text-[12px]"></i>
+                                            <span class="text-[8px] leading-none">เพิ่มรูป</span>
+                                        </button>
+                                        <input type="file" id="fileStartAis" multiple accept="image/*" class="hidden"
+                                            onchange="ReportManager.handleFileUpload(this, 'startAis')">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Stop AIS -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center px-1">
+                                <span
+                                    class="text-[10px] font-bold text-red-600 uppercase tracking-tight flex items-center gap-1">
+                                    <i class="fas fa-stop-circle text-[10px]"></i> Stop (AIS)
+                                </span>
+                                <select id="statusStopAis"
+                                    class="select select-bordered select-xs h-6 min-h-0 text-[10px] py-0 px-1 w-20"
+                                    onchange="ReportManager.toggleStopAisArea(this.value)">
+                                    <option value="ไม่มี">ไม่มี</option>
+                                    <option value="เรียบร้อย">เรียบร้อย</option>
+                                    <option value="ติดปัญหา">ติดปัญหา</option>
+                                </select>
+                            </div>
+                            <div id="stop-ais-area"
+                                class="hidden flex flex-col gap-1.5 bg-white p-2 rounded-lg border border-slate-200">
+                                <div id="auto-stop-ais-images" class="hidden min-w-0">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="text-[8px] text-green-500 font-bold italic uppercase">Auto from
+                                            Dashboard</span>
+                                        <span id="auto-stop-ais-count" class="badge badge-xs badge-success scale-75">0
+                                            เลือก</span>
+                                    </div>
+                                    <div id="auto-stop-ais-list"
+                                        class="flex flex-nowrap overflow-x-auto gap-2 p-1 custom-scrollbar-h min-h-[84px] bg-slate-50/50 rounded">
+                                    </div>
+                                </div>
+                                <div class="flex gap-2 items-stretch min-w-0 h-[84px]">
+                                    <!-- Combined Preview and Paste Zone -->
+                                    <div id="dropzone-stop-ais"
+                                        onpaste="ReportManager.handlePasteEvent(event, 'stopAis')" tabindex="0"
+                                        class="flex-1 flex flex-nowrap overflow-x-auto gap-2 p-1 custom-scrollbar-h border-2 border-dashed border-slate-200 hover:border-success bg-slate-50/10 hover:bg-white rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-success/20 cursor-pointer group relative">
+
+                                        <!-- Placeholder text -->
+                                        <div id="placeholder-stopAis"
+                                            class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <span
+                                                class="text-[10px] text-slate-400 group-hover:text-success font-medium tracking-tight">
+                                                <i class="fas fa-paste mr-1 opacity-50"></i>กด Ctrl+V เพื่อวางรูป
+                                            </span>
+                                        </div>
+
+                                        <div id="preview-stopAis" class="flex flex-nowrap gap-2"></div>
+                                    </div>
+
+                                    <!-- Add Button on the Right -->
+                                    <div class="shrink-0 flex flex-col justify-center">
+                                        <button type="button" onclick="document.getElementById('fileStopAis').click()"
+                                            class="btn btn-sm btn-success h-full w-14 flex flex-col items-center justify-center gap-1 rounded-xl shadow-sm text-white">
+                                            <i class="fas fa-plus text-[12px]"></i>
+                                            <span class="text-[8px] leading-none">เพิ่มรูป</span>
+                                        </button>
+                                        <input type="file" id="fileStopAis" multiple accept="image/*" class="hidden"
+                                            onchange="ReportManager.handleFileUpload(this, 'stopAis')">
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <div
-                    class="card bg-white shadow-sm border border-base-300 flex-1 min-h-[120px] rounded-2xl overflow-hidden p-3 flex flex-col shrink-0">
-                    <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">Shift Transfer</span>
-                    <textarea id="transferReport"
-                        class="textarea textarea-ghost w-full h-full text-xs resize-none p-0 focus:outline-none"
-                        placeholder="พิมพ์ข้อความ..."></textarea>
-                </div>
-
             </div>
+        </div>
 
-            <div class="shrink-0 pt-3 pb-1 mt-auto bg-base-200 z-10">
-                <textarea id="matchSummary" class="hidden"></textarea>
-                <textarea id="ticketSummary" class="hidden"></textarea>
-                <input type="hidden" id="matchTotalValue" value="0">
-                <input type="hidden" id="matchEndedValue" value="0">
-
-                <div class="grid grid-cols-2 gap-3">
-                    <button onclick="ReportManager.submitForm('preview')"
-                        class="btn btn-sm btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 hover:border-slate-400"><i
-                            class="fas fa-eye"></i> ตัวอย่าง</button>
-                    <button id="btn-submit-report" onclick="ReportManager.submitForm('send')"
-                        class="btn btn-sm btn-neutral text-white shadow-md hover:scale-[1.02] transition-transform">
-                        <span id="spin-btn-send" class="loading loading-spinner loading-xs hidden"></span> <i
-                            class="fas fa-paper-plane"></i> ส่งรายงาน
-                    </button>
+        <!-- 3. Ticket Summary (Bottom-Left): 50% Width (col-span-6) -->
+        <div
+            class="card bg-white shadow-sm border border-base-300 flex flex-col overflow-hidden rounded-xl min-h-0 min-w-0 lg:col-span-6 lg:row-span-1">
+            <div class="px-3 py-1.5 border-b border-base-100 bg-white shrink-0">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-[11px] text-gray-700 flex items-center gap-1.5 uppercase tracking-wide">
+                        <i class="fas fa-ticket-alt text-error text-[10px]"></i> สรุปทิคเก็ต
+                        <button onclick="ReportManager.showTicketInfo()"
+                            class="btn btn-xs btn-circle btn-ghost text-slate-400 hover:text-primary w-5 h-5 min-h-0"
+                            title="คำอธิบาย">
+                            <i class="fas fa-info-circle text-[10px]"></i>
+                        </button>
+                    </h3>
+                    <div class="flex gap-1.5 text-[9px] font-bold">
+                        <span class="text-green-600 bg-green-50 px-1 rounded border border-green-100">งานเข้าใหม่: <span
+                                id="disp-ticket-new">0</span></span>
+                        <span class="text-blue-600 bg-blue-50 px-1 rounded border border-blue-100">ปิดได้: <span
+                                id="disp-ticket-resolved">0</span></span>
+                        <span class="text-red-600 bg-red-50 px-1 rounded border border-red-100">งานค้าง: <span
+                                id="disp-ticket-backlog">0</span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="overflow-y-auto flex-1 p-0 custom-scrollbar">
+                <table class="table table-xs w-full table-pin-rows table-fixed">
+                    <thead class="bg-gray-50 text-gray-500">
+                        <tr>
+                            <th class="w-20 text-center text-[10px] px-1 font-bold">Ticket ID</th>
+                            <th class="w-24 text-center text-[10px] px-1 font-bold">สถานะ</th>
+                            <th class="text-[10px] px-1 font-bold">หัวข้อ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="disp-ticket-tbody" class="text-[10px]"></tbody>
+                </table>
+                <div id="loader-ticket" class="hidden p-3 space-y-2">
+                    <div class="skeleton h-4 w-full rounded"></div>
+                    <div class="skeleton h-4 w-full rounded"></div>
+                </div>
+                <div id="empty-ticket" class="hidden py-4 text-center text-gray-300 text-[10px]">ไม่มีข้อมูลทิคเก็ต
                 </div>
             </div>
         </div>
+
+        <!-- 4. Shift Transfer (Bottom-Right): 50% Width (col-span-6) -->
+        <div
+            class="card bg-white shadow-sm border border-base-300 flex flex-col overflow-hidden rounded-xl min-h-0 min-w-0 lg:col-span-6 lg:row-span-1">
+            <div class="px-3 py-1 border-b border-base-100 bg-white flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-[11px] text-gray-700 flex items-center gap-1.5 uppercase tracking-wide">
+                    <i class="fas fa-exchange-alt text-primary text-[10px]"></i> ข้อมูลส่งกะ
+                    <button onclick="ReportManager.showHandoverInfo()"
+                        class="btn btn-xs btn-circle btn-ghost text-slate-400 hover:text-primary w-5 h-5 min-h-0"
+                        title="คำอธิบาย">
+                        <i class="fas fa-info-circle text-[10px]"></i>
+                    </button>
+                </h3>
+                <div class="flex items-center gap-1">
+                    <button id="btn-transfer-text" onclick="ReportManager.setTransferMode('text')"
+                        class="btn btn-xs h-5 min-h-0 py-0 px-2 btn-ghost border border-gray-200 text-[10px] rounded-lg">พิมพ์เอง</button>
+                    <button id="btn-transfer-handover" onclick="ReportManager.setTransferMode('handover')"
+                        class="btn btn-xs h-5 min-h-0 py-0 px-2 bg-primary text-white border-0 text-[10px] rounded-lg">รายการส่งกะ</button>
+                </div>
+            </div>
+            <div id="transfer-mode-text" class="hidden flex-1 flex flex-col p-2 bg-gray-50/20">
+                <textarea id="transferReport"
+                    class="textarea textarea-ghost w-full h-full text-[11px] leading-relaxed resize-none p-2 focus:outline-none flex-1 custom-scrollbar bg-white rounded-lg border border-slate-100"
+                    placeholder="พิมพ์ข้อความส่งกะที่นี่..."></textarea>
+            </div>
+            <div id="transfer-mode-handover" class="flex-1 flex flex-col overflow-hidden p-2 bg-gray-50/20">
+                <div id="transfer-handover-loader" class="hidden p-3 space-y-2">
+                    <div class="skeleton h-4 w-full rounded"></div>
+                    <div class="skeleton h-4 w-full rounded"></div>
+                    <div class="skeleton h-4 w-full rounded"></div>
+                </div>
+                <div id="transfer-handover-list" class="flex-1 overflow-y-auto custom-scrollbar space-y-1 p-1"></div>
+                <div id="transfer-handover-empty"
+                    class="hidden flex-1 flex flex-col items-center justify-center text-center p-4">
+                    <i class="fas fa-check-circle text-green-200 text-3xl mb-2"></i>
+                    <p class="text-[10px] text-gray-400">ไม่มีข้อมูลส่งกะค้างอยู่</p>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <dialog id="preview_modal" class="modal modal-bottom sm:modal-middle">
@@ -319,4 +489,5 @@
         </div>
         <form method="dialog" class="modal-backdrop"><button>close</button></form>
     </dialog>
+
 </div>

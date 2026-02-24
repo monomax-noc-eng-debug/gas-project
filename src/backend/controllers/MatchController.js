@@ -163,7 +163,7 @@ const MatchController = (() => {
           Date.now().toString(),
           21600,
         ); // เก็บไว้ 6 ชั่วโมง
-      } catch (e) {}
+      } catch (e) { }
     },
 
     // =================================================================
@@ -196,6 +196,11 @@ const MatchController = (() => {
           away: getIdx(["Away", "Team 2", "ทีมเยือน"]),
           channel: getIdx(["Channel", "ช่อง"]),
           status: getIdx(["Status", "สถานะ"]),
+          startMono: getIdx(["Start Mono"]),
+          stopMono: getIdx(["Stop Mono"]),
+          startAis: getIdx(["Start AIS"]),
+          stopAis: getIdx(["Stop AIS"]),
+          // Legacy fallback
           startImg: getIdx(["Start Image", "Start", "Image In"]),
           stopImg: getIdx(["Stop Image", "Stop", "Image Out"]),
         };
@@ -207,6 +212,16 @@ const MatchController = (() => {
             rowId = `AUTO_${dateStr.replace(/-/g, "")}_${i}`;
           }
 
+          // New 4-column structure
+          let startMono = idx.startMono > -1 ? _parseImageCell(row[idx.startMono]) : "";
+          let stopMono = idx.stopMono > -1 ? _parseImageCell(row[idx.stopMono]) : "";
+          let startAis = idx.startAis > -1 ? _parseImageCell(row[idx.startAis]) : "";
+          let stopAis = idx.stopAis > -1 ? _parseImageCell(row[idx.stopAis]) : "";
+
+          // Legacy fallback: if new columns are empty, use old columns
+          if (!startMono && idx.startImg > -1) startMono = _parseImageCell(row[idx.startImg]);
+          if (!stopMono && idx.stopImg > -1) stopMono = _parseImageCell(row[idx.stopImg]);
+
           return {
             id: rowId,
             date: dateStr,
@@ -216,9 +231,13 @@ const MatchController = (() => {
             away: idx.away > -1 ? row[idx.away] || "?" : "?",
             channel: idx.channel > -1 ? row[idx.channel] || "-" : "-",
             status: idx.status > -1 ? row[idx.status] || "WAIT" : "WAIT",
-            start_img:
-              idx.startImg > -1 ? _parseImageCell(row[idx.startImg]) : "",
-            stop_img: idx.stopImg > -1 ? _parseImageCell(row[idx.stopImg]) : "",
+            start_mono: startMono,
+            stop_mono: stopMono,
+            start_ais: startAis,
+            stop_ais: stopAis,
+            // Legacy compat
+            start_img: startMono,
+            stop_img: stopMono,
           };
         });
 
@@ -247,27 +266,20 @@ const MatchController = (() => {
           typeof CONFIG !== "undefined" ? CONFIG.TIMEZONE : "Asia/Bangkok";
         const dateStr = Utilities.formatDate(matchDate, tz, "yyyy-MM-dd");
 
-        let imageUrls = [];
-        if (
-          data.startImages &&
-          Array.isArray(data.startImages) &&
-          data.startImages.length > 0
-        ) {
-          imageUrls = _processImageArray(
-            data.startImages,
-            newId,
-            "START",
-            matchDate,
-          );
-        } else if (data.imageBase64) {
-          const fileName = `Match_${newId}_START_Legacy.jpg`;
-          const url = _uploadImage(
-            data.imageBase64,
-            data.mimeType || "image/jpeg",
-            fileName,
-            matchDate,
-          );
-          if (url) imageUrls.push(url);
+        // Process 4 image types
+        const imgTypes = ['startMono', 'startAis'];
+        const processed = {};
+        imgTypes.forEach(type => {
+          if (data[type] && Array.isArray(data[type]) && data[type].length > 0) {
+            processed[type] = _processImageArray(data[type], newId, type.toUpperCase(), matchDate);
+          } else {
+            processed[type] = [];
+          }
+        });
+
+        // Legacy fallback: if old startImages provided, treat as startMono
+        if (processed.startMono.length === 0 && data.startImages && Array.isArray(data.startImages) && data.startImages.length > 0) {
+          processed.startMono = _processImageArray(data.startImages, newId, "START_MONO", matchDate);
         }
 
         const sheetName = getSheetName();
@@ -293,14 +305,19 @@ const MatchController = (() => {
         setVal(["Away"], data.away || "?");
         setVal(["Channel"], data.channel || "Manual");
 
-        const status = imageUrls.length > 0 ? "LIVE" : "WAIT";
+        const hasAnyImg = processed.startMono.length > 0 || processed.startAis.length > 0;
+        const status = hasAnyImg ? "LIVE" : "WAIT";
         setVal(["Status", "สถานะ"], status);
 
-        if (imageUrls.length > 0) {
-          const valToSave =
-            imageUrls.length > 1 ? JSON.stringify(imageUrls) : imageUrls[0];
-          setVal(["Start Image", "Image In", "Start"], valToSave);
-        }
+        // Save 4 image columns
+        const saveImgCol = (colNames, urls) => {
+          if (urls.length > 0) {
+            const val = urls.length > 1 ? JSON.stringify(urls) : urls[0];
+            setVal(colNames, val);
+          }
+        };
+        saveImgCol(["Start Mono"], processed.startMono);
+        saveImgCol(["Start AIS"], processed.startAis);
 
         const tsIdx = headers.findIndex((h) =>
           h.toLowerCase().includes("timestamp"),
@@ -326,36 +343,30 @@ const MatchController = (() => {
         if (!data.id) return Response.error("Missing ID");
         const today = new Date();
 
-        let imageUrls = [];
-        if (
-          data.stopImages &&
-          Array.isArray(data.stopImages) &&
-          !data.isSkipImage
-        ) {
-          imageUrls = _processImageArray(
-            data.stopImages,
-            data.id,
-            "STOP",
-            today,
-          );
-        } else if (data.imageBase64 && !data.isSkipImage) {
-          const fileName = `Match_${data.id}_STOP_Legacy.jpg`;
-          const url = _uploadImage(
-            data.imageBase64,
-            data.mimeType || "image/jpeg",
-            fileName,
-            today,
-          );
-          if (url) imageUrls.push(url);
-        }
-
         const updateMap = { Status: "DONE" };
 
-        if (imageUrls.length > 0) {
-          const valToSave =
-            imageUrls.length > 1 ? JSON.stringify(imageUrls) : imageUrls[0];
-          updateMap["Stop Image"] = valToSave;
-          updateMap["Image Out"] = valToSave;
+        if (!data.isSkipImage) {
+          // Process stop images for Mono and AIS separately
+          const stopTypes = ['stopMono', 'stopAis'];
+          stopTypes.forEach(type => {
+            if (data[type] && Array.isArray(data[type]) && data[type].length > 0) {
+              const urls = _processImageArray(data[type], data.id, type.toUpperCase(), today);
+              if (urls.length > 0) {
+                const val = urls.length > 1 ? JSON.stringify(urls) : urls[0];
+                const colName = type === 'stopMono' ? "Stop Mono" : "Stop AIS";
+                updateMap[colName] = val;
+              }
+            }
+          });
+
+          // Legacy fallback: if old stopImages provided, treat as stopMono
+          if (!data.stopMono && data.stopImages && Array.isArray(data.stopImages) && data.stopImages.length > 0) {
+            const urls = _processImageArray(data.stopImages, data.id, "STOP_MONO", today);
+            if (urls.length > 0) {
+              const val = urls.length > 1 ? JSON.stringify(urls) : urls[0];
+              updateMap["Stop Mono"] = val;
+            }
+          }
         }
 
         const success = SheetService.update(
@@ -394,66 +405,35 @@ const MatchController = (() => {
 
         const targetDate = data.date ? new Date(data.date) : new Date();
 
-        if (data.startImages && Array.isArray(data.startImages)) {
-          const processed = _processImageArray(
-            data.startImages,
-            data.id,
-            "START_Edit",
-            targetDate,
-          );
-          if (processed.length > 0) {
-            const val =
-              processed.length > 1 ? JSON.stringify(processed) : processed[0];
-            updateMap["Start Image"] = val;
-            updateMap["Image In"] = val;
-          } else {
-            updateMap["Start Image"] = "";
-            updateMap["Image In"] = "";
-          }
-        } else if (data.clearStartImage) {
-          updateMap["Start Image"] = "";
-          updateMap["Image In"] = "";
-        } else if (data.startImageBase64) {
-          const fileName = `Match_${data.id}_START_Edit.jpg`;
-          const url = _uploadImage(
-            data.startImageBase64,
-            "image/jpeg",
-            fileName,
-            targetDate,
-          );
-          updateMap["Start Image"] = url;
-          updateMap["Image In"] = url;
-        }
+        // Process 4 image types for edit
+        const editImgTypes = [
+          { key: 'startMono', col: 'Start Mono', suffix: 'START_MONO_Edit' },
+          { key: 'startAis', col: 'Start AIS', suffix: 'START_AIS_Edit' },
+          { key: 'stopMono', col: 'Stop Mono', suffix: 'STOP_MONO_Edit' },
+          { key: 'stopAis', col: 'Stop AIS', suffix: 'STOP_AIS_Edit' },
+        ];
 
-        if (data.stopImages && Array.isArray(data.stopImages)) {
-          const processed = _processImageArray(
-            data.stopImages,
-            data.id,
-            "STOP_Edit",
-            targetDate,
-          );
-          if (processed.length > 0) {
-            const val =
-              processed.length > 1 ? JSON.stringify(processed) : processed[0];
-            updateMap["Stop Image"] = val;
-            updateMap["Image Out"] = val;
-          } else {
-            updateMap["Stop Image"] = "";
-            updateMap["Image Out"] = "";
+        editImgTypes.forEach(({ key, col, suffix }) => {
+          if (data[key] && Array.isArray(data[key])) {
+            const processed = _processImageArray(data[key], data.id, suffix, targetDate);
+            updateMap[col] = processed.length > 0
+              ? (processed.length > 1 ? JSON.stringify(processed) : processed[0])
+              : "";
           }
-        } else if (data.clearStopImage) {
-          updateMap["Stop Image"] = "";
-          updateMap["Image Out"] = "";
-        } else if (data.stopImageBase64) {
-          const fileName = `Match_${data.id}_STOP_Edit.jpg`;
-          const url = _uploadImage(
-            data.stopImageBase64,
-            "image/jpeg",
-            fileName,
-            targetDate,
-          );
-          updateMap["Stop Image"] = url;
-          updateMap["Image Out"] = url;
+        });
+
+        // Legacy fallback for old startImages/stopImages
+        if (!data.startMono && data.startImages && Array.isArray(data.startImages)) {
+          const processed = _processImageArray(data.startImages, data.id, "START_MONO_Edit", targetDate);
+          updateMap["Start Mono"] = processed.length > 0
+            ? (processed.length > 1 ? JSON.stringify(processed) : processed[0])
+            : "";
+        }
+        if (!data.stopMono && data.stopImages && Array.isArray(data.stopImages)) {
+          const processed = _processImageArray(data.stopImages, data.id, "STOP_MONO_Edit", targetDate);
+          updateMap["Stop Mono"] = processed.length > 0
+            ? (processed.length > 1 ? JSON.stringify(processed) : processed[0])
+            : "";
         }
 
         const success = SheetService.update(

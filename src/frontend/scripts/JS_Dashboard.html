@@ -1,7 +1,7 @@
 <script>
   /**
    * JS_Dashboard.html
-   * Version: Multi-Image Support & Grid Preview + Lightweight Polling
+   * Version: Multi-Image Support & Grid Preview + Lightweight Polling + Skeleton + Plan Start
    */
   const Dashboard = (function () {
     // --- Helpers ---
@@ -13,7 +13,7 @@
     let _pickers = {};
 
     // Store array of images objects: { type: 'url'|'file', source: string|File }
-    let _workImages = { start: [], stop: [], "stop-quick": [] };
+    let _workImages = { "start-mono": [], "start-ais": [], "stop-mono": [], "stop-ais": [], "stop-mono-quick": [], "stop-ais-quick": [] };
 
     let _editMode = "all"; // 'new', 'all', 'start', 'stop'
     let _isLoaded = false;
@@ -48,7 +48,7 @@
       const targetEl = getEl(modalId);
       Swal.fire({
         toast: true,
-        position: "top-end",
+        position: "bottom-end",
         showConfirmButton: false,
         timer: 3000,
         icon: type,
@@ -152,46 +152,32 @@
 
     return {
       init: function () {
+        // Register this controller to Router for Lifecycle management
+        if (typeof Router !== 'undefined') {
+          Router.register('page-dashboard', this);
+        }
         this.initDatePickers();
 
         // โหลดครั้งแรกตอนเปิดแอป
         this.loadWorkList(true);
+      },
 
-        document.addEventListener("page-change", function (e) {
-          if (e.detail.pageId === "page-dashboard") {
-            if (_pickers.main) _pickers.main.setDate(_currentDate);
-            Dashboard.loadWorkList(true);
-          }
-        });
+      onShow: function () {
+        if (_pickers.main) _pickers.main.setDate(_currentDate, true);
+        if (!_isLoaded) {
+          Dashboard.loadWorkList(true);
+        } else {
+          Dashboard.renderFilteredList();
+        }
 
-        // ✨ ระบบอัปเดต UI และ Lightweight Polling (ทุก 30 วินาที)
-        setInterval(() => {
-          if (
-            typeof Router !== "undefined" &&
-            Router.activePage === "page-dashboard" &&
-            _isLoaded
-          ) {
-            // 1. อัปเดต UI (ป้ายเวลาและสถานะ) แบบเรียลไทม์
-            Dashboard.renderFilteredList();
-
-            // 2. ถามเซิร์ฟเวอร์เบาๆ ว่ามีอะไรอัปเดตไหม (ประหยัด Quota API)
-            Server.call(
-              { func: "apiCheckMatchUpdate", silent: true },
-              _lastSyncTime,
-            )
-              .then((res) => {
-                if (res && res.success && res.data === true) {
-                  console.log(
-                    "🔄 New data detected on server, auto-refreshing...",
-                  );
-                  Dashboard.loadWorkList(true);
-                }
-              })
-              .catch((e) => {
-                /* เงียบไว้ถ้าเน็ตมีปัญหา */
-              });
-          }
-        }, 30000);
+        // ✨ อัปเดต UI (ป้ายเวลาและสถานะ) แบบเรียลไทม์ (ทุก 30 วินาที) เฉพาะตอนหน้า Dashboard แสดง
+        if (!this._intervalId) {
+          this._intervalId = setInterval(() => {
+            if (Router.activePage === "page-dashboard" && _isLoaded) {
+              Dashboard.renderFilteredList();
+            }
+          }, 30000);
+        }
       },
 
       initDatePickers: function () {
@@ -218,6 +204,7 @@
         if (input) input.value = toDisplayDate(_currentDate);
       },
 
+      // ✨ อัปเดตฟังก์ชัน loadWorkList ใส่ Skeleton Loading
       loadWorkList: function (forceRefresh) {
         if (!forceRefresh && _isLoaded) {
           return;
@@ -229,6 +216,35 @@
         }
         var empty = getEl("dash-empty");
         if (empty) empty.classList.add("hidden");
+
+        var tbody = getEl("work-list-body");
+        if (tbody) {
+          let skeletonHtml = '';
+          for (let i = 0; i < 6; i++) {
+            skeletonHtml += `
+              <tr class="h-16 border-b border-base-100">
+                <td class="text-center"><div class="skeleton h-3 w-8 mx-auto bg-gray-200"></div></td>
+                <td class="text-center"><div class="skeleton h-4 w-12 mx-auto bg-gray-200"></div></td>
+                <td class="pl-4">
+                  <div class="flex flex-col gap-1.5">
+                    <div class="skeleton h-2 w-24 bg-gray-200"></div>
+                    <div class="skeleton h-3 w-40 bg-gray-200"></div>
+                  </div>
+                </td>
+                <td class="text-center"><div class="skeleton h-4 w-12 mx-auto bg-gray-200"></div></td>
+                <td class="text-center"><div class="skeleton h-10 w-10 mx-auto rounded-lg bg-gray-200"></div></td>
+                <td class="text-center"><div class="skeleton h-10 w-10 mx-auto rounded-lg bg-gray-200"></div></td>
+                <td class="text-center"><div class="skeleton h-6 w-14 mx-auto rounded-full bg-gray-200"></div></td>
+                <td class="text-center">
+                  <div class="flex flex-col items-center gap-1">
+                    <div class="skeleton h-5 w-16 mx-auto bg-gray-200"></div>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }
+          tbody.innerHTML = skeletonHtml;
+        }
 
         Server.call({ func: "apiGetWorkList", silent: true }, forceRefresh)
           .then(function (res) {
@@ -243,10 +259,12 @@
                   "Load Failed: " + (res ? res.message : "Unknown Error"),
                   "error",
                 );
+              if (tbody) tbody.innerHTML = "";
             }
           })
           .catch(function (err) {
             console.error(err);
+            if (tbody) tbody.innerHTML = "";
           })
           .finally(function () {
             if (btn) {
@@ -367,8 +385,8 @@
             var badge =
               count > 1
                 ? '<span class="absolute -top-1 -right-1 bg-black text-white text-[8px] font-bold px-1 rounded-full shadow-md border border-white">+' +
-                  (count - 1) +
-                  "</span>"
+                (count - 1) +
+                "</span>"
                 : "";
 
             return (
@@ -389,43 +407,88 @@
             );
           };
 
+          // ✨ คำนวณเวลา Plan Start (-2 ชม.)
+          var matchTimeDisplay = Dashboard.formatTime(item.time);
+          var planTimeDisplay = "";
+          if (matchTimeDisplay && matchTimeDisplay !== "-") {
+            var parts = matchTimeDisplay.split(":");
+            var h = parseInt(parts[0], 10) - 2;
+            if (h < 0) h += 24;
+            planTimeDisplay = String(h).padStart(2, "0") + ":" + parts[1];
+          }
+
+          // 1. คอลัมน์เวลา (เอาป้ายแดงออก ให้เหลือแค่ตัวเลขคลีนๆ)
+          var timeColumnHtml = '<div class="font-mono text-[16px] font-extrabold text-slate-800 tracking-tight">' + matchTimeDisplay + '</div>';
+
+          // 2. คอลัมน์รายการแข่งขัน
+          var matchColumnHtml =
+            '<div class="flex flex-col justify-center h-full min-w-0 pr-2">' +
+            // บรรทัดบน: ลีก
+            '<div class="flex items-center gap-2 mb-0.5">' +
+            '<span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest truncate max-w-[120px]">' + (item.league || "-") + '</span>' +
+            '</div>' +
+            // บรรทัดล่าง: คู่แข่งขัน (ให้กางได้เต็มที่ ไม่โดนบีบ)
+            '<div class="font-bold text-[13px] text-gray-800 flex items-center gap-1.5 w-full">' +
+            '<div class="truncate">' + (hasStart ? '<span class="text-primary">' + item.home + "</span>" : item.home) + '</div>' +
+            '<span class="text-[10px] text-gray-300 font-normal shrink-0">vs</span>' +
+            '<div class="truncate">' + (hasStart ? '<span class="text-primary">' + item.away + "</span>" : item.away) + '</div>' +
+            '</div>' +
+            '</div>';
+
+          // 3. คอลัมน์ Plan Start (ใหม่)
+          var planColumnHtml = planTimeDisplay ?
+            '<div class="font-mono text-[14px] font-black text-red-600">' + planTimeDisplay + '</div>' :
+            '<div class="text-[14px] text-gray-300">-</div>';
+
+          // ประกอบร่างลงตาราง
           html +=
-            '<tr class="hover:bg-base-50 transition-colors border-b border-base-100 last:border-none h-16"><td class="text-center font-mono font-bold text-base-content/70">' +
-            Dashboard.formatTime(item.time) +
-            '</td><td class="pl-4 align-middle"><div class="flex flex-col justify-center h-full"><span class="text-[9px] font-bold text-base-content/40 uppercase tracking-widest mb-0.5 truncate max-w-[200px]">' +
-            (item.league || "-") +
-            '</span><div class="font-bold text-sm text-base-content/90 flex items-center gap-1 truncate"><div class="truncate max-w-[150px]">' +
-            (hasStart
-              ? '<span class="text-primary">' + item.home + "</span>"
-              : item.home) +
-            '</div><span class="text-[10px] text-base-content/30 px-1 font-normal">vs</span><div class="truncate max-w-[150px]">' +
-            (hasStart
-              ? '<span class="text-primary">' + item.away + "</span>"
-              : item.away) +
-            '</div></div></div></td><td class="text-center"><span class="badge badge-ghost badge-sm font-mono text-[10px]">' +
-            (item.channel || "-") +
-            '</span></td><td class="text-center align-middle">' +
-            btnProof(item.start_img, "Start") +
-            '</td><td class="text-center align-middle">' +
-            btnProof(item.stop_img, "Stop") +
-            '</td><td class="text-center align-middle bg-base-50/50 h-16">' +
-            statusWidget +
-            '</td><td class="text-center align-middle">' +
-            actionWidget +
-            "</td></tr>";
+            '<tr class="hover:bg-slate-50 transition-colors border-b border-gray-100 last:border-none h-[72px]">' +
+            '<td class="text-center align-middle">' + timeColumnHtml + '</td>' +
+            '<td class="text-center align-middle bg-red-50/20">' + planColumnHtml + '</td>' +
+            '<td class="pl-4 align-middle overflow-hidden">' + matchColumnHtml + '</td>' +
+            '<td class="text-center align-middle px-1 max-w-[80px] overflow-hidden"><span class="block w-full truncate badge badge-ghost badge-sm font-mono text-[10px] bg-gray-100 border-0 text-gray-500 leading-5" title="' + (item.channel || "-").replace(/"/g, '&quot;') + '">' + (item.channel || "-") + '</span></td>' +
+            '<td class="text-center align-middle">' + btnProof(item.start_img, "Start") + '</td>' +
+            '<td class="text-center align-middle">' + btnProof(item.stop_img, "Stop") + '</td>' +
+            '<td class="text-center align-middle bg-slate-50/30 h-[72px]">' + statusWidget + '</td>' +
+            '<td class="text-center align-middle">' + actionWidget + "</td></tr>";
         });
+
         tbody.innerHTML = html;
       },
 
       updateStats: function (data) {
-        var live = data.filter(function (d) {
-          return d.status === "LIVE";
-        }).length;
-        var done = data.filter(function (d) {
-          return d.status === "DONE";
-        }).length;
+        var now = new Date();
+        var live = 0;
+        var ready = 0;
+        var done = 0;
+
+        data.forEach(function (item) {
+          var isDone = item.status === "DONE";
+          if (isDone) {
+            done++;
+            return;
+          }
+
+          var matchTimeStr = item.date + "T" + item.time + ":00";
+          var matchDate = new Date(matchTimeStr);
+          var matchEndDate = new Date(matchDate.getTime() + 120 * 60 * 1000);
+          var isTimeReached = now >= matchDate;
+          var isMatchEnded = now >= matchEndDate;
+          var hasStart = !!item.start_img && (Array.isArray(item.start_img) ? item.start_img.length > 0 : true);
+
+          if (hasStart) {
+            if (!isTimeReached) {
+              ready++;
+            } else if (!isMatchEnded) {
+              live++;
+            }
+          }
+        });
+
         var liveEl = getEl("stat-live");
         if (liveEl) liveEl.innerText = live;
+        var readyEl = getEl("stat-ready");
+        if (readyEl) readyEl.innerText = ready;
         var doneEl = getEl("stat-done");
         if (doneEl) doneEl.innerText = done;
       },
@@ -621,6 +684,43 @@
 
       // --- Form Logic ---
 
+      // ✨ ฟังก์ชันคำนวณเวลา Plan Start (-2 ชม.)
+      calcPlanStart: function () {
+        var timeInput = getEl("input-time");
+        var displayWrap = getEl("plan-start-display");
+        var displayTime = getEl("plan-start-time");
+
+        if (!timeInput || !timeInput.value) {
+          if (displayWrap) displayWrap.classList.add("hidden");
+          return;
+        }
+
+        // แยกชั่วโมงและนาที
+        var parts = timeInput.value.split(":");
+        var hours = parseInt(parts[0], 10);
+        var mins = parts[1];
+
+        // ลบย้อนหลัง 2 ชั่วโมง
+        hours = hours - 2;
+
+        // จัดการกรณีข้ามเที่ยงคืน (เช่น 01:00 ลบ 2 ชม = 23:00)
+        var isCrossMidnight = false;
+        if (hours < 0) {
+          hours = hours + 24;
+          isCrossMidnight = true;
+        }
+
+        var formattedHours = String(hours).padStart(2, "0");
+        var timeStr = formattedHours + ":" + mins;
+
+        if (isCrossMidnight) {
+          timeStr += ' <span class="text-[9px] font-normal text-error/70 ml-0.5">(เมื่อวาน)</span>';
+        }
+
+        if (displayTime) displayTime.innerHTML = timeStr;
+        if (displayWrap) displayWrap.classList.remove("hidden");
+      },
+
       openAddModal: function () {
         this._editMode = "new";
         getEl("form-add-work").reset();
@@ -631,7 +731,9 @@
         getEl("form-add-work").classList.remove("lg:grid-cols-2");
         getEl("form-add-work").classList.add("lg:grid-cols-3");
 
-        getEl("section-img-stop").classList.add("hidden");
+        // Hide stop sections in new mode
+        if (getEl("section-img-stop-mono")) getEl("section-img-stop-mono").classList.add("hidden");
+        if (getEl("section-img-stop-ais")) getEl("section-img-stop-ais").classList.add("hidden");
         getEl("btn-delete-work").classList.add("hidden");
         getEl("btn-submit-start").innerHTML =
           '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกและเริ่มงาน</span>';
@@ -642,8 +744,10 @@
         var ii = String(now.getMinutes()).padStart(2, "0");
         getEl("input-time").value = HH + ":" + ii;
 
-        this.resetImages("start");
-        this.resetImages("stop");
+        this.resetImages("start-mono");
+        this.resetImages("start-ais");
+        this.resetImages("stop-mono");
+        this.resetImages("stop-ais");
 
         getEl("import-date-picker").value = toInputDate(now);
         if (_lastCalendarFetchDate !== toInputDate(now)) {
@@ -655,6 +759,7 @@
 
         getEl("modal-add-work").showModal();
         this.checkFormInput();
+        this.calcPlanStart(); // ✨ สั่งคำนวณ Plan Start ตอนเปิดหน้า
       },
 
       openEditModal: function (itemEncoded, mode) {
@@ -676,8 +781,10 @@
         getEl("btn-submit-start").innerHTML =
           '<span class="loading loading-spinner loading-xs hidden" id="spinner-submit-start"></span><i class="fas fa-save"></i> <span>บันทึกการแก้ไข</span>';
 
-        this.resetImages("start");
-        this.resetImages("stop");
+        this.resetImages("start-mono");
+        this.resetImages("start-ais");
+        this.resetImages("stop-mono");
+        this.resetImages("stop-ais");
 
         const pushToGallery = (mode, data) => {
           if (Array.isArray(data)) {
@@ -687,30 +794,38 @@
           }
         };
 
-        pushToGallery("start", item.start_img);
-        pushToGallery("stop", item.stop_img);
+        pushToGallery("start-mono", item.start_mono || item.start_img);
+        pushToGallery("stop-mono", item.stop_mono || item.stop_img);
+        pushToGallery("start-ais", item.start_ais);
+        pushToGallery("stop-ais", item.stop_ais);
 
-        var startSection = getEl("section-img-start");
-        var stopSection = getEl("section-img-stop");
+        // Show/hide sections
+        var sections = ['section-img-start-mono', 'section-img-start-ais', 'section-img-stop-mono', 'section-img-stop-ais'];
+        sections.forEach(function (s) { if (getEl(s)) getEl(s).classList.remove('hidden'); });
 
-        if (startSection) startSection.classList.remove("hidden");
-        if (stopSection) stopSection.classList.remove("hidden");
-
-        if (mode === "start") stopSection.classList.add("hidden");
-        if (mode === "stop") startSection.classList.add("hidden");
+        if (mode === "stop") {
+          if (getEl('section-img-start-mono')) getEl('section-img-start-mono').classList.add('hidden');
+          if (getEl('section-img-start-ais')) getEl('section-img-start-ais').classList.add('hidden');
+        }
 
         getEl("modal-add-work").showModal();
+        this.calcPlanStart(); // ✨ สั่งคำนวณ Plan Start ตอนเปิดหน้า
       },
 
       checkFormInput: function () {
         var home = getEl("input-home").value.trim();
         var away = getEl("input-away").value.trim();
-        var sectionStart = getEl("section-img-start");
-        if (!sectionStart) return;
+        var sectionMono = getEl("section-img-start-mono");
+        var sectionAis = getEl("section-img-start-ais");
 
         if (this._editMode === "new") {
-          if (home && away) sectionStart.classList.remove("hidden");
-          else sectionStart.classList.add("hidden");
+          if (home && away) {
+            if (sectionMono) sectionMono.classList.remove("hidden");
+            if (sectionAis) sectionAis.classList.remove("hidden");
+          } else {
+            if (sectionMono) sectionMono.classList.add("hidden");
+            if (sectionAis) sectionAis.classList.add("hidden");
+          }
         }
       },
 
@@ -783,8 +898,10 @@
           home: getEl("input-home").value,
           away: getEl("input-away").value,
           channel: getEl("input-channel").value,
-          startImages: [],
-          stopImages: [],
+          startMono: [],
+          startAis: [],
+          stopMono: [],
+          stopAis: [],
         };
 
         var btn = getEl("btn-submit-start");
@@ -794,6 +911,7 @@
 
         const processImages = async (mode) => {
           const results = [];
+          if (!_workImages[mode]) return results;
           for (const item of _workImages[mode]) {
             if (item.type === "file") {
               const b64 = await compressImage(item.source);
@@ -805,13 +923,17 @@
           return results;
         };
 
-        Promise.all([processImages("start"), processImages("stop")])
-          .then(([startRes, stopRes]) => {
-            payload.startImages = startRes;
-            payload.stopImages = stopRes;
-
-            const startB64 = startRes.find((x) => x.type === "base64");
-            if (startB64) payload.imageBase64 = startB64.data;
+        Promise.all([
+          processImages("start-mono"),
+          processImages("start-ais"),
+          processImages("stop-mono"),
+          processImages("stop-ais"),
+        ])
+          .then(([smRes, saRes, emRes, eaRes]) => {
+            payload.startMono = smRes;
+            payload.startAis = saRes;
+            payload.stopMono = emRes;
+            payload.stopAis = eaRes;
 
             const apiFunc = isEdit ? "apiUpdateWorkItem" : "apiCreateWorkItem";
             return Server.call({ func: apiFunc, silent: true }, payload);
@@ -847,7 +969,8 @@
 
       openStopModal: function (id) {
         getEl("inp-stop-id-quick").value = id;
-        this.resetImages("stop-quick");
+        this.resetImages("stop-mono-quick");
+        this.resetImages("stop-ais-quick");
         getEl("modal-stop-work").showModal();
       },
 
@@ -861,10 +984,10 @@
         if (btnSkip) btnSkip.disabled = true;
         if (spinner) spinner.classList.remove("hidden");
 
-        const processQuickStop = async () => {
+        const processQuickStop = async (mode) => {
           const results = [];
-          if (!skipImage) {
-            for (const item of _workImages["stop-quick"]) {
+          if (!skipImage && _workImages[mode]) {
+            for (const item of _workImages[mode]) {
               if (item.type === "file") {
                 const b64 = await compressImage(item.source);
                 results.push({ type: "base64", data: b64 });
@@ -874,12 +997,16 @@
           return results;
         };
 
-        processQuickStop().then((images) => {
+        Promise.all([
+          processQuickStop("stop-mono-quick"),
+          processQuickStop("stop-ais-quick"),
+        ]).then(([monoImgs, aisImgs]) => {
           Server.call(
             { func: "apiStopWorkItem", silent: true },
             {
               id: id,
-              stopImages: images,
+              stopMono: monoImgs,
+              stopAis: aisImgs,
               isSkipImage: skipImage,
             },
           )
@@ -997,14 +1124,11 @@
             "modal-add-work",
           );
           this.checkFormInput();
+          this.calcPlanStart(); // ✨ สั่งคำนวณ Plan Start ตอนนำเข้าข้อมูลเสร็จ
         } catch (e) {
           console.error(e);
         }
       },
     };
   })();
-
-  document.addEventListener("DOMContentLoaded", function () {
-    Dashboard.init();
-  });
 </script>

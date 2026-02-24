@@ -22,7 +22,7 @@
         <a onclick="changePage('page-dashboard'); closeDrawerOnMobile();"
           class="rounded-lg py-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50" data-target="page-dashboard">
           <i class="fas fa-th-large w-5 text-center px-1"></i>
-          <span class="font-medium text-[13px] ml-1">แดชบอร์ด</span>
+          <span class="font-medium text-[13px] ml-1">เปิดรับสัญญาณ</span>
         </a>
       </li>
 
@@ -32,13 +32,9 @@
       <li>
         <details open class="group">
           <summary
-            class="rounded-lg py-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 list-none [&::-webkit-details-marker]:hidden flex items-center justify-between">
-            <div class="flex items-center">
-              <i class="fas fa-briefcase w-5 text-center text-indigo-500 px-1"></i>
-              <span class="font-medium text-[13px] ml-1">งานปฏิบัติการ</span>
-            </div>
-            <i
-              class="fas fa-chevron-down text-[10px] text-gray-400 opacity-70 group-open:rotate-180 transition-transform"></i>
+            class="rounded-lg py-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 list-none [&::-webkit-details-marker]:hidden">
+            <i class="fas fa-briefcase w-5 text-center text-indigo-500 px-1"></i>
+            <span class="font-medium text-[13px] ml-1">งานปฏิบัติการ</span>
           </summary>
           <ul class="mt-1 border-l border-gray-200 ml-4 pl-0 py-1 space-y-0.5">
             <li><a onclick="changePage('page-ticket'); closeDrawerOnMobile();"
@@ -58,24 +54,42 @@
       <li>
         <details open class="group">
           <summary
-            class="rounded-lg py-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 list-none [&::-webkit-details-marker]:hidden flex items-center justify-between mt-1">
-            <div class="flex items-center">
-              <i class="fas fa-chart-pie w-5 text-center text-teal-400 px-1"></i>
-              <span class="font-medium text-[13px] ml-1">ข้อมูล & สรุป</span>
-            </div>
-            <i
-              class="fas fa-chevron-down text-[10px] text-gray-400 opacity-70 group-open:rotate-180 transition-transform"></i>
+            class="rounded-lg py-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 list-none [&::-webkit-details-marker]:hidden mt-1">
+            <i class="fas fa-chart-pie w-5 text-center text-teal-400 px-1"></i>
+            <span class="font-medium text-[13px] ml-1">ข้อมูล & สรุป</span>
           </summary>
           <ul class="mt-1 border-l border-gray-200 ml-4 pl-0 py-1 space-y-0.5">
             <li><a onclick="changePage('page-report'); closeDrawerOnMobile();"
                 class="rounded-lg py-2 ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50"
                 data-target="page-report"><i
                   class="fas fa-file-invoice w-4 text-center opacity-40 text-[11px]"></i><span
-                  class="text-[13px]">รายงาน (Report)</span></a></li>
+                  class="text-[13px]">รายงาน</span></a></li>
             <li><a onclick="changePage('page-history'); closeDrawerOnMobile();"
                 class="rounded-lg py-2 ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50"
                 data-target="page-history"><i class="fas fa-history w-4 text-center opacity-40 text-[11px]"></i><span
                   class="text-[13px]">ประวัติย้อนหลัง</span></a></li>
+          </ul>
+        </details>
+      </li>
+
+      <!-- Emails -->
+      <li>
+        <details open class="group">
+          <summary
+            class="rounded-lg py-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 list-none [&::-webkit-details-marker]:hidden mt-1">
+            <i class="fas fa-envelope-open-text w-5 text-center text-blue-500 px-1"></i>
+            <span class="font-medium text-[13px] ml-1">อีเมล</span>
+          </summary>
+          <ul class="mt-1 border-l border-gray-200 ml-4 pl-0 py-1 space-y-0.5">
+            <li><a onclick="changePage('page-email-fetch'); closeDrawerOnMobile();"
+                class="rounded-lg py-2 ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50"
+                data-target="page-email-fetch"><i class="fas fa-inbox w-4 text-center opacity-40 text-[11px]"></i><span
+                  class="text-[13px]">ดึงจากเมล</span></a></li>
+            <li><a onclick="changePage('page-email-send'); closeDrawerOnMobile();"
+                class="rounded-lg py-2 ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50"
+                data-target="page-email-send"><i
+                  class="fas fa-paper-plane w-4 text-center opacity-40 text-[11px]"></i><span
+                  class="text-[13px]">ส่งเมล</span></a></li>
           </ul>
         </details>
       </li>
@@ -88,13 +102,9 @@
       <li>
         <details class="group">
           <summary
-            class="rounded-lg py-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 list-none [&::-webkit-details-marker]:hidden flex items-center justify-between">
-            <div class="flex items-center">
-              <i class="fas fa-cogs w-5 text-center text-gray-400 px-1"></i>
-              <span class="font-medium text-[13px] ml-1">ตั้งค่าทั้งหมด</span>
-            </div>
-            <i
-              class="fas fa-chevron-down text-[10px] text-gray-400 opacity-70 group-open:rotate-180 transition-transform"></i>
+            class="rounded-lg py-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 list-none [&::-webkit-details-marker]:hidden">
+            <i class="fas fa-cogs w-5 text-center text-gray-400 px-1"></i>
+            <span class="font-medium text-[13px] ml-1">ตั้งค่าทั้งหมด</span>
           </summary>
           <ul class="mt-1 border-l border-gray-200 ml-4 pl-0 py-1 space-y-0.5">
             <li><a onclick="changePage('page-settings-system'); closeDrawerOnMobile();"
@@ -123,22 +133,6 @@
 
     </ul>
   </div>
-
-  <!-- Bottom: User Profile (Mobile) -->
-  <div class="shrink-0 mt-auto pt-2 border-t border-base-200 bg-gray-50/50">
-    <div
-      class="p-3 mx-3 mt-2 mb-4 bg-white rounded-xl shadow-sm border border-base-200 flex items-center gap-3 md:hidden">
-      <div class="avatar placeholder shrink-0">
-        <div class="bg-primary/10 text-primary rounded-xl w-10 h-10 flex items-center justify-center font-bold">
-          <span class="text-xs" id="sidebar-user-initial">JS</span>
-        </div>
-      </div>
-      <div class="overflow-hidden">
-        <p class="text-sm font-bold text-gray-800 truncate" id="sidebar-display-user-name">Guest User</p>
-        <p class="text-[10px] text-gray-500 font-mono truncate" id="sidebar-display-user-email">guest@nocapp.local</p>
-      </div>
-    </div>
-  </div>
 </aside>
 
 <script>
@@ -146,18 +140,4 @@
     const drawer = document.getElementById("my-drawer");
     if (drawer && window.innerWidth < 1024) drawer.checked = false;
   }
-  document.addEventListener('DOMContentLoaded', () => {
-    const origUpdate = window.updateNavbarUI;
-    window.updateNavbarUI = function (user) {
-      if (origUpdate) origUpdate(user);
-      if (user) {
-        const n = document.getElementById("sidebar-display-user-name");
-        const e = document.getElementById("sidebar-display-user-email");
-        const i = document.getElementById("sidebar-user-initial");
-        if (n) n.innerText = user.userName || "User";
-        if (e) e.innerText = user.userEmail || "";
-        if (i && user.userName) i.innerText = user.userName.substring(0, 2).toUpperCase();
-      }
-    };
-  });
 </script>

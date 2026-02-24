@@ -1,0 +1,51 @@
+<div id="page-email-fetch"
+  class="page-section hidden w-full h-full font-sans text-slate-600 bg-slate-50 flex flex-col p-4 gap-4 overflow-hidden">
+  <!-- HEADER (Compact Style) -->
+  <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200 shrink-0">
+    <div class="bg-blue-500/10 w-7 h-7 rounded-md flex items-center justify-center text-blue-500 shrink-0">
+      <i class="fas fa-inbox text-[10px]"></i>
+    </div>
+    <div class="hidden sm:block">
+      <h2 class="text-xs font-bold text-slate-800">Sync Emails</h2>
+    </div>
+
+    <div class="flex items-center gap-2 ml-auto">
+      <button onclick="EmailFetchManager.scanEmails()"
+        class="btn btn-xs btn-ghost text-slate-600 hover:bg-slate-100 gap-1.5 px-2 transition-colors">
+        <i class="fas fa-sync-alt text-[9px]"></i>
+        <span class="text-[10px] font-semibold hidden md:inline">สแกนหาอีเมล</span>
+      </button>
+
+      <button id="btn-import-emails" onclick="EmailFetchManager.importEmails()" disabled
+        class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md transition-shadow">
+        <i class="fas fa-download text-[9px]"></i>
+        <span class="text-[10px] font-semibold hidden md:inline">นำเข้าที่เลือก</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Table Content Area -->
+  <div class="flex-1 overflow-hidden bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col relative">
+    <table class="table table-sm min-w-[800px] w-full border-collapse">
+      <thead class="bg-slate-100 text-slate-600 sticky top-0 z-10 shadow-sm">
+        <tr>
+          <th class="w-10 text-center rounded-tl-xl p-3">
+            <input type="checkbox" class="checkbox checkbox-xs" onchange="EmailFetchManager.toggleAll(this)" />
+          </th>
+          <th class="w-24 text-center p-3">สถานะ</th>
+          <th class="p-3 w-1/3">หัวข้ออีเมล (Subject)</th>
+          <th class="p-3 w-32">Ticket ID</th>
+          <th class="p-3 rounded-tr-xl">รายละเอียดคร่าวๆ</th>
+        </tr>
+      </thead>
+      <tbody id="email-fetch-table-body">
+        <tr>
+          <td colspan="5" class="text-center py-10 text-slate-400 text-sm">
+            <i class="fas fa-inbox text-3xl mb-3 opacity-50 block"></i>
+            คลิกปุ่ม "สแกนหาอีเมล" ด้านบนเพื่อเริ่มดึงข้อมูล (ดึงมาเฉพาะสถานะไม่เกิน 20 รายการล่าสุด)
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

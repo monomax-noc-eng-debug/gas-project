@@ -10,7 +10,7 @@ const ReportGenerator = {
         : null;
 
       let uploadedUrls = [];
-      let blobs = { mono: [], ais: [], start: [] };
+      let blobs = { startMono: [], stopMono: [], startAis: [], stopAis: [] };
       let pdfImages = []; // เก็บ Base64 ไว้ส่งเข้า PDF
 
       const handleUpload = (imgArray, prefix, targetBlobArr) => {
@@ -84,12 +84,15 @@ const ReportGenerator = {
 
       // Process all groups
       if (formData.proofImages) {
-        handleUpload(formData.proofImages.mono, "Mono", blobs.mono);
-        handleUpload(formData.proofImages.ais, "AIS", blobs.ais);
-        handleUpload(formData.proofImages.start, "Start", blobs.start);
+        handleUpload(formData.proofImages.startMono, "StartMono", blobs.startMono);
+        handleUpload(formData.proofImages.stopMono, "StopMono", blobs.stopMono);
+        handleUpload(formData.proofImages.startAis, "StartAIS", blobs.startAis);
+        handleUpload(formData.proofImages.stopAis, "StopAIS", blobs.stopAis);
       }
-      handleUpload(formData.autoStartUrls, "Start", blobs.start);
-      handleUpload(formData.autoMonoUrls, "Mono", blobs.mono);
+      handleUpload(formData.autoStartMonoUrls, "StartMono", blobs.startMono);
+      handleUpload(formData.autoStopMonoUrls, "StopMono", blobs.stopMono);
+      handleUpload(formData.autoStartAisUrls, "StartAIS", blobs.startAis);
+      handleUpload(formData.autoStopAisUrls, "StopAIS", blobs.stopAis);
 
       console.timeEnd("ProcessImages"); // 🏁 จบเวลา
       return { blobs, urls: uploadedUrls, pdfImages };
@@ -98,7 +101,7 @@ const ReportGenerator = {
       if (typeof console.timeEnd === "function")
         try {
           console.timeEnd("ProcessImages");
-        } catch (ex) {}
+        } catch (ex) { }
       return { blobs: {}, urls: [], pdfImages: [] };
     }
   },
@@ -116,15 +119,15 @@ const ReportGenerator = {
     // ✅ ปรับปรุง: รองรับกรณี PDF สร้างไม่สำเร็จ (Graceful Degradation)
     const pdfButton = pdfUrl
       ? {
-          text: "เปิดรายงาน PDF",
-          icon: { knownIcon: "DESCRIPTION" },
-          onClick: { openLink: { url: pdfUrl } },
-          color: { red: 0, green: 0.5, blue: 1, alpha: 1 },
-        }
+        text: "เปิดรายงาน PDF",
+        icon: { knownIcon: "DESCRIPTION" },
+        onClick: { openLink: { url: pdfUrl } },
+        color: { red: 0, green: 0.5, blue: 1, alpha: 1 },
+      }
       : {
-          text: "⚠️ สร้าง PDF ไม่สำเร็จ (ตรวจสอบ Base64 รูปภาพ)",
-          color: { red: 1, green: 0, blue: 0, alpha: 1 },
-        };
+        text: "⚠️ สร้าง PDF ไม่สำเร็จ (ตรวจสอบ Base64 รูปภาพ)",
+        color: { red: 1, green: 0, blue: 0, alpha: 1 },
+      };
 
     return {
       cardsV2: [
@@ -154,19 +157,18 @@ const ReportGenerator = {
                   },
                   {
                     textParagraph: {
-                      text: `<b>2. Stop channel</b><br>> Mono: ${formData.statusMono}<br>> AIS: ${formData.statusAis}<br>> Start Channel: ${formData.statusStart}`,
+                      text: `<b>2. สถานะระบบออกสื่อ</b><br>> Start Mono: ${formData.statusStartMono || '-'}<br>> Stop Mono: ${formData.statusStopMono || '-'}<br>> Start AIS: ${formData.statusStartAis || '-'}<br>> Stop AIS: ${formData.statusStopAis || '-'}`,
                     },
                   },
                   {
                     textParagraph: {
-                      text: `<b>3. Shift Transfer</b><br>${
-                        formData.transferReport
-                          ? formData.transferReport
-                              .split("\n")
-                              .map((l) => `> ${l}`)
-                              .join("<br>")
-                          : "> - ไม่มีข้อมูล"
-                      }`,
+                      text: `<b>3. Shift Transfer</b><br>${formData.transferReport
+                        ? formData.transferReport
+                          .split("\n")
+                          .map((l) => `> ${l}`)
+                          .join("<br>")
+                        : "> - ไม่มีข้อมูล"
+                        }`,
                     },
                   },
                   { divider: {} },
@@ -257,24 +259,31 @@ const ReportGenerator = {
         ticketList: ticketList,
         topics: [
           {
-            title: "Start Channel (เปิดสัญญาณ)",
-            status: formData.statusStart,
-            description: "ตรวจสอบสัญญาณภาพจาก MONO & JAS",
-            images: findImages("Start"),
-            caption: "ภาพยืนยันการเปิดสัญญาณ",
+            title: "Start Channel (Mono)",
+            status: formData.statusStartMono,
+            description: "ตรวจสอบสัญญาณภาพเปิดช่อง Mono",
+            images: findImages("StartMono"),
+            caption: "ภาพยืนยันการเปิดสัญญาณ Mono",
           },
           {
             title: "Stop Channel (Mono)",
-            status: formData.statusMono,
+            status: formData.statusStopMono,
             description: "ตรวจสอบการปิดสัญญาณช่อง Mono",
-            images: findImages("Mono"),
+            images: findImages("StopMono"),
             caption: "ภาพยืนยันจากการปิดช่อง Mono",
           },
           {
+            title: "Start Channel (AIS)",
+            status: formData.statusStartAis,
+            description: "ตรวจสอบสัญญาณภาพเปิดช่อง AIS",
+            images: findImages("StartAIS"),
+            caption: "ภาพยืนยันการเปิดสัญญาณ AIS",
+          },
+          {
             title: "Stop Channel (AIS)",
-            status: formData.statusAis,
+            status: formData.statusStopAis,
             description: "ตรวจสอบการปิดสัญญาณช่อง AIS",
-            images: findImages("AIS"),
+            images: findImages("StopAIS"),
             caption: "ภาพยืนยันจากการปิดช่อง AIS",
           },
           {
@@ -335,7 +344,7 @@ const ReportGenerator = {
           DriveApp.Access.ANYONE_WITH_LINK,
           DriveApp.Permission.VIEW,
         );
-      } catch (e) {}
+      } catch (e) { }
       console.timeEnd("SaveToDrive");
 
       const finalUrl = pdfFile.getUrl();
@@ -348,7 +357,7 @@ const ReportGenerator = {
       if (typeof console.timeEnd === "function") {
         try {
           console.timeEnd("TotalPDFTime");
-        } catch (ex) {}
+        } catch (ex) { }
       }
       return null;
     }

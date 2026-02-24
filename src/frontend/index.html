@@ -101,73 +101,30 @@
   </style>
 </head>
 
-<body class="bg-base-200 text-base-content font-sans h-screen overflow-hidden">
-  <div id="initial-splash-screen"
-    class="fixed inset-0 z-[99999] bg-base-100 flex flex-col items-center justify-center transition-opacity duration-500">
-    <span class="loading loading-spinner text-primary w-16 mb-4"></span>
-    <h2 class="text-xl font-bold text-base-content animate-pulse">
-      กำลังโหลด...
-    </h2>
-    <p class="text-sm text-base-content/60 mt-2">NOC APP System</p>
+<body class="bg-base-200 text-base-content font-sans h-screen overflow-hidden relative">
+
+  <div id="global-page-loader"
+    class="fixed inset-0 z-[9999] bg-base-200 flex flex-col items-center justify-center transition-opacity duration-500 opacity-100">
+    <span class="loading loading-bars loading-lg text-primary"></span>
+    <h2 class="mt-4 text-sm font-bold text-base-content/70 tracking-wider">กำลังเชื่อมต่อฐานข้อมูล...</h2>
   </div>
-
-  <div id="login-page"
-    class="fixed inset-0 z-[100] flex items-center justify-center bg-base-300 p-4 transition-all duration-500">
-    <div class="card w-full max-w-md bg-white shadow-2xl border border-base-300">
-      <div class="card-body items-center text-center">
-        <div class="bg-primary/10 p-4 rounded-full mb-2">
-          <i class="fas fa-lock text-3xl text-primary"></i>
-        </div>
-        <h2 class="card-title text-2xl font-bold text-gray-800 border-none">
-          Daily Report System
-        </h2>
-        <p class="text-sm text-gray-400 mb-6">
-          กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อ
-        </p>
-
-        <div class="form-control w-full">
-          <label class="label"><span class="label-text font-semibold">อีเมล / ชื่อผู้ใช้</span></label>
-          <input type="text" id="login-user" placeholder="example@email.com"
-            class="input input-bordered w-full focus:input-primary" />
-        </div>
-
-        <div class="form-control w-full mt-4">
-          <label class="label"><span class="label-text font-semibold">รหัสผ่าน (PIN)</span></label>
-          <input type="password" id="login-pass" placeholder="••••"
-            class="input input-bordered w-full focus:input-primary"
-            onkeyup="if (event.key === 'Enter') handleLogin();" />
-        </div>
-
-        <div class="card-actions w-full mt-8">
-          <button id="btn-login-submit" onclick="handleLogin()" class="btn btn-primary w-full shadow-lg text-white">
-            <span id="login-spinner" class="loading loading-spinner hidden"></span>
-            เข้าสู่ระบบ
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="main-app" class="drawer lg:drawer-open h-full opacity-0 pointer-events-none transition-opacity duration-500">
+  <div id="main-app" class="drawer lg:drawer-open h-full transition-opacity duration-500 opacity-0">
     <input id="my-drawer" type="checkbox" class="drawer-toggle" />
     <div class="drawer-content flex flex-col h-full overflow-hidden relative">
-      <?!= include('frontend/components/Part_Navbar'); ?>
-
-      <div class="hidden">
-        <span id="display-user-name"></span>
-        <span id="display-user-email"></span>
-      </div>
+      <!-- Floating Mobile Toggle -->
+      <label for="my-drawer"
+        class="btn btn-sm btn-circle btn-primary shadow-lg lg:hidden fixed bottom-4 right-4 z-[60]">
+        <i class="fas fa-bars"></i>
+      </label>
 
       <main class="flex-1 overflow-y-auto scroll-smooth relative w-full">
         <?!= include('frontend/pages/Page_Dashboard'); ?>
-        <?!=
-          include('frontend/pages/Page_Handover'); ?>
-        <?!=
-          include('frontend/pages/Page_Report'); ?>
-        <?!=
-          include('frontend/pages/Page_Ticket'); ?>
-        <?!=
-          include('frontend/pages/Page_History'); ?>
+        <?!= include('frontend/pages/Page_Handover'); ?>
+        <?!= include('frontend/pages/Page_Report'); ?>
+        <?!= include('frontend/pages/Page_Ticket'); ?>
+        <?!= include('frontend/pages/Page_Email_Fetch'); ?>
+        <?!= include('frontend/pages/Page_Email_Send'); ?>
+        <?!= include('frontend/pages/Page_History'); ?>
         <?!= include('frontend/pages/Page_Settings_System'); ?>
         <?!= include('frontend/pages/Page_Settings_Users'); ?>
         <?!= include('frontend/pages/Page_Settings_Email'); ?>
@@ -182,161 +139,54 @@
 
   <?!= include('frontend/components/Part_Modal_Core'); ?>
 
-  <script>
-    /**
-     * Logic การจัดการ Login
-     */
-    function handleLogin() {
-      const email = document.getElementById("login-user").value;
-      const pass = document.getElementById("login-pass").value;
-      const btn = document.getElementById("btn-login-submit");
-      const spinner = document.getElementById("login-spinner");
-
-      if (!email || !pass) {
-        return Swal.fire("แจ้งเตือน", "กรุณากรอกข้อมูลให้ครบถ้วน", "warning");
-      }
-
-      btn.disabled = true;
-      spinner.classList.remove("hidden");
-
-      google.script.run
-        .withSuccessHandler(function (res) {
-          btn.disabled = false;
-          spinner.classList.add("hidden");
-
-          if (res.success) {
-            // ✅ บันทึกข้อมูลลง LocalStorage
-            localStorage.setItem("gas_app_user", JSON.stringify(res));
-
-            const loginPage = document.getElementById("login-page");
-            const mainApp = document.getElementById("main-app");
-
-            loginPage.classList.add("opacity-0", "pointer-events-none");
-            mainApp.classList.remove("pointer-events-none", "opacity-0");
-
-            if (window.updateNavbarUI) {
-              window.updateNavbarUI(res);
-            }
-
-            if (
-              window.Dashboard &&
-              typeof window.Dashboard.init === "function"
-            ) {
-              window.Dashboard.init();
-            }
-
-            Swal.fire({
-              icon: "success",
-              title: "เข้าสู่ระบบสำเร็จ",
-              text: "ยินดีต้อนรับคุณ " + res.userName,
-              timer: 1500,
-              showConfirmButton: false,
-              toast: true,
-              position: "top-end",
-            });
-          } else {
-            Swal.fire("ผิดพลาด", res.message, "error");
-          }
-        })
-        .withFailureHandler(function (err) {
-          btn.disabled = false;
-          spinner.classList.add("hidden");
-          Swal.fire(
-            "Error",
-            "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์",
-            "error",
-          );
-        })
-        .apiLogin(email, pass);
-    }
-
-    /**
-     * ฟังก์ชันออกจากระบบ (Logout)
-     */
-    function handleLogout() {
-      Swal.fire({
-        title: "ยืนยันการออกจากระบบ?",
-        icon: "question",
-        showCancelButton: true,
-        confirmButtonText: "ใช่, ออกจากระบบ",
-        cancelButtonText: "ยกเลิก",
-        confirmButtonColor: "#d33",
-      }).then((result) => {
-        if (result.isConfirmed) {
-          localStorage.removeItem("gas_app_user");
-          location.reload();
-        }
-      });
-    }
-
-    // ✅ ตรวจสอบสถานะการเข้าสู่ระบบเมื่อโหลดหน้าเว็บ
-    document.addEventListener("DOMContentLoaded", function () {
-      const savedUser = localStorage.getItem("gas_app_user");
-      const splashScreen = document.getElementById("initial-splash-screen");
-
-      if (savedUser) {
-        try {
-          const user = JSON.parse(savedUser);
-          const loginPage = document.getElementById("login-page");
-          const mainApp = document.getElementById("main-app");
-
-          if (loginPage && mainApp) {
-            loginPage.classList.add("hidden");
-            mainApp.classList.remove("opacity-0", "pointer-events-none");
-
-            if (window.updateNavbarUI) window.updateNavbarUI(user);
-
-            setTimeout(() => {
-              if (
-                window.Dashboard &&
-                typeof window.Dashboard.init === "function"
-              ) {
-                window.Dashboard.init();
-              }
-            }, 500);
-          }
-        } catch (e) {
-          console.error("LocalStorage Parse Error", e);
-          localStorage.removeItem("gas_app_user");
-          // ถ้าข้อมูลเสียให้ลบทิ้ง แล้วซ่อนหน้า Loading เพื่อให้เห็นหน้า Login
-          if (splashScreen) {
-            splashScreen.style.opacity = "0";
-            setTimeout(() => splashScreen.remove(), 500);
-          }
-        }
-      } else {
-        // ✨ [เพิ่มใหม่] ถ้ายอมรับว่ายังไม่ได้ล็อกอิน ให้ปิด Splash Screen ทันที เพื่อให้เห็นหน้า Login
-        if (splashScreen) {
-          splashScreen.style.opacity = "0";
-          setTimeout(() => splashScreen.remove(), 500);
-        }
-      }
-    });
-  </script>
-
   <?!= include('frontend/scripts/JS_Core'); ?>
-  <?!=
-    include('frontend/scripts/JS_Dashboard'); ?>
-  <?!=
-    include('frontend/scripts/JS_Handover'); ?>
-  <?!=
-    include('frontend/scripts/JS_Report'); ?>
-  <?!=
-    include('frontend/scripts/JS_Ticket_Service'); ?>
-  <?!=
-    include('frontend/scripts/JS_Ticket_View'); ?>
-  <?!=
-    include('frontend/scripts/JS_Ticket_Email'); ?>
-  <?!=
-    include('frontend/scripts/JS_Ticket_Controller'); ?>
-  <?!=
-    include('frontend/scripts/JS_History'); ?>
+  <?!= include('frontend/scripts/JS_Dashboard'); ?>
+  <?!= include('frontend/scripts/JS_Handover'); ?>
+  <?!= include('frontend/scripts/JS_Report'); ?>
+  <?!= include('frontend/scripts/JS_Ticket_Service'); ?>
+  <?!= include('frontend/scripts/JS_Ticket_View'); ?>
+  <?!= include('frontend/scripts/JS_Ticket_Email'); ?>
+  <?!= include('frontend/scripts/JS_Ticket_Controller'); ?>
+  <?!= include('frontend/scripts/JS_Email_Fetch'); ?>
+  <?!= include('frontend/scripts/JS_Email_Send'); ?>
+  <?!= include('frontend/scripts/JS_History'); ?>
   <?!= include('frontend/scripts/JS_Settings_System'); ?>
   <?!= include('frontend/scripts/JS_Settings_Users'); ?>
   <?!= include('frontend/scripts/JS_Settings_Email'); ?>
   <?!= include('frontend/scripts/JS_Settings_Tags'); ?>
-  <?!=
-    include('frontend/scripts/JS_App'); ?>
+  <?!= include('frontend/scripts/JS_App'); ?>
+
+  <script>
+    /**
+     * ฟังก์ชันสำหรับปิดหน้าต่างโหลดเต็มจอ 
+     * *ข้อควรระวัง: คุณต้องนำคำสั่ง hideGlobalLoader() ไปเรียกใช้ใน withSuccessHandler 
+     * ของการดึงข้อมูลก้อนแรกใน JS_App หรือ JS_Core
+     */
+    function hideGlobalLoader() {
+      const loader = document.getElementById('global-page-loader');
+      const mainApp = document.getElementById('main-app');
+
+      if (loader && mainApp) {
+        // 1. ทำให้ Loader โปร่งใส
+        loader.classList.replace('opacity-100', 'opacity-0');
+        // 2. แสดง UI หลัก
+        mainApp.classList.replace('opacity-0', 'opacity-100');
+
+        // 3. รอให้ Animation จบแล้วค่อยซ่อน Loader ทิ้งเพื่อไม่ให้ขวางการคลิก
+        setTimeout(() => {
+          loader.classList.add('hidden');
+        }, 500);
+      }
+    }
+
+    // [ตัวเลือกเสริม] ป้องกันกรณีเน็ตหลุดหรือโหลดนานเกิน 15 วินาที ให้บังคับเปิด UI เลย
+    setTimeout(() => {
+      if (!document.getElementById('global-page-loader').classList.contains('hidden')) {
+        console.warn("Loader timeout fallback triggered.");
+        hideGlobalLoader();
+      }
+    }, 15000); 
+  </script>
 </body>
 
 </html>

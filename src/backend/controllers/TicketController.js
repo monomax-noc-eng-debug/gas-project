@@ -357,11 +357,11 @@ const TicketController = (() => {
           if (form.action !== undefined)
             setVal(["Action", "การดำเนินการ"], form.action);
           if (form.resolvedDetail !== undefined)
-            setVal(["Resolved detail"], form.resolvedDetail);
+            setVal(["Resolved detail", "รายละเอียดการแก้ไข"], form.resolvedDetail);
           if (form.responsibility !== undefined)
-            setVal(["Responsibility"], form.responsibility);
-          if (form.assignee !== undefined) setVal(["Assign"], form.assignee);
-          if (form.remark !== undefined) setVal(["Remark"], form.remark);
+            setVal(["Responsibility", "ผู้รับผิดชอบ"], form.responsibility);
+          if (form.assignee !== undefined) setVal(["Assign", "มอบหมาย"], form.assignee);
+          if (form.remark !== undefined) setVal(["Remark", "หมายเหตุ"], form.remark);
 
           if (form.date) {
             const t = form.time || "00:00";
@@ -727,10 +727,19 @@ const TicketController = (() => {
     // 🚀 เพิ่มฟังก์ชันใหม่ รวมการอ่าน Sheet รอบเดียวให้ GmailService ใช้
     getTicketMappings: function () {
       try {
-        const sheet = _getTicketSheet();
-        const data = sheet.getDataRange().getValues();
+        const tabName = typeof CONFIG !== "undefined" && CONFIG.TICKET_TAB ? CONFIG.TICKET_TAB : TABLE_NAME;
+        const ticketIdConfig = typeof CONFIG !== "undefined" ? CONFIG.TICKET_ID : "";
+
+        let data = [];
+        try {
+          data = SheetService.getAll(tabName, 300, ticketIdConfig);
+        } catch (e) {
+          const sheet = _getTicketSheet();
+          data = sheet.getDataRange().getValues();
+        }
+
         const mappings = { ids: [], threadMap: {} };
-        if (data.length < 2) return mappings;
+        if (!data || data.length < 2) return mappings;
 
         const headers = data[0];
         const idCol = _findColIndex(headers, ["Ticket Number", "ID"]);

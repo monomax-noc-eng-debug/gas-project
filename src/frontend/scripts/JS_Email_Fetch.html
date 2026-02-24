@@ -1,0 +1,157 @@
+<script>
+  /**
+   * ==========================================
+   * MODULE: EMAIL FETCH MANAGER
+   * ==========================================
+   */
+  const EmailFetchManager = (() => {
+    let _tempEmails = [];
+
+    const getEl = (id) => document.getElementById(id);
+
+    return {
+      init: function () {
+        if (typeof Router !== 'undefined') {
+          Router.register('page-email-fetch', this);
+        }
+      },
+
+      scanEmails: () => {
+        UIManager.showLoading("สแกนหาอีเมล...");
+
+        TicketService.fetchEmailPreviews()
+          .then((res) => {
+            UIManager.hideLoading();
+
+            if (!res.success || !res.items || res.items.length === 0) {
+              Swal.fire({
+                icon: "info",
+                title: "ไม่พบอีเมล",
+                text: "ไม่มีรายการใหม่ใน Inbox",
+                timer: 2000,
+                showConfirmButton: false,
+              });
+              const tbody = getEl("email-fetch-table-body");
+              if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-400">สรุป: ไม่พบรายการใหม่ หรือมีป้ายกำกับ Complete ไปแล้ว</td></tr>`;
+              return;
+            }
+
+            _tempEmails = res.items;
+
+            // Render the table directly with the items provided by the backend (already validated & mapped)
+            EmailFetchManager.renderTable(_tempEmails);
+          })
+          .catch((err) => {
+            console.error(err);
+            UIManager.hideLoading();
+            UIManager.showToast("ดึงข้อมูลอีเมลล้มเหลว", "error");
+          });
+      },
+
+      renderTable: (list) => {
+        const tbody = getEl("email-fetch-table-body");
+        if (!tbody) return;
+
+        if (list.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-xs text-slate-400">ไม่มีข้อมูลอีเมลที่เกี่ยวข้อง</td></tr>`;
+          getEl("btn-import-emails").disabled = true;
+          return;
+        }
+
+        let html = "";
+        let enableImport = false;
+
+        list.forEach((item, index) => {
+          let badge = "";
+          let chkDisabled = "";
+          let rowClass = "hover whitespace-nowrap";
+
+          if (item.status === 'READY') {
+            badge = `<div class="badge badge-success badge-sm text-white gap-1"><i class="fas fa-check-circle text-[10px]"></i> พร้อมสร้าง</div>`;
+            enableImport = true;
+          } else if (item.status === 'UPDATE_SVR') {
+            badge = `<div class="badge badge-info badge-sm gap-1 text-white"><i class="fas fa-sync-alt text-[10px]"></i> เปลี่ยน ID</div>`;
+            enableImport = true;
+            rowClass += " bg-blue-50";
+          } else if (item.status === 'DUPLICATE') {
+            badge = `<div class="badge badge-warning badge-sm gap-1"><i class="fas fa-exclamation-circle text-[10px]"></i> ซ้ำในระบบ</div>`;
+            chkDisabled = 'disabled';
+          } else if (item.status === 'DUPLICATE_ID_EXIST') {
+            badge = `<div class="badge badge-warning badge-sm gap-1"><i class="fas fa-exclamation-circle text-[10px]"></i> ID ถูกใช้แล้ว</div>`;
+            chkDisabled = 'disabled';
+          } else {
+            badge = `<div class="badge badge-error badge-sm text-white"><i class="fas fa-times-circle text-[10px]"></i> ไม่มี SVR</div>`;
+            chkDisabled = 'disabled';
+          }
+
+          const safeId = item.id || '-';
+          const remark = item.remark || '';
+
+          html += `
+          <tr class="${rowClass}">
+            <td class="text-center">
+              <input type="checkbox" class="checkbox checkbox-xs chk-email-fetch" ${chkDisabled} data-index="${index}" data-subject="${item.subject.replace(/"/g, '&quot;')}" />
+            </td>
+            <td class="text-center pl-2" title="${remark}">${badge}</td>
+            <td class="font-bold text-xs truncate max-w-xs" title="${item.subject.replace(/"/g, '&quot;')}">${item.subject}</td>
+            <td class="font-mono text-primary font-bold text-xs">${safeId}</td>
+            <td class="text-xs truncate max-w-[250px] opacity-70" title="${item.snippet.replace(/"/g, '&quot;')}">${item.snippet}</td>
+          </tr>
+        `;
+        });
+
+        tbody.innerHTML = html;
+        getEl("btn-import-emails").disabled = !enableImport;
+      },
+
+      toggleAll: (checkbox) => {
+        const boxes = document.querySelectorAll(".chk-email-fetch");
+        boxes.forEach((box) => {
+          if (!box.disabled) box.checked = checkbox.checked;
+        });
+      },
+
+      importEmails: () => {
+        const checkboxes = document.querySelectorAll(".chk-email-fetch:checked");
+        if (checkboxes.length === 0) {
+          UIManager.showToast("กรุณาเลือกรายการที่จะบันทึก", "warning");
+          return;
+        }
+
+        const selectedSubjects = [];
+        checkboxes.forEach((box) => {
+          selectedSubjects.push(box.getAttribute("data-subject"));
+        });
+
+        const selectedEmails = _tempEmails
+          .filter(e => selectedSubjects.includes(e.subject))
+          .map(e => e.payload)
+          .filter(p => p !== null);
+
+        UIManager.showLoading(`กำลังสร้าง Ticket ใหม่... (${selectedEmails.length} รายการ)`);
+
+        TicketService.importEmails(selectedEmails).then((res) => {
+          UIManager.hideLoading();
+          if (res.success) {
+            Swal.fire({
+              icon: "success",
+              title: "บันทึกสำเร็จ!",
+              text: `สร้าง Ticket สรุปเสร็จสิ้นเรียบร้อย ${res.count} รายการ`,
+              timer: 3000,
+              showConfirmButton: false,
+            });
+            // Re-load table
+            EmailFetchManager.scanEmails();
+            // Optional: Auto fetch data for tickets
+            if (typeof TicketManager !== 'undefined') TicketManager.loadData(true);
+          } else {
+            UIManager.showToast("บันทึกไม่สำเร็จ: " + res.message, "error");
+          }
+        }).catch(err => {
+          UIManager.hideLoading();
+          UIManager.showToast("Connection Error", "error");
+        });
+      }
+    };
+  })();
+</script>

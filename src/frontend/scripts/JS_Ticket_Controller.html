@@ -32,10 +32,11 @@
       /**
        * 1. Initialization
        */
-      init: () => {
+      init: function () {
         console.log("🚀 Ticket Controller Initialized");
-
-        // รายชื่อพนักงาน (Static Lists) - ควรย้ายไป Config ในอนาคต
+        if (typeof Router !== "undefined") {
+          Router.register("page-ticket", this);
+        }
         // เริ่มต้นระบบฟัง Event (Live Preview)
         TicketManager.setupPreviewListeners();
         TicketManager.initPickers();
@@ -322,7 +323,7 @@
               timer: 2000,
               showConfirmButton: false,
             });
-            TicketManager.loadData();
+            TicketManager.loadData(true);
           } else {
             UIManager.showToast("บันทึกไม่สำเร็จ: " + res.message, "error");
           }
@@ -334,7 +335,8 @@
       // ============================================================
 
       openModal: (mode, id = null) => {
-        const modal = getEl("modal-ticket-form");
+        // Switch from modal to drawer toggle
+        const drawerToggle = getEl("drawer-ticket-toggle");
         const title = getEl("ticket-modal-title");
         const idInput = getEl("inp-ticket-id");
         const btnSave = getEl("btn-save-ticket");
@@ -353,12 +355,10 @@
           TicketView.switchTab(1);
 
           idInput.value = "";
-          idInput.removeAttribute("readonly");
-          idInput.classList.remove("bg-gray-100");
           idInput.placeholder = "Auto Gen";
 
-          btnSave.classList.remove("hidden");
-          btnDraft.classList.add("hidden");
+          if (btnSave) btnSave.classList.remove("hidden");
+          if (btnDraft) btnDraft.classList.add("hidden");
 
           const now = new Date();
           getEl("inp-ticket-date").value = now.toISOString().split("T")[0];
@@ -373,6 +373,12 @@
 
           const btnEmailTab = getEl("tab-btn-email");
           if (btnEmailTab) btnEmailTab.classList.add("hidden");
+
+          const idDisplay = getEl("ticket-modal-id-display");
+          if (idDisplay) idDisplay.innerText = "AUTO GENERATED";
+
+          const btnEditIdTitle = getEl("btn-edit-ticket-id-title");
+          if (btnEditIdTitle) btnEditIdTitle.classList.add("hidden");
         } else {
           const row = _tickets.find((t) => t.ticketNumber == id);
           if (!row) {
@@ -386,8 +392,6 @@
           };
 
           setVal("inp-ticket-id", row.ticketNumber);
-          idInput.setAttribute("readonly", true);
-          idInput.classList.add("bg-gray-100");
 
           const parsed = TicketManager.smartParseDate(row.date);
           const dDate = parsed.date;
@@ -421,21 +425,101 @@
           if (mode === "EMAIL") {
             title.innerText = "ส่งอีเมล: " + id;
             TicketView.switchTab(4);
-            btnSave.classList.add("hidden");
-            btnDraft.classList.remove("hidden");
+            if (btnSave) btnSave.classList.add("hidden");
+            if (btnDraft) btnDraft.classList.remove("hidden");
             setTimeout(() => TicketManager.updateEmailPreview(), 100);
           } else {
             title.innerText = "แก้ไข Ticket: " + id;
             TicketView.switchTab(1);
-            btnSave.classList.remove("hidden");
-            btnDraft.classList.add("hidden");
+            if (btnSave) btnSave.classList.remove("hidden");
+            if (btnDraft) btnDraft.classList.add("hidden");
           }
 
           const btnEmailTab = getEl("tab-btn-email");
           if (btnEmailTab) btnEmailTab.classList.remove("hidden");
+
+          const btnEditIdTitle = getEl("btn-edit-ticket-id-title");
+          if (btnEditIdTitle && mode !== "EMAIL") {
+            btnEditIdTitle.classList.remove("hidden");
+          } else if (btnEditIdTitle) {
+            btnEditIdTitle.classList.add("hidden");
+          }
+
+          const idDisplay = getEl("ticket-modal-id-display");
+          if (idDisplay) idDisplay.innerText = id;
         }
 
-        modal.showModal();
+        const inlineGroup = getEl("inline-edit-group");
+        if (inlineGroup) {
+          inlineGroup.classList.remove("flex");
+          inlineGroup.classList.add("hidden");
+        }
+        if (getEl("ticket-id-display-container")) {
+          getEl("ticket-id-display-container").classList.remove("hidden");
+          getEl("ticket-id-display-container").classList.add("flex");
+        }
+
+        drawerToggle.checked = true;
+      },
+
+      showInlineEditId: () => {
+        const currentId = getEl("inp-ticket-id").value;
+        if (!currentId) return;
+
+        getEl("ticket-id-display-container").classList.add("hidden");
+        getEl("ticket-id-display-container").classList.remove("flex");
+
+        const inlineGroup = getEl("inline-edit-group");
+        inlineGroup.classList.remove("hidden");
+        inlineGroup.classList.add("flex");
+
+        const inp = getEl("inp-inline-ticket-id");
+        inp.value = currentId;
+        inp.focus();
+      },
+
+      cancelInlineTicketId: () => {
+        const inlineGroup = getEl("inline-edit-group");
+        inlineGroup.classList.remove("flex");
+        inlineGroup.classList.add("hidden");
+
+        const displayContainer = getEl("ticket-id-display-container");
+        displayContainer.classList.remove("hidden");
+        displayContainer.classList.add("flex");
+      },
+
+      saveInlineTicketId: () => {
+        const currentId = getEl("inp-ticket-id").value;
+        const newId = getEl("inp-inline-ticket-id").value.trim().toUpperCase();
+
+        if (!newId) {
+          UIManager.showToast("กรุณาระบุ Ticket ID", "warning");
+          return;
+        }
+
+        if (newId === currentId) {
+          TicketManager.cancelInlineTicketId();
+          return;
+        }
+
+        UIManager.showLoading("กำลังเปลี่ยน Ticket ID...");
+        Server.call({ func: "updateTicketIdOnly" }, { oldId: currentId, newId: newId })
+          .then(res => {
+            UIManager.hideLoading();
+            if (res.success) {
+              getEl("inp-ticket-id").value = newId;
+              getEl("ticket-modal-id-display").innerText = newId;
+              getEl("ticket-modal-title").innerText = "แก้ไข Ticket: " + newId;
+              UIManager.showToast("เปลี่ยน ID สำเร็จ", "success");
+              TicketManager.cancelInlineTicketId();
+              TicketManager.loadData(true);
+            } else {
+              UIManager.showToast("ไม่สามารถเปลี่ยนได้: " + res.message, "error");
+            }
+          }).catch(err => {
+            UIManager.hideLoading();
+            UIManager.showToast("เกิดข้อผิดพลาดในการเชื่อมต่อ", "error");
+          });
       },
 
       saveTicketOnly: () => {
@@ -455,18 +539,19 @@
 
         const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
-        data.assign = _currentAssignees.join(", ");
+        data.assignee = _currentAssignees.join(", ");
 
-        const isUpdate =
-          getEl("inp-ticket-id").hasAttribute("readonly") && data.id;
+        // The ID uses the native form data since it's stored in inp-ticket-id
+
+        const isUpdate = !!data.id;
 
         TicketService.saveTicket(data, isUpdate)
           .then((res) => {
             UIManager.hideLoading();
             if (res.success) {
               UIManager.showToast("บันทึกข้อมูลสำเร็จ", "success");
-              getEl("modal-ticket-form").close();
-              TicketManager.loadData();
+              getEl("drawer-ticket-toggle").checked = false;
+              TicketManager.loadData(true);
             } else {
               UIManager.showToast("Error: " + res.message, "error");
             }
@@ -489,7 +574,7 @@
 
         const formData = new FormData(form);
         const ticketData = Object.fromEntries(formData.entries());
-        ticketData.assign = _currentAssignees.join(", ");
+        ticketData.assignee = _currentAssignees.join(", ");
 
         const emailSubject = getEl("preview-subject").innerText;
         const emailBody = getEl("preview-body-html").innerHTML;
@@ -505,8 +590,8 @@
           .then((res) => {
             UIManager.hideLoading();
             if (res.success) {
-              getEl("modal-ticket-form").close();
-              TicketManager.loadData();
+              getEl("drawer-ticket-toggle").checked = false;
+              TicketManager.loadData(true);
 
               if (res.draftUrl) {
                 const btnLink = getEl("btn-open-draft-link");
@@ -545,7 +630,7 @@
               UIManager.hideLoading();
               if (res.success) {
                 UIManager.showToast("ลบข้อมูลสำเร็จ", "success");
-                TicketManager.loadData();
+                TicketManager.loadData(true);
               } else {
                 UIManager.showToast("ลบไม่สำเร็จ: " + res.message, "error");
               }
@@ -840,12 +925,4 @@
       },
     };
   })();
-
-  // Auto Initialize
-  document.addEventListener("DOMContentLoaded", () => {
-    if (typeof Router !== "undefined") {
-      Router.register("page-ticket", TicketManager);
-    }
-    TicketManager.init();
-  });
 </script>

@@ -31,6 +31,9 @@
       deleteTicket: (id) =>
         Server.call({ func: "deleteTicket", silent: false }, id),
 
+      updateTicketIdOnly: (oldId, newId) =>
+        Server.call({ func: "updateTicketIdOnly", silent: false }, { oldId, newId }),
+
       // --- Email Sync ---
       fetchEmailPreviews: () =>
         Server.call({ func: "getEmailPreviews", silent: true, retries: 2 }),

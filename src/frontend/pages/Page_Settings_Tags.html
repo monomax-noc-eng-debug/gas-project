@@ -1,28 +1,26 @@
 <div id="page-settings-tags"
-  class="page-section hidden w-full h-full relative bg-base-200/50 overflow-hidden flex flex-col p-4 gap-4">
+  class="page-section hidden w-full h-full relative bg-base-200 overflow-hidden flex flex-col p-3 gap-2">
 
   <!-- Header -->
-  <div
-    class="flex flex-col md:flex-row justify-between items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0">
-    <div class="flex items-center gap-3 w-full md:w-auto">
-      <div class="bg-sky-50 p-2.5 rounded-xl text-sky-500"><i class="fas fa-tags text-lg"></i></div>
-      <div>
-        <h2 class="text-base font-bold text-gray-800">แท็กส่งกะ (Handover Tags)</h2>
-        <p class="text-[10px] text-gray-400 font-mono">SYS_Handover_Tags</p>
+  <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-base-300 shrink-0">
+    <div class="flex items-center gap-2">
+      <div class="bg-sky-50 p-1.5 rounded-lg text-sky-500"><i class="fas fa-tags text-sm"></i></div>
+      <div class="hidden sm:block">
+        <h2 class="text-xs font-bold text-gray-800">Handover Tags</h2>
       </div>
     </div>
-    <div class="flex items-center gap-2 w-full md:w-auto justify-end">
-      <button onclick="TagSettings.loadData(true)" class="btn btn-sm btn-ghost btn-circle tooltip tooltip-bottom"
-        data-tip="รีเฟรช"><i class="fas fa-sync-alt text-gray-400"></i></button>
-      <button onclick="TagSettings.openAdd()" class="btn btn-sm btn-accent text-white shadow-sm gap-1 px-4"><i
-          class="fas fa-plus text-xs"></i> เพิ่ม</button>
-      <button onclick="TagSettings.saveAll()" class="btn btn-sm btn-primary shadow-sm gap-1 px-4"><i
-          class="fas fa-save text-xs"></i> บันทึก</button>
+    <div class="flex items-center gap-1 ml-auto">
+      <button onclick="TagSettings.loadData(true)" class="btn btn-xs btn-ghost btn-circle" title="รีเฟรช"><i
+          class="fas fa-sync-alt text-gray-400 text-[10px]"></i></button>
+      <button onclick="TagSettings.openAdd()" class="btn btn-xs btn-accent text-white shadow-sm gap-1 px-3 h-7"><i
+          class="fas fa-plus text-[10px]"></i> เพิ่ม</button>
+      <button onclick="TagSettings.saveAll()" class="btn btn-xs btn-primary shadow-sm gap-1 px-3 h-7"><i
+          class="fas fa-save text-[10px]"></i> บันทึก</button>
     </div>
   </div>
 
   <!-- Table Card -->
-  <div class="flex-1 bg-white rounded-2xl shadow-sm border border-base-200 flex flex-col overflow-hidden min-h-0">
+  <div class="flex-1 bg-white rounded-xl shadow-sm border border-base-200 flex flex-col overflow-hidden min-h-0">
     <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-sky-50/30 shrink-0">
       <h3 class="text-xs font-bold text-sky-700 uppercase flex items-center gap-2"><i class="fas fa-hashtag"></i>
         รายการแท็ก</h3>
@@ -39,6 +37,32 @@
         </thead>
         <tbody id="tag-tbody"></tbody>
       </table>
+
+      <div id="tag-loader" class="hidden flex-col w-full bg-white z-10">
+        <div class="p-4 space-y-4 w-full">
+          <div class="flex gap-4 w-full items-center">
+            <div class="skeleton h-8 w-12 rounded-lg"></div>
+            <div class="skeleton h-8 flex-1 rounded-lg"></div>
+            <div class="skeleton h-8 w-28 rounded-lg"></div>
+          </div>
+          <div class="flex gap-4 w-full items-center">
+            <div class="skeleton h-8 w-12 rounded-lg"></div>
+            <div class="skeleton h-8 flex-1 rounded-lg"></div>
+            <div class="skeleton h-8 w-28 rounded-lg"></div>
+          </div>
+          <div class="flex gap-4 w-full items-center">
+            <div class="skeleton h-8 w-12 rounded-lg"></div>
+            <div class="skeleton h-8 flex-1 rounded-lg"></div>
+            <div class="skeleton h-8 w-28 rounded-lg"></div>
+          </div>
+          <div class="flex gap-4 w-full items-center">
+            <div class="skeleton h-8 w-12 rounded-lg"></div>
+            <div class="skeleton h-8 flex-1 rounded-lg"></div>
+            <div class="skeleton h-8 w-28 rounded-lg"></div>
+          </div>
+        </div>
+      </div>
+
       <div id="tag-empty" class="hidden text-center py-16 text-gray-300"><i class="fas fa-inbox text-4xl mb-3"></i>
         <p class="text-sm font-semibold">ยังไม่มีแท็ก</p>
       </div>

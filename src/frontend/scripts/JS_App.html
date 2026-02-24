@@ -1,5 +1,4 @@
 <script>
-  // ดึงค่าหน้าล่าสุดไว้ทันทีตั้งแต่สคริปต์เริ่มรัน
   const savedLastPage = localStorage.getItem("gas_last_page");
   let isAppReady = false;
 
@@ -25,13 +24,25 @@
       }
     });
 
-    // 3. Initialize Data
+    // 3. Initialize Controllers & Managers
     try {
+      if (typeof Dashboard !== 'undefined' && Dashboard.init) Dashboard.init();
+      if (typeof ReportManager !== 'undefined' && ReportManager.init) ReportManager.init();
+      if (typeof HandoverManager !== 'undefined' && HandoverManager.init) HandoverManager.init();
+      if (typeof TicketManager !== 'undefined' && TicketManager.init) TicketManager.init();
+      if (typeof EmailFetchManager !== 'undefined' && EmailFetchManager.init) EmailFetchManager.init();
+      if (typeof EmailSendManager !== 'undefined' && EmailSendManager.init) EmailSendManager.init();
+      if (typeof HistoryManager !== 'undefined' && HistoryManager.init) HistoryManager.init();
+      if (typeof SysSettings !== 'undefined' && SysSettings.init) SysSettings.init();
+      if (typeof UsrSettings !== 'undefined' && UsrSettings.init) UsrSettings.init();
+      if (typeof EmailSettings !== 'undefined' && EmailSettings.init) EmailSettings.init();
+      if (typeof TagSettings !== 'undefined' && TagSettings.init) TagSettings.init();
+
       if (typeof Store !== "undefined" && Store.init) {
-        await Store.init(); // รอโหลดข้อมูล User
+        // รอจนกว่าจะดึงข้อมูล User Settings จาก GAS สำเร็จ
+        await Store.init();
       }
 
-      // นำทางไปยังหน้าเดิม
       if (
         savedLastPage &&
         savedLastPage !== "undefined" &&
@@ -45,23 +56,13 @@
       console.error("App Init Failed", e);
       Router.navigateTo("page-dashboard");
     } finally {
-      // ✨ 4. ระบบนำทางเสร็จแล้ว ปลดล็อคและซ่อนหน้าโหลด
-      setTimeout(() => {
-        isAppReady = true;
+      isAppReady = true;
+      console.log("✅ App is fully ready.");
 
-        // ค้นหาหน้า Splash Screen
-        const splashScreen = document.getElementById("initial-splash-screen");
-        if (splashScreen) {
-          // สั่งให้ค่อยๆ จางหายไป (Fade out)
-          splashScreen.style.opacity = "0";
-
-          // พอจางหายเสร็จ (500ms) ให้ลบทิ้งออกจากหน้าเว็บไปเลย จะได้ไม่กินแรม
-          setTimeout(() => {
-            splashScreen.remove();
-            console.log("✅ App is fully ready.");
-          }, 500);
-        }
-      }, 500); // หน่วงเวลาให้ Router ทำงานเสร็จภาพไม่กระตุก
+      // ✨ ปิด Global Loader (ที่ฝังไว้ใน HTML) เมื่อข้อมูลจากหลังบ้านโหลดเสร็จ
+      if (typeof hideGlobalLoader === 'function') {
+        hideGlobalLoader();
+      }
     }
   });
 </script>

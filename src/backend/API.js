@@ -84,16 +84,6 @@ const API_UTILS = (() => {
 function apiHandler(request) {
   const { func, data } = request;
 
-  // ✨ [SECURITY] Middleware Check: ตรวจสอบสิทธิ์ก่อนเข้าถึงระบบหลังบ้านทุกครั้ง
-  const auth = AuthController.verifyUser();
-  if (!auth.success && func !== "getUserSettings") {
-    // บล็อกการทำงานทันทีหากไม่อยู่ใน Whitelist
-    return JSON.stringify({
-      success: false,
-      error: "403 Forbidden: " + auth.message,
-    });
-  }
-
   const apiMap = {
     // Ticket Core
     getTickets: () => TicketController.getTickets(false),
@@ -107,9 +97,12 @@ function apiHandler(request) {
     apiGetAllSettings: () => SettingController.apiGetAllSettings(),
     apiSaveAllSettings: (d) => SettingController.apiSaveAllSettings(d),
 
+    updateTicketIdOnly: (d) => TicketController.updateTicketIdOnly(d.oldId, d.newId),
+
     // Gmail & Import
     getEmailPreviews: () => GmailService.getUnsyncedEmails(),
     saveBatchTickets: (d) => GmailService.saveBatchTickets(d),
+    apiCreateDraftEmail: (d) => GmailService.createDraftTicket(d),
 
     // Match Core
     apiGetWorkList: (d) => MatchController.apiGetWorkList(d),
@@ -124,6 +117,9 @@ function apiHandler(request) {
     // ✨ Shift Handover
     getHandovers: () => HandoverController.getHandovers(),
     createHandover: (d) => HandoverController.createHandover(d),
+    updateHandover: (d) => HandoverController.updateHandover(d),
+    deleteHandover: (id) => HandoverController.deleteHandover(id),
+    resolveHandover: (id) => HandoverController.resolveHandover(id),
     acknowledgeHandover: (d) => HandoverController.acknowledgeHandover(d),
 
 

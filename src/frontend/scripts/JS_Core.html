@@ -144,10 +144,10 @@
               if (currentTry < options.retries) {
                 console.warn(
                   "Connection issue, retrying... (" +
-                    (currentTry + 1) +
-                    "/" +
-                    options.retries +
-                    ")",
+                  (currentTry + 1) +
+                  "/" +
+                  options.retries +
+                  ")",
                 );
                 setTimeout(function () {
                   attempt(currentTry + 1);
@@ -189,7 +189,7 @@
       if (typeof Swal !== "undefined") {
         const Toast = Swal.mixin({
           toast: true,
-          position: "top-end",
+          position: "bottom-end",
           showConfirmButton: false,
           timer: 3000,
           timerProgressBar: true,
@@ -225,8 +225,8 @@
         '<span class="loading loading-spinner loading-lg text-primary"></span>' +
         (msg
           ? '<p class="mt-2 text-white font-bold drop-shadow-md text-sm">' +
-            msg +
-            "</p>"
+          msg +
+          "</p>"
           : "") +
         "</div>";
       document.body.appendChild(d);

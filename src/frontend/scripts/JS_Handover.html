@@ -3,45 +3,59 @@
   let handoverItems = [];
   let filteredItems = [];
   let handoverTags = [];
+  let handoverTypes = [];
   let selectedHandoverId = null;
   let selectedFormTags = [];
+  let _isHandoverDataLoaded = false;
 
-  document.addEventListener('DOMContentLoaded', function () {
-    const hoPage = document.getElementById('page-handover');
-    if (hoPage) {
-      let isFirstLoad = true;
-      const observer = new MutationObserver(function (mutations) {
-        mutations.forEach(function (mutation) {
-          if (mutation.attributeName === "class" && !hoPage.classList.contains('hidden') && isFirstLoad) {
-            loadHandovers();
-            isFirstLoad = false;
-          }
-        });
-      });
-      observer.observe(hoPage, { attributes: true });
-    }
-  });
+  window.HandoverManager = (function () {
+    return {
+      init: function () {
+        if (typeof Router !== 'undefined') {
+          Router.register('page-handover', this);
+        }
+      },
+      onShow: function () {
+        loadHandovers();
+      }
+    };
+  })();
 
-  // ==================== [ระบบโหลดข้อมูล & ปุ่มโหลด] ====================
-
+  // ==================== [ระบบโหลดข้อมูล & Filter] ====================
   function loadHandoversWithBtn() {
     const btn = document.getElementById('btn-load-handovers');
     if (btn) btn.classList.add('is-loading');
-
+    _isHandoverDataLoaded = false; // Force refresh
     loadHandovers(false, function () {
       if (btn) btn.classList.remove('is-loading');
+      UIManager.showToast("อัปเดตข้อมูลส่งกะแล้ว", "success");
     });
   }
 
   function loadHandovers(keepSelection = false, callback = null) {
-    const listContainer = document.getElementById('ho_list_container');
+    if (_isHandoverDataLoaded) {
+      console.log("🚚 Handover Cache Hit");
+      if (callback) callback();
+      filterHandovers(keepSelection);
+      return;
+    }
 
+    const listContainer = document.getElementById('ho_list_container');
     if (!callback && listContainer) {
-      listContainer.innerHTML = `
-        <div class="flex flex-col items-center justify-center py-10 text-gray-400">
-          <span class="loading loading-spinner loading-md text-primary mb-2"></span>
-          <p class="text-xs font-bold">กำลังซิงค์ข้อมูล...</p>
-        </div>`;
+      let skeletonHtml = '';
+      for (let i = 0; i < 6; i++) {
+        skeletonHtml += `
+          <div class="px-3 py-3 mb-1 bg-white rounded-lg border border-gray-100">
+            <div class="flex items-start gap-3">
+              <div class="skeleton w-3 h-3 rounded-full mt-0.5 shrink-0 bg-gray-200"></div>
+              <div class="flex-1 space-y-2">
+                <div class="skeleton h-3 w-3/4 rounded bg-gray-200"></div>
+                <div class="skeleton h-2 w-1/2 rounded bg-gray-200"></div>
+              </div>
+            </div>
+          </div>`;
+      }
+      listContainer.innerHTML = skeletonHtml;
     }
 
     google.script.run
@@ -50,50 +64,60 @@
         try {
           const response = typeof res === 'string' ? JSON.parse(res) : res;
           if (response.success) {
+            _isHandoverDataLoaded = true;
             currentTeamMembers = response.data.team || [];
             handoverTags = response.data.tags || [];
+            handoverTypes = response.data.types || [];
             handoverItems = response.data.items || [];
             filteredItems = [...handoverItems];
-
             updateTagsDropdown(handoverTags);
+            updateTypeDropdown(handoverTypes);
             populateCreatorDropdown();
-
-            const searchInput = document.getElementById('ho_search_input');
-            if (keepSelection && searchInput && searchInput.value.trim() !== '') {
-              filterHandovers();
-            } else {
-              if (!keepSelection && searchInput) searchInput.value = '';
-              renderHandoverCards(filteredItems, keepSelection);
-            }
+            filterHandovers(keepSelection);
           }
         } catch (e) { console.error(e); }
       })
       .apiHandler({ func: "getHandovers", data: null });
   }
 
-  function filterHandovers() {
-    const searchInput = document.getElementById('ho_search_input');
-    if (!searchInput) return;
-    const searchText = searchInput.value.toLowerCase().trim();
-    if (searchText === '') {
-      filteredItems = [...handoverItems];
-    } else {
+  let searchTimeout;
+  function filterHandovers(keepSelection = true) {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      const searchInput = document.getElementById('ho_search_input');
+      const statusFilter = document.getElementById('ho_status_filter');
+      const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
+      const statusVal = statusFilter ? statusFilter.value : 'all';
+
       filteredItems = handoverItems.filter(item => {
-        const topicMatch = (item.topic || '').toLowerCase().includes(searchText);
-        let tagMatch = false;
-        if (Array.isArray(item.tags)) tagMatch = item.tags.some(t => t.toLowerCase().includes(searchText));
-        return topicMatch || tagMatch;
+        let textMatched = true;
+        if (searchText !== '') {
+          const topicMatch = (item.topic || '').toLowerCase().includes(searchText);
+          let tagMatch = false;
+          if (Array.isArray(item.tags)) tagMatch = item.tags.some(t => t.toLowerCase().includes(searchText));
+          textMatched = topicMatch || tagMatch;
+        }
+        let statusMatched = true;
+        if (statusVal === 'pending') statusMatched = item.status !== 'Succeed';
+        if (statusVal === 'succeed') statusMatched = item.status === 'Succeed';
+        return textMatched && statusMatched;
       });
-    }
-    renderHandoverCards(filteredItems, true);
+      renderHandoverCards(filteredItems, keepSelection);
+    }, 200);
   }
 
-  // ==================== [Tag & Creator Management] ====================
   function updateTagsDropdown(tags) {
     const select = document.getElementById('ho_tags_select');
     if (!select) return;
     select.innerHTML = '<option value="" disabled selected>-- เลือก Tag --</option>';
     tags.forEach(tag => select.innerHTML += `<option value="${tag}">${tag}</option>`);
+  }
+
+  function updateTypeDropdown(types) {
+    const select = document.getElementById('ho_type_select');
+    if (!select) return;
+    select.innerHTML = '<option value="">-- ไม่ระบุ --</option>';
+    types.forEach(type => select.innerHTML += `<option value="${type}">${type}</option>`);
   }
 
   function populateCreatorDropdown() {
@@ -134,36 +158,63 @@
     `).join('');
   }
 
-  // ==================== [✨ ระบบ Dynamic Rows (ปุ่มเพิ่มแถวใหม่)] ====================
-
   function addDynamicRow(containerId, placeholderStr, type = 'textarea', valueStr = '') {
     const container = document.getElementById(containerId);
     if (!container) return;
     const rowId = `row_${Math.random().toString(36).substr(2, 9)}`;
-
-    let inputHTML = '';
-    if (type === 'textarea') {
-      inputHTML = `<textarea class="textarea textarea-bordered w-full min-h-[60px] text-xs bg-slate-50 focus:bg-white focus:outline-primary leading-relaxed" placeholder="${placeholderStr}">${valueStr}</textarea>`;
-    } else {
-      inputHTML = `<input type="text" class="input input-sm input-bordered w-full text-xs bg-slate-50 focus:bg-white focus:outline-primary" placeholder="${placeholderStr}" value="${valueStr}" />`;
-    }
-
+    let inputHTML = (type === 'textarea')
+      ? `<textarea class="textarea textarea-bordered w-full min-h-[60px] text-xs bg-slate-50 focus:bg-white focus:outline-primary leading-relaxed rounded-lg" placeholder="${placeholderStr}">${valueStr}</textarea>`
+      : `<input type="text" class="input input-sm input-bordered w-full text-xs bg-slate-50 focus:bg-white focus:outline-primary rounded-lg" placeholder="${placeholderStr}" value="${valueStr}" />`;
     const html = `
       <div id="${rowId}" class="flex gap-2 items-start relative group">
         <div class="flex-1">${inputHTML}</div>
-        <button type="button" class="btn btn-sm btn-square btn-ghost text-red-400 hover:text-red-600 hover:bg-red-50" onclick="document.getElementById('${rowId}').remove()" title="ลบข้อมูลนี้"><i class="fas fa-trash-alt"></i></button>
+        <button type="button" class="btn btn-sm btn-square btn-ghost text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onclick="document.getElementById('${rowId}').remove()" title="ลบข้อมูลนี้"><i class="fas fa-trash-alt"></i></button>
       </div>`;
+    container.insertAdjacentHTML('beforeend', html);
+  }
 
+  function addDynamicContactRow(containerId, placeholderStr, valueObj = { type: 'phone', val: '' }) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const rowId = `row_${Math.random().toString(36).substr(2, 9)}`;
+    let type = 'phone';
+    let val = '';
+    if (typeof valueObj === 'string') {
+      val = valueObj;
+    } else if (valueObj) {
+      type = valueObj.type || 'phone';
+      val = valueObj.val || '';
+    }
+    const html = `
+      <div id="${rowId}" class="flex gap-2 items-center relative group contact-row">
+        <select class="select select-sm select-bordered bg-slate-50 focus:bg-white text-xs w-28 contact-type">
+           <option value="phone" ${type === 'phone' ? 'selected' : ''}>📞 โทรศัพท์</option>
+           <option value="email" ${type === 'email' ? 'selected' : ''}>✉️ อีเมล</option>
+        </select>
+        <div class="flex-1"><input type="text" class="input input-sm input-bordered w-full text-xs bg-slate-50 focus:bg-white rounded-lg contact-val" placeholder="${placeholderStr}" value="${val}" /></div>
+        <button type="button" class="btn btn-sm btn-square btn-ghost text-red-400 hover:bg-red-50 rounded-lg" onclick="document.getElementById('${rowId}').remove()"><i class="fas fa-trash-alt"></i></button>
+      </div>`;
     container.insertAdjacentHTML('beforeend', html);
   }
 
   function getDynamicValues(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return '[]';
-    const inputs = container.querySelectorAll('input, textarea');
     const values = [];
-    inputs.forEach(input => {
+    container.querySelectorAll('input, textarea').forEach(input => {
       if (input.value.trim() !== '') values.push(input.value.trim());
+    });
+    return JSON.stringify(values);
+  }
+
+  function getDynamicContactValues(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return '[]';
+    const values = [];
+    container.querySelectorAll('.contact-row').forEach(row => {
+      const type = row.querySelector('.contact-type').value;
+      const val = row.querySelector('.contact-val').value.trim();
+      if (val !== '') values.push({ type, val });
     });
     return JSON.stringify(values);
   }
@@ -179,7 +230,6 @@
     } catch (e) {
       if (jsonStr && jsonStr.trim() !== '') values = [jsonStr];
     }
-
     if (values.length === 0) {
       addDynamicRow(containerId, placeholderStr, type);
     } else {
@@ -187,50 +237,64 @@
     }
   }
 
-  // ==================== [UI Rendering] ====================
+  function renderDynamicContactValues(containerId, jsonStr, placeholderStr) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    let values = [];
+    try {
+      const parsed = JSON.parse(jsonStr);
+      values = Array.isArray(parsed) ? parsed : [jsonStr];
+    } catch (e) {
+      if (jsonStr && jsonStr.trim() !== '') values = [jsonStr];
+    }
+    if (values.length === 0) {
+      addDynamicContactRow(containerId, placeholderStr);
+    } else {
+      values.forEach(val => addDynamicContactRow(containerId, placeholderStr, val));
+    }
+  }
 
   function renderHandoverCards(items, keepSelection) {
     const container = document.getElementById('ho_list_container');
     const badge = document.getElementById('ho_count_badge');
     if (badge) badge.innerText = items.length;
-
     if (items.length === 0) {
       container.innerHTML = `<div class="text-center py-10 text-xs text-gray-400">ไม่มีรายการ</div>`;
       showEmptyState();
       return;
     }
-
     let html = '';
     items.forEach(item => {
       const isSelected = selectedHandoverId === item.id;
-      const cardClass = isSelected ? "border-primary bg-indigo-50/30 ring-1 ring-primary/20" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50";
-
-      const shiftIcon = item.shift === 'Day' ? '<i class="fas fa-sun text-amber-500"></i>' : '<i class="fas fa-moon text-indigo-500"></i>';
+      const cardClass = isSelected ? "bg-gray-100/80 rounded-lg shadow-sm border border-gray-200" : "bg-transparent border border-transparent hover:bg-gray-50 hover:border-gray-200 rounded-lg";
+      const statusColor = item.status === 'Succeed' ? 'text-emerald-500' : 'text-amber-500';
+      const statusIcon = item.status === 'Succeed' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-circle-notch"></i>';
+      const shiftIcon = item.shift === 'Day' ? '<i class="fas fa-sun text-gray-400"></i>' : '<i class="fas fa-moon text-gray-400"></i>';
       const timeStr = new Date(item.timestamp).toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit' });
-      const statusIcon = item.status === 'Succeed' ? '<i class="fas fa-check-circle text-green-500"></i>' : '<i class="fas fa-clock text-amber-500"></i>';
-
       let tagsHtml = '';
       if (Array.isArray(item.tags) && item.tags.length > 0) {
-        tagsHtml = item.tags.slice(0, 2).map(t => `<span class="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">${t}</span>`).join('');
-        if (item.tags.length > 2) tagsHtml += `<span class="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">+${item.tags.length - 2}</span>`;
+        tagsHtml = item.tags.slice(0, 1).map(t => `<span class="text-[10px] font-medium text-gray-500 border border-gray-200 bg-white px-1.5 py-0.5 rounded">${t}</span>`).join('');
+        if (item.tags.length > 1) tagsHtml += `<span class="text-[10px] font-medium text-gray-400 ml-1">+${item.tags.length - 1}</span>`;
       }
-
       html += `
-        <div class="p-3 rounded-xl cursor-pointer transition-all border ${cardClass}" onclick="selectHandover('${item.id}')" id="card_${item.id}">
-          <div class="flex justify-between items-start mb-1.5">
-            <div class="flex gap-1 flex-wrap">${tagsHtml}</div>
-            <span class="text-[10px] text-gray-500 font-mono flex items-center gap-1">${shiftIcon} ${timeStr}</span>
-          </div>
-          <h3 class="font-bold text-xs text-gray-800 leading-snug line-clamp-2 mb-2">${item.topic || '-'}</h3>
-          <div class="flex justify-between items-center text-[10px] font-bold text-gray-500">
-            <span class="flex items-center gap-1">${statusIcon} ${item.status}</span>
-            <span class="truncate max-w-[80px]"><i class="fas fa-user-edit opacity-50"></i> ${item.creator || ''}</span>
+        <div class="px-3 py-2.5 mb-1 cursor-pointer transition-all ${cardClass}" onclick="selectHandover('${item.id}')" id="card_${item.id}">
+          <div class="flex items-start gap-2.5">
+            <div class="mt-0.5 ${statusColor} text-[10px] shrink-0" title="${item.status}">${statusIcon}</div>
+            <div class="flex-1 min-w-0">
+              <h3 class="font-semibold text-[13px] text-gray-800 leading-tight truncate mb-1.5">${item.topic || '-'}</h3>
+              <div class="flex items-center gap-2 text-[11px] text-gray-500 font-medium">
+                <span class="flex items-center gap-1">${shiftIcon} ${timeStr}</span>
+                <span class="text-gray-300">|</span>
+                <span class="truncate max-w-[80px]">${item.creator || ''}</span>
+                ${item.type ? `<span class="ml-1 font-bold text-blue-500">[${item.type}]</span>` : ''}
+                <div class="ml-auto flex gap-1">${tagsHtml}</div>
+              </div>
+            </div>
           </div>
         </div>`;
     });
-
     container.innerHTML = html;
-
     if (keepSelection && selectedHandoverId && items.find(i => i.id === selectedHandoverId)) {
       selectHandover(selectedHandoverId);
     } else {
@@ -241,16 +305,14 @@
   function showEmptyState() {
     selectedHandoverId = null;
     document.getElementById('ho_empty_state').classList.remove('hidden');
-
+    document.getElementById('ho_skeleton_state').classList.add('hidden');
     const detailContent = document.getElementById('ho_detail_content');
     detailContent.classList.add('hidden');
     detailContent.classList.remove('flex');
-
     document.querySelectorAll('#ho_list_container > div').forEach(card => {
-      card.classList.remove('border-primary', 'bg-indigo-50/30', 'ring-1', 'ring-primary/20');
-      card.classList.add('border-slate-200', 'bg-white');
+      card.classList.remove('bg-gray-100/80', 'shadow-sm', 'border-gray-200');
+      card.classList.add('bg-transparent', 'border-transparent', 'hover:bg-gray-50', 'hover:border-gray-200');
     });
-
     if (window.innerWidth < 1024) {
       const wrap = document.getElementById('ho_detail_wrapper');
       wrap.classList.remove('flex', 'absolute', 'inset-0', 'z-50', 'bg-base-200', 'p-4');
@@ -260,22 +322,20 @@
 
   function selectHandover(id) {
     selectedHandoverId = id;
-
     document.querySelectorAll('#ho_list_container > div').forEach(card => {
-      card.classList.remove('border-primary', 'bg-indigo-50/30', 'ring-1', 'ring-primary/20');
-      card.classList.add('border-slate-200', 'bg-white');
+      card.classList.remove('bg-gray-100/80', 'shadow-sm', 'border-gray-200');
+      card.classList.add('bg-transparent', 'border-transparent', 'hover:bg-gray-50', 'hover:border-gray-200');
     });
     const activeCard = document.getElementById(`card_${id}`);
     if (activeCard) {
-      activeCard.classList.remove('border-slate-200', 'bg-white');
-      activeCard.classList.add('border-primary', 'bg-indigo-50/30', 'ring-1', 'ring-primary/20');
+      activeCard.classList.remove('bg-transparent', 'border-transparent', 'hover:bg-gray-50', 'hover:border-gray-200');
+      activeCard.classList.add('bg-gray-100/80', 'shadow-sm', 'border-gray-200');
     }
-
     document.getElementById('ho_empty_state').classList.add('hidden');
+    document.getElementById('ho_skeleton_state').classList.add('hidden');
     const detailContent = document.getElementById('ho_detail_content');
     detailContent.classList.remove('hidden');
     detailContent.classList.add('flex');
-
     const wrap = document.getElementById('ho_detail_wrapper');
     if (window.innerWidth < 1024) {
       wrap.classList.remove('hidden');
@@ -284,194 +344,167 @@
       wrap.classList.remove('hidden');
       wrap.classList.add('flex');
     }
-
     const item = handoverItems.find(i => i.id === id);
     if (item) renderDetailData(item);
   }
 
-  function closeDetail() {
-    showEmptyState();
+  function showRightSkeleton() {
+    document.getElementById('ho_empty_state').classList.add('hidden');
+    document.getElementById('ho_skeleton_state').classList.remove('hidden');
+    const detailContent = document.getElementById('ho_detail_content');
+    detailContent.classList.add('hidden');
+    detailContent.classList.remove('flex');
+    const wrap = document.getElementById('ho_detail_wrapper');
+    if (window.innerWidth < 1024) {
+      wrap.classList.remove('hidden');
+      wrap.classList.add('flex', 'absolute', 'inset-0', 'z-50', 'bg-base-200', 'p-4');
+    } else {
+      wrap.classList.remove('hidden');
+      wrap.classList.add('flex');
+    }
   }
+
+  function closeDetail() { showEmptyState(); }
 
   function renderDetailData(item) {
     document.getElementById('ho_detail_topic').innerText = item.topic || '-';
     document.getElementById('ho_detail_time_text').innerText = new Date(item.timestamp).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
     document.getElementById('ho_detail_creator_text').innerText = item.creator || 'Unknown';
-
     const tagsContainer = document.getElementById('ho_detail_tags_container');
-    if (Array.isArray(item.tags) && item.tags.length > 0) {
-      tagsContainer.innerHTML = item.tags.map(t => `<span class="badge badge-sm badge-outline border-slate-300 font-bold text-slate-600 bg-white">${t}</span>`).join('');
-    } else {
-      tagsContainer.innerHTML = ``;
-    }
-
+    tagsContainer.innerHTML = (Array.isArray(item.tags) && item.tags.length > 0)
+      ? item.tags.map(t => `<span class="text-xs font-medium text-gray-600 bg-gray-100/80 px-2 py-0.5 rounded-md border border-gray-200/50">${t}</span>`).join('')
+      : '';
     const statusEl = document.getElementById('ho_detail_status');
     if (item.status === 'Succeed') {
-      statusEl.className = 'badge badge-sm font-bold border-0 bg-green-100 text-green-700';
-      statusEl.innerText = 'Succeed';
+      statusEl.className = 'text-[11px] font-semibold border border-emerald-200 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md flex items-center gap-1.5 shadow-sm';
+      statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Succeed';
     } else {
-      statusEl.className = 'badge badge-sm font-bold border-0 bg-amber-100 text-amber-700';
-      statusEl.innerText = 'Pending';
+      statusEl.className = 'text-[11px] font-semibold border border-amber-200 text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md flex items-center gap-1.5 shadow-sm';
+      statusEl.innerHTML = '<i class="fas fa-circle-notch"></i> Pending';
     }
-
-    document.getElementById('ho_detail_shift').innerText = item.shift || '-';
-
-    // วาด Timeline
+    const shiftIcon = item.shift === 'Day' ? '<i class="fas fa-sun text-amber-500"></i>' : '<i class="fas fa-moon text-indigo-500"></i>';
+    const shiftEl = document.getElementById('ho_detail_shift');
+    const typeHtml = item.type ? `<span class="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md ml-2">${item.type}</span>` : '';
+    shiftEl.innerHTML = `${shiftIcon} <span class="ml-1">${item.shift || '-'} Shift</span>${typeHtml}`;
+    shiftEl.className = 'text-[11px] font-semibold text-gray-600 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-200 flex items-center shadow-sm';
     let detailsArr = [];
     try { detailsArr = JSON.parse(item.detail); } catch (e) { detailsArr = [item.detail]; }
     const timelineContainer = document.getElementById('ho_detail_timeline');
-    timelineContainer.innerHTML = '';
-
-    if (Array.isArray(detailsArr) && detailsArr.length > 0) {
-      detailsArr.forEach((txt, idx) => {
-        timelineContainer.innerHTML += `
-          <div class="flex gap-3 items-start">
-            <div class="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 mt-0.5 text-[10px]">${idx + 1}</div>
-            <div class="bg-slate-50/50 p-3 rounded-xl border border-slate-200 text-xs text-gray-700 leading-relaxed w-full whitespace-pre-line">${txt}</div>
-          </div>`;
-      });
-    } else {
-      timelineContainer.innerHTML = '<span class="text-xs text-gray-400 italic">- ไม่มีข้อมูล -</span>';
-    }
-
-    // วาด Contact
+    timelineContainer.innerHTML = (Array.isArray(detailsArr) && detailsArr.length > 0)
+      ? detailsArr.map((txt, idx) => `
+          <div class="flex gap-3 items-start pb-3">
+            <div class="w-5 h-5 rounded-md bg-gray-100 text-gray-500 font-semibold flex items-center justify-center shrink-0 mt-0.5 text-[11px] border border-gray-200/50">${idx + 1}</div>
+            <div class="text-[13px] text-gray-700 leading-relaxed w-full whitespace-pre-line pt-0.5">${txt.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+          </div>`).join('')
+      : '<span class="text-sm text-gray-400 italic">- ไม่มีข้อมูล -</span>';
     let contactsArr = [];
     try { contactsArr = JSON.parse(item.contact); } catch (e) { contactsArr = [item.contact]; }
     const contactWrap = document.getElementById('ho_detail_contact_wrap');
     const contactGrid = document.getElementById('ho_detail_contact_grid');
-    contactGrid.innerHTML = '';
-
-    if (Array.isArray(contactsArr) && contactsArr.length > 0 && contactsArr[0].trim() !== '') {
+    if (Array.isArray(contactsArr) && contactsArr.length > 0 && contactsArr[0] && (typeof contactsArr[0] !== 'string' || contactsArr[0].trim() !== '')) {
       contactWrap.classList.remove('hidden');
-      contactsArr.forEach(txt => {
-        contactGrid.innerHTML += `
-          <div class="flex items-center gap-3 bg-info/5 border border-info/20 p-2.5 rounded-xl">
-            <div class="w-8 h-8 rounded-full bg-info/20 text-info flex items-center justify-center shrink-0 text-sm"><i class="fas fa-phone"></i></div>
-            <p class="text-xs font-semibold text-slate-700">${txt}</p>
-          </div>`;
-      });
-    } else {
-      contactWrap.classList.add('hidden');
-    }
-
+      contactGrid.innerHTML = contactsArr.map(c => {
+        let type = 'phone';
+        let val = '';
+        if (typeof c === 'string') {
+          val = c;
+        } else if (c && c.val) {
+          type = c.type;
+          val = c.val;
+        } else { return ''; }
+        if (val.trim() === '') return '';
+        const icon = type === 'email' ? '<i class="fas fa-envelope text-gray-400 text-[10px]"></i>' : '<i class="fas fa-phone text-gray-400 text-[10px]"></i>';
+        return `<div class="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg border border-gray-100">
+          ${icon}
+          <p class="text-[13px] font-medium text-gray-700">${val.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
+        </div>`;
+      }).join('');
+    } else { contactWrap.classList.add('hidden'); }
     renderAcknowledgeSection(item);
+    const btnResolve = document.getElementById('btn_quick_resolve');
+    if (btnResolve) {
+      if (item.status !== 'Succeed') { btnResolve.classList.remove('hidden'); btnResolve.classList.add('flex'); }
+      else { btnResolve.classList.add('hidden'); btnResolve.classList.remove('flex'); }
+    }
   }
 
   function renderAcknowledgeSection(item) {
     const container = document.getElementById('ho_ack_container');
-    let html = '';
-
-    if (currentTeamMembers.length === 0) {
-      html = `<div class="col-span-full text-[10px] text-error">ไม่พบข้อมูลทีม</div>`;
-    }
-
-    currentTeamMembers.forEach(fullName => {
+    if (currentTeamMembers.length === 0) { container.innerHTML = `<div class="col-span-full text-[10px] text-error">ไม่พบข้อมูลทีม</div>`; return; }
+    container.innerHTML = currentTeamMembers.map(fullName => {
       const shortName = fullName.split(' ')[0];
-      const ackTime = item.acknowledged[fullName];
-
-      if (ackTime) {
-        html += `
-          <button onclick="ackHandover('${item.id}', '${fullName}', this)" class="btn btn-sm h-auto py-2 px-3 flex items-center justify-start gap-2 w-full bg-green-50 border-green-200 hover:bg-red-50 hover:border-red-200 group text-left rounded-lg transition-colors shadow-none">
-            <i class="fas fa-check-circle text-green-500 group-hover:hidden"></i>
-            <i class="fas fa-times-circle text-red-500 hidden group-hover:inline"></i>
-            <div class="flex flex-col leading-none">
-              <span class="text-xs font-bold text-green-700 group-hover:text-red-600">${shortName}</span>
-              <span class="text-[9px] text-green-600/70 mt-0.5">${ackTime}</span>
-            </div>
-          </button>`;
-      } else {
-        html += `
-          <button onclick="ackHandover('${item.id}', '${fullName}', this)" class="btn btn-sm h-auto py-2 px-3 flex items-center justify-start gap-2 w-full bg-white border-slate-200 hover:bg-green-50 hover:border-green-300 text-left rounded-lg transition-colors shadow-none">
-            <i class="fas fa-user-circle text-slate-300"></i>
-            <div class="flex flex-col leading-none">
-              <span class="text-xs font-bold text-slate-600">${shortName}</span>
-              <span class="text-[9px] text-slate-400 mt-0.5">รอรับทราบ</span>
-            </div>
-          </button>`;
-      }
-    });
-    container.innerHTML = html;
+      const ackTime = item.acknowledged && item.acknowledged[fullName] ? item.acknowledged[fullName] : null;
+      return ackTime ? `
+        <button onclick="ackHandover('${item.id}', '${fullName}', this)" class="btn btn-sm h-auto py-2 px-3 flex items-center justify-start gap-2 w-full bg-emerald-50/50 border-emerald-100 hover:bg-red-50 hover:border-red-100 group text-left rounded-lg transition-colors shadow-none font-sans">
+          <i class="fas fa-check-circle text-emerald-500 group-hover:hidden"></i>
+          <i class="fas fa-times-circle text-red-400 hidden group-hover:inline"></i>
+          <div class="flex flex-col leading-tight">
+            <span class="text-xs font-semibold text-emerald-700 group-hover:text-red-600">${shortName}</span>
+            <span class="text-[10px] text-emerald-600/70 font-medium">${ackTime}</span>
+          </div>
+        </button>` : `
+        <button onclick="ackHandover('${item.id}', '${fullName}', this)" class="btn btn-sm h-auto py-2 px-3 flex items-center justify-start gap-2 w-full bg-white border-gray-200 hover:bg-gray-50 text-left rounded-lg transition-colors shadow-none font-sans">
+          <div class="w-4 h-4 rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0"><i class="fas fa-user text-gray-300 text-[8px]"></i></div>
+          <div class="flex flex-col leading-tight"><span class="text-xs font-semibold text-gray-600">${shortName}</span><span class="text-[10px] text-gray-400 font-medium">รอรับทราบ</span></div>
+        </button>`;
+    }).join('');
   }
 
   let isAcknowledging = false;
-
   function ackHandover(id, name, btnObj) {
     if (isAcknowledging) return;
     isAcknowledging = true;
-
     const container = document.getElementById('ho_ack_container');
     if (container) {
-      const allBtns = container.querySelectorAll('button');
-      allBtns.forEach(b => {
-        if (b !== btnObj) {
-          b.disabled = true;
-          b.classList.add('opacity-50', 'cursor-not-allowed');
-        }
-      });
+      container.querySelectorAll('button').forEach(b => { if (b !== btnObj) { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); } });
     }
-
-    let originalHtml = '';
-    if (btnObj) {
-      originalHtml = btnObj.innerHTML;
-      btnObj.innerHTML = '<div class="flex items-center justify-center w-full py-0.5"><span class="loading loading-spinner loading-sm text-primary"></span></div>';
-    }
-
-    const Toast = Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 1500 });
-
+    let originalHtml = btnObj ? btnObj.innerHTML : '';
+    if (btnObj) btnObj.innerHTML = '<div class="flex items-center justify-center w-full py-0.5"><span class="loading loading-spinner loading-sm text-primary"></span></div>';
     google.script.run
       .withSuccessHandler(function (res) {
         isAcknowledging = false;
-        Toast.fire({ icon: 'success', title: res.message });
+        Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 1500 }).fire({ icon: 'success', title: res.message });
+        _isHandoverDataLoaded = false;
+        showRightSkeleton();
         loadHandovers(true);
       })
       .withFailureHandler(function (err) {
         isAcknowledging = false;
-        Toast.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด' });
-
+        Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 1500 }).fire({ icon: 'error', title: 'เกิดข้อผิดพลาด' });
         if (btnObj) btnObj.innerHTML = originalHtml;
-        if (container) {
-          const allBtns = container.querySelectorAll('button');
-          allBtns.forEach(b => {
-            b.disabled = false;
-            b.classList.remove('opacity-50', 'cursor-not-allowed');
-          });
-        }
+        if (container) { container.querySelectorAll('button').forEach(b => { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); }); }
       })
       .apiHandler({ func: "acknowledgeHandover", data: { id: id, name: name } });
   }
 
-  // ==================== [Modal Management] ====================
-
   function openCreateModal() {
     document.getElementById('ho_edit_id').value = '';
     document.getElementById('ho_topic').value = '';
-
+    document.getElementById('ho_type_select').value = '';
     selectedFormTags = [];
     document.getElementById('ho_tags_select').value = "";
     renderFormTagsUI();
-
     renderDynamicValues('dynamic_detail_container', '[]', 'ระบุรายละเอียดหรือสิ่งที่ต้องทำ...', 'textarea');
-    renderDynamicValues('dynamic_contact_container', '[]', 'ชื่อ - เบอร์โทร', 'input');
-
-    let currentUser = "Unknown";
-    try {
-      const storedUser = localStorage.getItem("gas_app_user");
-      if (storedUser) currentUser = JSON.parse(storedUser).userName || "Unknown";
-    } catch (e) { }
+    renderDynamicContactValues('dynamic_contact_container', '[]', 'ชื่อ - เบอร์โทร');
+    let currentUser = (typeof Store !== "undefined" && Store.state && Store.state.currentUser) ? Store.state.currentUser.userName || "" : "";
     const creatorSelect = document.getElementById('ho_creator_select');
-    for (let i = 0; i < creatorSelect.options.length; i++) {
-      if (creatorSelect.options[i].value === currentUser) {
-        creatorSelect.selectedIndex = i;
-        break;
-      }
-    }
+    for (let i = 0; i < creatorSelect.options.length; i++) { if (creatorSelect.options[i].value === currentUser) { creatorSelect.selectedIndex = i; break; } }
 
-    const hour = new Date().getHours();
-    const isDay = hour >= 8 && hour < 20;
-    const shiftHtml = isDay ? '<i class="fas fa-sun text-amber-500"></i> Day Shift' : '<i class="fas fa-moon text-indigo-500"></i> Night Shift';
-    document.getElementById('ho_modal_shift_display').innerHTML = shiftHtml;
+    // Default Time & Date
+    const nowLocal = new Date();
+    // Use tz offset trick to format properly for inputs without it converting back to UTC causing off-by-1-day
+    // For simplicity, building manually to local date
+    const yyyy = nowLocal.getFullYear();
+    const mm = String(nowLocal.getMonth() + 1).padStart(2, '0');
+    const dd = String(nowLocal.getDate()).padStart(2, '0');
+    document.getElementById('ho_date_input').value = `${yyyy}-${mm}-${dd}`;
+    document.getElementById('ho_time_input').value = String(nowLocal.getHours()).padStart(2, '0') + ":" + String(nowLocal.getMinutes()).padStart(2, '0');
+    document.getElementById('ho_modal_shift_select').value = "Auto";
 
-    document.getElementById('ho_modal_title').innerHTML = '<i class="fas fa-plus-circle text-success"></i> <span class="text-base">สร้างรายการส่งกะ</span>';
+    document.getElementById('ho_modal_time_controls').classList.add('hidden');
+    document.getElementById('ho_auto_time_display').classList.remove('hidden');
+
+    document.getElementById('ho_modal_title').innerHTML = '<i class="fas fa-plus-circle text-primary"></i> <span class="text-base text-gray-800">สร้างรายการส่งกะ</span>';
     document.getElementById('ho_modal').showModal();
   }
 
@@ -479,89 +512,117 @@
     if (!selectedHandoverId) return;
     const item = handoverItems.find(i => i.id === selectedHandoverId);
     if (!item) return;
-
     document.getElementById('ho_edit_id').value = item.id;
     document.getElementById('ho_topic').value = item.topic;
-
+    document.getElementById('ho_type_select').value = item.type || "";
     selectedFormTags = Array.isArray(item.tags) ? [...item.tags] : [];
-    document.getElementById('ho_tags_select').value = "";
     renderFormTagsUI();
-
     renderDynamicValues('dynamic_detail_container', item.detail, 'ระบุรายละเอียดหรือสิ่งที่ต้องทำ...', 'textarea');
-    renderDynamicValues('dynamic_contact_container', item.contact, 'ชื่อ - เบอร์โทร', 'input');
+    renderDynamicContactValues('dynamic_contact_container', item.contact, 'ชื่อ - เบอร์โทร');
+    document.getElementById('ho_creator_select').value = item.creator || "Unknown";
 
-    const creatorSelect = document.getElementById('ho_creator_select');
-    creatorSelect.value = item.creator || "Unknown";
+    // Set time/date
+    const itemDate = new Date(item.timestamp);
+    if (!isNaN(itemDate)) {
+      const yyyy = itemDate.getFullYear();
+      const mm = String(itemDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(itemDate.getDate()).padStart(2, '0');
+      document.getElementById('ho_date_input').value = `${yyyy}-${mm}-${dd}`;
+      document.getElementById('ho_time_input').value = String(itemDate.getHours()).padStart(2, '0') + ":" + String(itemDate.getMinutes()).padStart(2, '0');
+    }
+    document.getElementById('ho_modal_shift_select').value = item.shift || 'Auto';
 
-    const shiftHtml = item.shift === 'Day' ? '<i class="fas fa-sun text-amber-500"></i> Day Shift' : '<i class="fas fa-moon text-indigo-500"></i> Night Shift';
-    document.getElementById('ho_modal_shift_display').innerHTML = shiftHtml;
+    document.getElementById('ho_modal_time_controls').classList.remove('hidden');
+    document.getElementById('ho_auto_time_display').classList.add('hidden');
 
-    document.getElementById('ho_modal_title').innerHTML = '<i class="fas fa-edit text-warning"></i> <span class="text-base">แก้ไขรายการส่งกะ</span>';
+    document.getElementById('ho_modal_title').innerHTML = '<i class="fas fa-edit text-amber-500"></i> <span class="text-base text-gray-800">แก้ไขรายการ</span>';
     document.getElementById('ho_modal').showModal();
   }
 
   function deleteHandover() {
     if (!selectedHandoverId) return;
-    Swal.fire({
-      title: 'ลบรายการนี้?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#e3242b',
-      cancelButtonColor: '#9ca3af',
-      confirmButtonText: 'ลบทิ้ง',
-      cancelButtonText: 'ยกเลิก'
-    }).then((result) => {
+    Swal.fire({ title: 'ลบรายการนี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#e3242b', cancelButtonColor: '#9ca3af', confirmButtonText: 'ลบทิ้ง', cancelButtonText: 'ยกเลิก', customClass: { confirmButton: 'rounded-lg', cancelButton: 'rounded-lg' } }).then((result) => {
       if (result.isConfirmed) {
         Swal.fire({ title: 'กำลังลบ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-        google.script.run
-          .withSuccessHandler(function (res) {
-            Swal.fire({ icon: 'success', title: 'ลบเรียบร้อย', timer: 1500, showConfirmButton: false });
-            loadHandovers(false);
-          })
-          .apiHandler({ func: "deleteHandover", data: selectedHandoverId });
+        google.script.run.withSuccessHandler(function (res) {
+          const resp = typeof res === 'string' ? JSON.parse(res) : res;
+          if (resp && resp.success === false) return Swal.fire({ icon: 'error', title: 'ไม่สามารถลบได้', text: resp.message || resp.error });
+          Swal.fire({ icon: 'success', title: 'ลบเรียบร้อย', timer: 1500, showConfirmButton: false });
+          _isHandoverDataLoaded = false;
+          showRightSkeleton();
+          loadHandovers(false);
+        }).apiHandler({ func: "deleteHandover", data: selectedHandoverId });
       }
     });
   }
 
   function submitHandover() {
     const detailJSON = getDynamicValues('dynamic_detail_container');
-    const contactJSON = getDynamicValues('dynamic_contact_container');
+    const contactJSON = getDynamicContactValues('dynamic_contact_container');
     const creatorVal = document.getElementById('ho_creator_select').value;
+
+    let dateVal = document.getElementById('ho_date_input').value;
+    let timeVal = document.getElementById('ho_time_input').value;
+    let shiftVal = document.getElementById('ho_modal_shift_select').value;
+
+    const isHidden = document.getElementById('ho_modal_time_controls').classList.contains('hidden');
+    if (isHidden && !document.getElementById('ho_edit_id').value) {
+      // If not editing and it is hidden, treat it as Auto
+      dateVal = "";
+      timeVal = "";
+      shiftVal = "Auto";
+    }
 
     const data = {
       id: document.getElementById('ho_edit_id').value,
       tags: selectedFormTags,
       topic: document.getElementById('ho_topic').value.trim(),
+      type: document.getElementById('ho_type_select').value,
       detail: detailJSON,
       contact: contactJSON,
-      creator: creatorVal === "Unknown" ? "" : creatorVal
+      creator: creatorVal === "Unknown" ? "" : creatorVal,
+      overrideDate: dateVal,
+      overrideTime: timeVal,
+      shift: shiftVal
     };
-
-    if (!data.topic || detailJSON === '[]') {
-      Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบ', text: 'กรุณาระบุหัวข้อและรายละเอียดอย่างน้อย 1 ขั้นตอน', timer: 2000, showConfirmButton: false });
-      return;
-    }
-
+    if (!data.topic || detailJSON === '[]') { Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบ', text: 'กรุณาระบุหัวข้อและรายละเอียดอย่างน้อย 1 ขั้นตอน', timer: 2000, showConfirmButton: false }); return; }
     const btnText = document.getElementById('submit-ho-text');
     const btnSpinner = document.getElementById('submit-ho-spinner');
     const btn = document.getElementById('btn_submit_ho');
-
     if (btnText) btnText.classList.replace('opacity-100', 'opacity-0');
     if (btnSpinner) btnSpinner.classList.replace('opacity-0', 'opacity-100');
     btn.disabled = true;
+    google.script.run.withSuccessHandler(function (res) {
+      if (btnText) btnText.classList.replace('opacity-0', 'opacity-100');
+      if (btnSpinner) btnSpinner.classList.replace('opacity-100', 'opacity-0');
+      btn.disabled = false;
+      const resp = typeof res === 'string' ? JSON.parse(res) : res;
+      if (resp && resp.success === false) {
+        Swal.fire({ icon: 'error', title: 'ไม่สามารถบันทึกได้', text: resp.message });
+        return;
+      }
+      document.getElementById('ho_modal').close();
+      Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', timer: 1500, showConfirmButton: false });
+      _isHandoverDataLoaded = false;
+      showRightSkeleton();
+      loadHandovers(!!data.id);
+    }).apiHandler({ func: data.id ? "updateHandover" : "createHandover", data: data });
+  }
 
-    const apiFunc = data.id ? "updateHandover" : "createHandover";
-
-    google.script.run
-      .withSuccessHandler(function (res) {
-        if (btnText) btnText.classList.replace('opacity-0', 'opacity-100');
-        if (btnSpinner) btnSpinner.classList.replace('opacity-100', 'opacity-0');
-        btn.disabled = false;
-
-        document.getElementById('ho_modal').close();
-        Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', timer: 1500, showConfirmButton: false });
-        loadHandovers(!!data.id);
-      })
-      .apiHandler({ func: apiFunc, data: data });
+  function quickResolveHandover() {
+    if (!selectedHandoverId) return;
+    Swal.fire({ title: 'ปิดงานนี้ (Mark as Succeed)?', text: "สถานะจะถูกเปลี่ยนเป็น เสร็จสิ้น ทันที", icon: 'question', showCancelButton: true, confirmButtonColor: '#10b981', cancelButtonColor: '#9ca3af', confirmButtonText: '<i class="fas fa-check"></i> ยืนยันปิดงาน', cancelButtonText: 'ยกเลิก', customClass: { confirmButton: 'rounded-lg', cancelButton: 'rounded-lg' } }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        google.script.run.withSuccessHandler(function (res) {
+          const resp = typeof res === 'string' ? JSON.parse(res) : res;
+          if (resp && resp.success === false) return Swal.fire({ icon: 'error', title: 'ไม่สามารถปิดได้', text: resp.message || resp.error });
+          Swal.fire({ icon: 'success', title: 'ปิดงานเรียบร้อย', timer: 1500, showConfirmButton: false });
+          _isHandoverDataLoaded = false;
+          showRightSkeleton();
+          loadHandovers(true);
+        }).withFailureHandler(function (err) { Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด' }); }).apiHandler({ func: "resolveHandover", data: selectedHandoverId });
+      }
+    });
   }
 </script>

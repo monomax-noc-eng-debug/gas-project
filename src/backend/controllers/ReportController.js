@@ -34,10 +34,11 @@ const ReportController = {
         chatBody += `> 🔵 ปิดได้วันนี้: ${(Number(ts.resolved) || 0) + (Number(ts.closed) || 0)}\n`;
         chatBody += `> 🔴 งานค้าง: ${ts.backlog || ts.open || 0}\n\n`;
 
-        chatBody += `2. Stop channel\n`;
-        chatBody += `> Mono: ${formData.statusMono || '-'}\n`;
-        chatBody += `> AIS: ${formData.statusAis || '-'}\n`;
-        chatBody += `> Start Channel: ${formData.statusStart || '-'}\n\n`;
+        chatBody += `2. สถานะระบบออกสื่อ\n`;
+        chatBody += `> Start Mono: ${formData.statusStartMono || '-'}\n`;
+        chatBody += `> Stop Mono: ${formData.statusStopMono || '-'}\n`;
+        chatBody += `> Start AIS: ${formData.statusStartAis || '-'}\n`;
+        chatBody += `> Stop AIS: ${formData.statusStopAis || '-'}\n\n`;
 
         if (formData.transferReport) {
           chatBody += `3. Shift Transfer\n`;
@@ -72,9 +73,9 @@ const ReportController = {
         formData.matchSummary,
         formData.matchTotal || 0,
         formData.transferReport,
-        formData.statusMono,
-        formData.statusAis,
-        formData.statusStart,
+        formData.statusStopMono,
+        formData.statusStopAis,
+        formData.statusStartMono,
         imgString,
         pdfUrl, // Link PDF ใหม่
         formData.chatTarget
@@ -133,7 +134,6 @@ const ReportController = {
       const data = sheet.getDataRange().getValues();
       const headerMap = API_UTILS.getHeaderMap(sheet);
 
-      // Helper function to safely find column index
       const findCol = (keys) => {
         if (!keys) return -1;
         return keys.find(k => headerMap && headerMap.hasOwnProperty(k.toLowerCase()));
@@ -141,65 +141,47 @@ const ReportController = {
 
       const colDate = findCol(["date"]);
       const colTime = findCol(["time", "kickoff"]);
-      const colStart = findCol(["start image", "start", "image in"]);
       const colHome = findCol(["home"]);
       const colAway = findCol(["away"]);
+      // New 4-column structure
+      const colStartMono = findCol(["start mono"]);
+      const colStopMono = findCol(["stop mono"]);
+      const colStartAis = findCol(["start ais"]);
+      const colStopAis = findCol(["stop ais"]);
+      // Legacy fallback
+      const colStart = findCol(["start image", "start", "image in"]);
       const colStop = findCol(["stop image", "stop", "image out"]);
 
-      // Helper function to extract images
       const extractImages = (cellValue, labelPrefix) => {
         if (!cellValue) return [];
         const val = String(cellValue).trim();
         if (val === "") return [];
-
         let urls = [];
-        // Check if it's a JSON array string
         if (val.startsWith("[") && val.endsWith("]")) {
-          try {
-            const parsed = JSON.parse(val);
-            if (Array.isArray(parsed)) {
-              urls = parsed;
-            }
-          } catch (e) {
-            // Fallback to treating as single string if parsing fails
-            urls = [val];
-          }
-        } else {
-          // Treat as single string (legacy data)
-          urls = [val];
-        }
-
-        // Map to object format with labels
-        return urls.map((u, i) => ({
-          url: u,
-          label: urls.length > 1 ? `${labelPrefix} (${i + 1})` : labelPrefix
-        }));
+          try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) urls = parsed; } catch (e) { urls = [val]; }
+        } else { urls = [val]; }
+        return urls.map((u, i) => ({ url: u, label: urls.length > 1 ? `${labelPrefix} (${i + 1})` : labelPrefix }));
       };
 
-      let proofData = { start: [], stop: [] };
+      let proofData = { startMono: [], stopMono: [], startAis: [], stopAis: [], start: [], stop: [] };
       const targetDateObj = dateStr ? new Date(dateStr) : new Date();
       const tz = (typeof CONFIG !== 'undefined') ? CONFIG.TIMEZONE : "Asia/Bangkok";
       const targetDateStr = Utilities.formatDate(targetDateObj, tz, "yyyy-MM-dd");
       const prevDateObj = new Date(targetDateObj); prevDateObj.setDate(targetDateObj.getDate() - 1);
       const prevDateStr = Utilities.formatDate(prevDateObj, tz, "yyyy-MM-dd");
 
-      // Check if critical columns exist
       if (!colDate || !colTime) {
-        console.warn("Missing Date or Time columns");
         return API_UTILS.createRes(true, proofData);
       }
 
       for (let i = 1; i < data.length; i++) {
         const row = data[i];
-        // Safely access row data using column names from headerMap
         const rawDate = row[headerMap[colDate]];
         const rawTime = row[headerMap[colTime]];
-
         const rDateStr = API_UTILS.formatDateTime(rawDate, 'date');
         const rTimeStr = API_UTILS.formatDateTime(rawTime, 'time');
 
         let matchFound = false;
-        // Logic for shift spanning two days (10:00 previous day to 10:00 target day)
         if (rDateStr === prevDateStr && rTimeStr >= "10:00") matchFound = true;
         else if (rDateStr === targetDateStr && rTimeStr < "10:00") matchFound = true;
 
@@ -208,19 +190,19 @@ const ReportController = {
           const away = (colAway && row[headerMap[colAway]]) ? row[headerMap[colAway]] : "?";
           const matchLabel = `${home} vs ${away}`;
 
-          // Extract Start Images
-          if (colStart) {
-            const startVal = row[headerMap[colStart]];
-            const startImgs = extractImages(startVal, matchLabel);
-            proofData.start = proofData.start.concat(startImgs);
-          }
+          // New 4-column
+          if (colStartMono) proofData.startMono = proofData.startMono.concat(extractImages(row[headerMap[colStartMono]], matchLabel));
+          if (colStopMono) proofData.stopMono = proofData.stopMono.concat(extractImages(row[headerMap[colStopMono]], matchLabel));
+          if (colStartAis) proofData.startAis = proofData.startAis.concat(extractImages(row[headerMap[colStartAis]], matchLabel));
+          if (colStopAis) proofData.stopAis = proofData.stopAis.concat(extractImages(row[headerMap[colStopAis]], matchLabel));
 
-          // Extract Stop Images
-          if (colStop) {
-            const stopVal = row[headerMap[colStop]];
-            const stopImgs = extractImages(stopVal, matchLabel);
-            proofData.stop = proofData.stop.concat(stopImgs);
-          }
+          // Legacy fallback: populate start/stop from old columns
+          if (colStart && !colStartMono) proofData.startMono = proofData.startMono.concat(extractImages(row[headerMap[colStart]], matchLabel));
+          if (colStop && !colStopMono) proofData.stopMono = proofData.stopMono.concat(extractImages(row[headerMap[colStop]], matchLabel));
+
+          // Keep legacy keys for backward compat
+          proofData.start = proofData.startMono;
+          proofData.stop = proofData.stopMono;
         }
       }
       return API_UTILS.createRes(true, proofData);

@@ -5,12 +5,18 @@
    */
   window.ReportManager = (function () {
     // --- State Variables ---
-    var _files = { mono: [], ais: [], start: [] };
-    var _autoStartUrls = [];
-    var _autoMonoUrls = [];
+    var _files = { startMono: [], stopMono: [], startAis: [], stopAis: [] };
+    var _autoStartMonoUrls = [];
+    var _autoStopMonoUrls = [];
+    var _autoStartAisUrls = [];
+    var _autoStopAisUrls = [];
     var _isCustomReporter = false;
     var _picker = null;
     var _isLoading = false;
+    var _isHandoverLoaded = false;
+    var _isDataLoaded = false;
+    var _lastFetchedDate = null;
+    var _isReportersLoaded = false;
 
     // --- Helpers ---
     var el = function (id) {
@@ -80,12 +86,25 @@
     };
 
     return {
-      _autoMonoUrls: _autoMonoUrls, // Expose for debug
+      _autoStartMonoUrls: _autoStartMonoUrls,
+      _autoStopMonoUrls: _autoStopMonoUrls,
+      _autoStartAisUrls: _autoStartAisUrls,
+      _autoStopAisUrls: _autoStopAisUrls,
 
       init: function () {
-        document.addEventListener("page-change", function (e) {
-          if (e.detail.pageId === "page-report") ReportManager.onPageShow();
-        });
+        // Register this controller to Router for Lifecycle management
+        if (typeof Router !== 'undefined') {
+          Router.register('page-report', this);
+        }
+      },
+
+      openDatePicker: function () {
+        if (!_picker) this.onPageShow();
+        if (_picker) _picker.show();
+      },
+
+      onShow: function () {
+        this.onPageShow();
       },
 
       onPageShow: function () {
@@ -120,6 +139,7 @@
         this.fetchReporters();
         setTimeout(() => {
           if (this.setupPasteHandlers) this.setupPasteHandlers();
+          this.setTransferMode('handover');
         }, 1000);
       },
 
@@ -127,6 +147,14 @@
         if (_isLoading) return;
         var dateVal = el("inputDate").value;
         if (!dateVal) return;
+
+        if (!force && _isDataLoaded && _lastFetchedDate === dateVal) {
+          console.log("🚀 Report Cache Hit");
+          return;
+        }
+
+        _isDataLoaded = true;
+        _lastFetchedDate = dateVal;
 
         var self = this;
         self._setLoading(true);
@@ -142,6 +170,7 @@
           self.fetchTickets(),
           self.fetchMatches(force),
           self.fetchStartImages(),
+          (function () { if (force) _isHandoverLoaded = false; return self.loadHandoverTopics(force); })()
         ])
           .then(function () {
             if (typeof UIManager !== "undefined")
@@ -279,7 +308,7 @@
 
               if (el("ticketSummary"))
                 el("ticketSummary").value =
-                  `งานวันนี้: ${stats.newToday}, ปิดได้: ${stats.closedToday}, ค้าง: ${stats.pending}`;
+                  `งานเข้าใหม่: ${stats.newToday}, ปิดได้: ${stats.closedToday}, งานค้าง: ${stats.pending}`;
 
               listForTable.sort(
                 (a, b) =>
@@ -303,25 +332,25 @@
                     var miniTag = "";
                     if (t.tag === "NEW")
                       miniTag =
-                        '<span class="text-[9px] text-blue-500 font-bold ml-1 tracking-tighter">✨NEW</span>';
+                        '<span class="text-[9px] text-blue-500 font-bold ml-1 tracking-tighter">งานเข้าใหม่</span>';
                     else if (t.tag === "RESOLVED")
                       miniTag =
-                        '<span class="text-[9px] text-green-500 font-bold ml-1 tracking-tighter">✓DONE</span>';
+                        '<span class="text-[9px] text-green-500 font-bold ml-1 tracking-tighter">ปิดได้</span>';
                     else if (t.tag === "BACKLOG")
                       miniTag =
-                        '<span class="text-[9px] text-gray-400 font-bold ml-1 tracking-tighter">⏳OLD</span>';
+                        '<span class="text-[9px] text-gray-400 font-bold ml-1 tracking-tighter">งานค้าง</span>';
 
                     return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                                                <td class="font-mono font-bold text-center text-[10px] text-gray-400 w-24 py-3">${t.id}</td>
-                                                <td class="text-center p-1 w-32">
+                                                <td class="font-mono font-bold text-center text-[10px] text-gray-400 py-2 border-r border-gray-50 truncate max-w-[80px]" title="${t.id}">${t.id}</td>
+                                                <td class="text-center p-1 border-r border-gray-50">
                                                     <div class="flex flex-col items-center justify-center">
-                                                        <span class="badge ${badgeClass} badge-xs font-bold uppercase tracking-wide h-5 px-2 min-w-[70px]">${t.status}</span>
+                                                        <span class="badge ${badgeClass} badge-xs font-bold uppercase scale-90 h-4 px-1">${t.status}</span>
                                                         ${miniTag}
                                                     </div>
                                                 </td>
-                                                <td class="p-2 overflow-hidden">
-                                                    <div class="text-xs text-gray-700 font-medium truncate w-full" title="${t.subject}">${t.subject}</div>
-                                                    <div class="text-[9px] text-gray-400 mt-0.5 font-mono">${t.dateDisplay}</div>
+                                                <td class="p-1.5 overflow-hidden">
+                                                    <div class="text-[10px] text-gray-700 font-medium truncate w-full" title="${t.subject}">${t.subject}</div>
+                                                    <div class="text-[9px] text-gray-400 mt-0.5 font-mono leading-none">${t.dateDisplay}</div>
                                                 </td>
                                             </tr>`;
                   })
@@ -408,11 +437,14 @@
                       : `<span class="text-gray-300 text-[10px]">-</span>`;
 
                   html += `<tr class="border-b border-gray-100 hover:bg-white transition-colors">
-                            <td class="text-center font-mono text-[10px] text-gray-500">${db.time}</td>
-                            <td class="text-xs py-2"><div class="font-bold text-slate-700">${db.home} v ${db.away}</div><div class="text-[9px] text-slate-400">${db.league}</div></td>
-                            <td class="text-center">${imgBtn(db.startImg, "fa-play-circle", "success")}</td>
-                            <td class="text-center">${imgBtn(db.stopImg, "fa-stop-circle", "error")}</td>
-                            <td class="text-center">${badge}</td>
+                            <td class="text-center font-mono text-[9px] text-gray-400 border-r border-gray-50 px-0">${db.time}</td>
+                            <td class="p-1 border-r border-gray-50 overflow-hidden">
+                                <div class="font-bold text-slate-700 text-[10px] truncate" title="${db.home} v ${db.away}">${db.home} v ${db.away}</div>
+                                <div class="text-[9px] text-slate-400 truncate">${db.league}</div>
+                            </td>
+                            <td class="text-center p-0 border-r border-gray-50">${imgBtn(db.startImg, "fa-play-circle", "success")}</td>
+                            <td class="text-center p-0 border-r border-gray-50">${imgBtn(db.stopImg, "fa-stop-circle", "error")}</td>
+                            <td class="text-center p-0">${badge}</td>
                           </tr>`;
                 });
                 el("verification-tbody").innerHTML = html;
@@ -433,46 +465,49 @@
 
       fetchStartImages: function () {
         var dateVal = el("inputDate").value;
-        if (el("auto-start-list")) el("auto-start-list").innerHTML = "";
-        show("auto-start-images", false);
-        _autoStartUrls = [];
-        if (el("auto-mono-list")) el("auto-mono-list").innerHTML = "";
-        show("auto-mono-images", false);
-        _autoMonoUrls = [];
+        const types = ['startMono', 'stopMono', 'startAis', 'stopAis'];
+
+        types.forEach(type => {
+          const listEl = el(`auto-${type.replace(/([A-Z])/g, '-$1').toLowerCase()}-list`);
+          if (listEl) listEl.innerHTML = "";
+          show(`auto-${type.replace(/([A-Z])/g, '-$1').toLowerCase()}-images`, false);
+        });
+
+        // Clear local variables (keeping the same array references)
+        _autoStartMonoUrls.length = 0;
+        _autoStopMonoUrls.length = 0;
+        _autoStartAisUrls.length = 0;
+        _autoStopAisUrls.length = 0;
 
         return Server.call(
           { func: "getDailyProofImages", silent: true },
           dateVal,
         ).then((res) => {
           if (res.success) {
-            if (res.data.start && res.data.start.length > 0) {
-              show("auto-start-images", true);
-              res.data.start.forEach((img) =>
-                ReportManager._renderAutoImage(
-                  img,
-                  el("auto-start-list"),
-                  _autoStartUrls,
-                ),
-              );
-            }
+            const mapping = [
+              { key: 'startMono', list: 'auto-start-mono-list', urls: _autoStartMonoUrls, container: 'auto-start-mono-images' },
+              { key: 'stopMono', list: 'auto-stop-mono-list', urls: _autoStopMonoUrls, container: 'auto-stop-mono-images' },
+              { key: 'startAis', list: 'auto-start-ais-list', urls: _autoStartAisUrls, container: 'auto-start-ais-images' },
+              { key: 'stopAis', list: 'auto-stop-ais-list', urls: _autoStopAisUrls, container: 'auto-stop-ais-images' }
+            ];
+
+            mapping.forEach(m => {
+              var images = res.data[m.key] || [];
+              if (images.length > 0) {
+                show(m.container, true);
+                images.forEach((img) => ReportManager._renderAutoImage(img, el(m.list), m.urls));
+              }
+            });
             ReportManager._updateStartStatus();
-            if (res.data.stop && res.data.stop.length > 0) {
-              show("auto-mono-images", true);
-              res.data.stop.forEach((img) =>
-                ReportManager._renderAutoImage(
-                  img,
-                  el("auto-mono-list"),
-                  _autoMonoUrls,
-                ),
-              );
-            }
           }
         });
       },
 
       fetchReporters: function () {
+        if (_isReportersLoaded) return;
         Server.call({ func: "apiGetAllSettings", silent: true }).then(
           function (res) {
+            _isReportersLoaded = true;
             if (res && res.success && res.data && res.data.staff) {
               var select = el("reporterSelect");
               if (!select) return;
@@ -490,25 +525,51 @@
       },
 
       _updateStartStatus: function () {
-        var hasImages =
-          _autoStartUrls.length > 0 ||
-          (_files.start && _files.start.length > 0);
-        var statusEl = el("statusStart");
-        if (statusEl) {
-          if (hasImages) statusEl.value = "เรียบร้อย";
-          else if (statusEl.value === "เรียบร้อย") statusEl.value = "ไม่มี";
-          ReportManager.toggleStartArea(statusEl.value);
+        // Mono Start
+        var hasStartMono = _autoStartMonoUrls.length > 0 || (_files.startMono && _files.startMono.length > 0);
+        var sStartMono = el("statusStartMono");
+        if (sStartMono) {
+          if (hasStartMono) sStartMono.value = "เรียบร้อย";
+          else if (sStartMono.value === "เรียบร้อย") sStartMono.value = "ไม่มี";
+          ReportManager.toggleStartMonoArea(sStartMono.value);
+        }
+
+        // Mono Stop
+        var hasStopMono = _autoStopMonoUrls.length > 0 || (_files.stopMono && _files.stopMono.length > 0);
+        var sStopMono = el("statusStopMono");
+        if (sStopMono) {
+          if (hasStopMono) sStopMono.value = "เรียบร้อย";
+          else if (sStopMono.value === "เรียบร้อย") sStopMono.value = "ไม่มี";
+          ReportManager.toggleStopMonoArea(sStopMono.value);
+        }
+
+        // AIS Start
+        var hasStartAis = _autoStartAisUrls.length > 0 || (_files.startAis && _files.startAis.length > 0);
+        var sStartAis = el("statusStartAis");
+        if (sStartAis) {
+          if (hasStartAis) sStartAis.value = "เรียบร้อย";
+          else if (sStartAis.value === "เรียบร้อย") sStartAis.value = "ไม่มี";
+          ReportManager.toggleStartAisArea(sStartAis.value);
+        }
+
+        // AIS Stop
+        var hasStopAis = _autoStopAisUrls.length > 0 || (_files.stopAis && _files.stopAis.length > 0);
+        var sStopAis = el("statusStopAis");
+        if (sStopAis) {
+          if (hasStopAis) sStopAis.value = "เรียบร้อย";
+          else if (sStopAis.value === "เรียบร้อย") sStopAis.value = "ไม่มี";
+          ReportManager.toggleStopAisArea(sStopAis.value);
         }
       },
 
       _renderAutoImage: function (img, container, urlArray) {
         var div = document.createElement("div");
         div.className =
-          "relative group cursor-pointer border-2 border-slate-200 rounded-lg overflow-hidden w-14 h-14 flex-shrink-0 transition-all hover:shadow-md";
-        div.innerHTML = `<img src="${formatDriveUrl(img.url)}" class="object-cover w-full h-full opacity-60 transition-opacity">
-                                 <div class="auto-check absolute top-0 right-0 w-4 h-4 bg-green-500 rounded-bl-lg flex items-center justify-center hidden"><i class="fas fa-check text-white text-[8px]"></i></div>
-                                 <div class="auto-hover absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 text-white text-xs transition-opacity"><i class="fas fa-plus-circle"></i></div>
-                                 <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-[7px] text-white truncate px-1 py-0.5 leading-tight">${img.label}</div>`;
+          "relative flex-shrink-0 w-24 h-16 border border-slate-200 rounded overflow-hidden cursor-pointer group transition-all hover:border-primary hover:shadow-sm";
+        div.innerHTML = `<img src="${formatDriveUrl(img.url)}" class="object-cover w-full h-full opacity-70 transition-opacity">
+                         <div class="auto-check absolute top-0 right-0 w-4 h-4 bg-green-500 rounded-bl-sm flex items-center justify-center hidden z-10"><i class="fas fa-check text-white text-[8px]"></i></div>
+                         <div class="auto-hover absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 group-hover:opacity-100 text-white text-[10px] transition-opacity"><i class="fas fa-plus shadow-sm"></i></div>
+                         <div class="absolute bottom-0 left-0 right-0 bg-black/40 text-[7px] text-white truncate px-1 py-0.5 leading-none font-mono text-center">${img.label}</div>`;
 
         div.onclick = () => {
           var checkEl = div.querySelector(".auto-check");
@@ -529,61 +590,56 @@
             urlArray.push(img.url);
           }
           ReportManager.updateImageCounts();
-          if (container.id === "auto-start-list")
-            ReportManager._updateStartStatus();
+          ReportManager._updateStartStatus();
         };
         container.appendChild(div);
       },
 
       updateImageCounts: function () {
-        var startBadge = el("auto-start-count");
-        if (startBadge) startBadge.innerText = _autoStartUrls.length + " เลือก";
-        var monoBadge = el("auto-mono-count");
-        if (monoBadge) monoBadge.innerText = _autoMonoUrls.length + " เลือก";
+        const types = ['startMono', 'stopMono', 'startAis', 'stopAis'];
+        types.forEach(t => {
+          var badge = el(`auto-${t.replace(/([A-Z])/g, '-$1').toLowerCase()}-count`);
+          var urls = window['ReportManager']['_auto' + t.charAt(0).toUpperCase() + t.slice(1) + 'Urls'] || [];
+          if (badge) badge.innerText = urls.length + " เลือก";
+        });
       },
 
       handleFileUpload: function (input, type) {
         if (input.files.length > 0) {
           _files[type] = _files[type].concat(Array.from(input.files));
           this.renderFileList(type);
-          if (type === "start") ReportManager._updateStartStatus();
+          ReportManager._updateStartStatus();
         }
       },
 
       renderFileList: function (type) {
-        var dropzone = el("dropzone-" + type);
-        if (!dropzone) return;
+        var previewbox = el("preview-" + type);
+        var placeholder = el("placeholder-" + type);
+        if (!previewbox) return;
         var files = _files[type];
-        dropzone.innerHTML = "";
 
         if (files.length === 0) {
-          var color =
-            type === "start" ? "amber" : type === "mono" ? "indigo" : "green";
-          dropzone.className = `border-2 border-dashed border-${color}-300 hover:border-${color}-400 bg-${color}-50/30 hover:bg-${color}-50 rounded-lg p-2.5 cursor-pointer transition-all group text-center focus:ring-2 focus:ring-${color}-300 focus:outline-none`;
-          dropzone.innerHTML = `<div class="flex items-center justify-center gap-2 text-${color}-400 group-hover:text-${color}-500 transition-colors">
-                                            <i class="fas fa-cloud-upload-alt text-sm"></i><span class="text-[10px] font-semibold">คลิกเพื่ออัปโหลด หรือ Ctrl+V วางรูป</span>
-                                          </div>`;
+          previewbox.innerHTML = "";
+          if (placeholder) placeholder.classList.remove("hidden");
         } else {
-          dropzone.className = `border border-gray-200 p-2 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-300`;
-          var grid = document.createElement("div");
-          grid.className = "flex flex-wrap gap-2 justify-center";
+          if (placeholder) placeholder.classList.add("hidden");
+          var html = "";
           files.forEach((file, idx) => {
             var url = URL.createObjectURL(file);
-            var item = document.createElement("div");
-            item.className =
-              "relative w-16 h-16 rounded overflow-hidden border shadow-sm";
-            item.innerHTML = `<img src="${url}" class="w-full h-full object-cover">
-                                          <button onclick="event.stopPropagation(); ReportManager.removeFile('${type}', ${idx})" class="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white flex items-center justify-center text-[10px]"><i class="fas fa-times"></i></button>`;
-            grid.appendChild(item);
+            html += `
+              <div class="relative flex-shrink-0 w-32 h-16 rounded overflow-hidden border border-slate-200 shadow-sm group">
+                <img src="${url}" class="w-full h-full object-cover">
+                <button type="button" onclick="event.stopPropagation(); ReportManager.removeFile('${type}', ${idx})" class="absolute top-0 right-0 w-5 h-5 bg-red-500/90 hover:bg-red-600 text-white flex items-center justify-center text-[9px] z-10 shadow-sm"><i class="fas fa-times"></i></button>
+              </div>`;
           });
-          dropzone.appendChild(grid);
+          previewbox.innerHTML = html;
         }
       },
 
       removeFile: function (type, index) {
         _files[type].splice(index, 1);
         this.renderFileList(type);
-        if (type === "start") this._updateStartStatus();
+        this._updateStartStatus();
       },
 
       submitForm: function (mode) {
@@ -593,9 +649,12 @@
         if (!reporter)
           return UIManager.showToast("ระบุชื่อผู้รายงาน", "warning");
 
-        if (_autoMonoUrls.length === 0 && _files.mono.length === 0) {
+        // Validate: Stop Mono evidence is MANDATORY
+        var hasStopMono = _autoStopMonoUrls.length > 0 || (_files.stopMono && _files.stopMono.length > 0);
+
+        if (!hasStopMono) {
           return UIManager.showToast(
-            "กรุณามีรูปหลักฐาน Mono (เลือกจากรายการ หรือ อัปโหลดเพิ่ม)",
+            "กรุณาใส่รูปหลักฐาน Stop Mono เป็นหลัก (เลือกจาก Dashboard หรืออัปโหลดใหม่)",
             "warning",
           );
         }
@@ -613,22 +672,29 @@
           matchSummary: el("matchSummary").value,
           matchTotal: el("matchTotalValue").value,
           matchEnded: el("matchEndedValue").value,
-          transferReport: el("transferReport").value,
-          statusMono: el("statusMono") ? el("statusMono").value : "เรียบร้อย",
-          statusAis: el("statusAis") ? el("statusAis").value : "ไม่มี",
-          statusStart: el("statusStart") ? el("statusStart").value : "ไม่มี",
+          transferReport: ReportManager.getTransferValue(),
+          statusMono: el("statusStopMono") ? el("statusStopMono").value : "ไม่มี",
+          statusAis: el("statusStopAis") ? el("statusStopAis").value : "ไม่มี",
+          statusStart: el("statusStartMono") ? el("statusStartMono").value : "ไม่มี",
+          // New split status for detailed backend use
+          statusStartMono: el("statusStartMono") ? el("statusStartMono").value : "ไม่มี",
+          statusStopMono: el("statusStopMono") ? el("statusStopMono").value : "ไม่มี",
+          statusStartAis: el("statusStartAis") ? el("statusStartAis").value : "ไม่มี",
+          statusStopAis: el("statusStopAis") ? el("statusStopAis").value : "ไม่มี",
           ticketStats: {
-            total: el("disp-ticket-total").innerText,
-            new: el("disp-ticket-new").innerText,
-            open: el("disp-ticket-backlog").innerText,
+            total: el("disp-ticket-total") ? el("disp-ticket-total").innerText : "0",
+            new: el("disp-ticket-new") ? el("disp-ticket-new").innerText : "0",
+            open: el("disp-ticket-backlog") ? el("disp-ticket-backlog").innerText : "0",
             pending: 0,
-            resolved: el("disp-ticket-resolved").innerText,
+            resolved: el("disp-ticket-resolved") ? el("disp-ticket-resolved").innerText : "0",
             closed: 0,
-            backlog: el("disp-ticket-backlog").innerText,
+            backlog: el("disp-ticket-backlog") ? el("disp-ticket-backlog").innerText : "0"
           },
           proofImages: {},
-          autoStartUrls: _autoStartUrls,
-          autoMonoUrls: _autoMonoUrls,
+          autoStartMonoUrls: _autoStartMonoUrls,
+          autoStopMonoUrls: _autoStopMonoUrls,
+          autoStartAisUrls: _autoStartAisUrls,
+          autoStopAisUrls: _autoStopAisUrls,
           isDraft: mode === "preview",
         };
 
@@ -668,18 +734,13 @@
           try {
             if (mode !== "preview") {
               // ใช้ .filter(Boolean) เพื่อกรองไฟล์เสียออกไป ไม่ให้ส่งค่า null เข้า Server
-              if (_files.mono.length)
-                formData.proofImages.mono = (
-                  await Promise.all(_files.mono.map(compress))
-                ).filter(Boolean);
-              if (_files.ais.length)
-                formData.proofImages.ais = (
-                  await Promise.all(_files.ais.map(compress))
-                ).filter(Boolean);
-              if (_files.start.length)
-                formData.proofImages.start = (
-                  await Promise.all(_files.start.map(compress))
-                ).filter(Boolean);
+              const types = ['startMono', 'stopMono', 'startAis', 'stopAis'];
+              for (const t of types) {
+                const files = _files[t] || [];
+                if (files.length > 0) {
+                  formData.proofImages[t] = (await Promise.all(files.map(compress))).filter(Boolean);
+                }
+              }
             }
 
             var res = await Server.call(
@@ -713,21 +774,21 @@
                   if (el("statusAis")) el("statusAis").value = "ไม่มี";
                   if (el("statusStart")) el("statusStart").value = "ไม่มี";
 
-                  ReportManager.toggleStartArea("ไม่มี");
-                  ReportManager.toggleAisActions("ไม่มี");
+                  _files = { startMono: [], stopMono: [], startAis: [], stopAis: [] };
+                  _autoStartMonoUrls = [];
+                  _autoStopMonoUrls = [];
+                  _autoStartAisUrls = [];
+                  _autoStopAisUrls = [];
 
-                  _files = { mono: [], ais: [], start: [] };
-                  _autoStartUrls = [];
-                  _autoMonoUrls = [];
+                  ReportManager.renderFileList("startMono");
+                  ReportManager.renderFileList("stopMono");
+                  ReportManager.renderFileList("startAis");
+                  ReportManager.renderFileList("stopAis");
 
-                  ReportManager.renderFileList("mono");
-                  ReportManager.renderFileList("ais");
-                  ReportManager.renderFileList("start");
-                  if (el("auto-start-list"))
-                    el("auto-start-list").innerHTML = "";
-                  show("auto-start-images", false);
-                  if (el("auto-mono-list")) el("auto-mono-list").innerHTML = "";
-                  show("auto-mono-images", false);
+                  ['start-mono', 'stop-mono', 'start-ais', 'stop-ais'].forEach(t => {
+                    if (el(`auto-${t}-list`)) el(`auto-${t}-list`).innerHTML = "";
+                    show(`auto-${t}-images`, false);
+                  });
 
                   if (typeof ReportManager.updateImageCounts === "function")
                     ReportManager.updateImageCounts();
@@ -749,8 +810,28 @@
       // แจ้งเตือน Help Dialogs
       showTicketInfo: function () {
         Swal.fire({
-          title: "หลักการนับ Ticket",
-          html: '<div style="text-align:left;font-size:12px;line-height:1.7"><div style="background:#ecfdf5;padding:10px 12px;border-radius:8px;border:1px solid #bbf7d0;margin-bottom:8px"><b style="color:#15803d">🟢 งานเข้าใหม่</b><br><span style="color:#16a34a">Ticket ที่ <u>สร้าง</u> ในวันที่เลือก</span></div><div style="background:#eff6ff;padding:10px 12px;border-radius:8px;border:1px solid #bfdbfe;margin-bottom:8px"><b style="color:#1d4ed8">🔵 ปิดได้</b><br><span style="color:#2563eb">Ticket ที่ <u>ปิดงาน</u> ในวันที่เลือก (รวมงานค้างเก่าที่มาปิดวันนี้)</span></div><div style="background:#fef2f2;padding:10px 12px;border-radius:8px;border:1px solid #fecaca"><b style="color:#b91c1c">🔴 งานค้าง</b><br><span style="color:#dc2626">Ticket ที่สถานะ <u>ยังไม่ปิด</u> ทั้งหมด (นับรวมทุกวันที่)</span></div></div>',
+          title: "การสรุปข้อมูล Ticket",
+          html: '<div style="text-align:left;font-size:12px;line-height:1.7"><div style="background:#ecfdf5;padding:10px 12px;border-radius:8px;border:1px solid #bbf7d0;margin-bottom:8px"><b style="color:#15803d">🟢 งานเข้าใหม่ (New Today)</b><br><span style="color:#16a34a">Ticket ที่ <u>ถูกสร้างขึ้นใหม่</u> ตามวันที่คุณเลือกไว้</span></div><div style="background:#eff6ff;padding:10px 12px;border-radius:8px;border:1px solid #bfdbfe;margin-bottom:8px"><b style="color:#1d4ed8">🔵 ปิดได้ (Resolved)</b><br><span style="color:#2563eb">Ticket ที่ <u>ปิดงานลุล่วง</u> ในวันที่เลือก (รวมงานค้างเก่าที่ถูกนำมาปิดในวันนี้ด้วย)</span></div><div style="background:#fef2f2;padding:10px 12px;border-radius:8px;border:1px solid #fecaca"><b style="color:#b91c1c">🔴 งานค้าง (Backlog/Pending)</b><br><span style="color:#dc2626">Ticket ในระบบที่มีสถานะ <u>ยังแก้ไขไม่เสร็จสิ้น หรือยังไม่ถูกปิด</u> ทั้งหมดในระบบ (นับรวมทุกรอบวัน) เพื่อแจ้งเตือนงานยังค้างอยู่</span></div></div>',
+          icon: "info",
+          confirmButtonText: "เข้าใจแล้ว 👍",
+          heightAuto: false,
+          scrollbarPadding: false,
+        });
+      },
+      showHandoverInfo: function () {
+        Swal.fire({
+          title: "แหล่งที่มา ข้อมูลส่งกะ",
+          html: '<div style="text-align:left;font-size:12px;line-height:1.7"><div style="background:#f8fafc;padding:10px 12px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:8px"><b style="color:#475569">📝 โหมดรายการส่งกะ (อัตโนมัติ)</b><br><span style="color:#64748b">ระบบจะไปสืบค้นและดึง <u>รายการส่งกะที่ยังดำเนินการไม่เสร็จ (Pending)</u> ทั้งหมด จากแท็บ Shift Transfer มาแสดงให้อัตโนมัติ</span></div><div style="background:#f8fafc;padding:10px 12px;border-radius:8px;border:1px solid #e2e8f0;"><b style="color:#475569">⌨️ โหมดพิมพ์เอง (Manual)</b><br><span style="color:#64748b">หากไม่ต้องการใช้ข้อมูลค้างในระบบ คุณสามารถพิมพ์บันทึกข้อความส่งกะใหม่ของคุณลงไปเองได้อย่างอิสระ</span></div></div>',
+          icon: "info",
+          confirmButtonText: "เข้าใจแล้ว 👍",
+          heightAuto: false,
+          scrollbarPadding: false,
+        });
+      },
+      showEvidenceInfo: function () {
+        Swal.fire({
+          title: "แหล่งที่มา รูปหลักฐาน",
+          html: '<div style="text-align:left;font-size:12px;line-height:1.7"><div style="background:#f8fafc;padding:10px 12px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:8px"><b style="color:#475569">📸 รูปภาพดึงอัตโนมัติ (Auto Images)</b><br><span style="color:#64748b">รูป Snapshot / หลักฐานต่างๆ ที่คุณแคปเจอร์ไว้ล่วงหน้าจาก <u>หน้า Dashboard</u> ระบบจะดึงรูปของวันที่เลือกนั้นๆ มาแสดงให้เลือกใช้งานเองโดยอัตโนมัติ</span></div><div style="background:#f8fafc;padding:10px 12px;border-radius:8px;border:1px solid #e2e8f0;"><b style="color:#475569">🚀 เพิ่มรูปเพิ่มเติม (Manual Upload)</b><br><span style="color:#64748b">คุณสามารถเพิ่มรูปภาพเพิ่มเติมได้ตลอดเวลาโดยกด ปุ่มคลิกอัปโหลด หรือใช้วิธีคลิกที่กรอบแล้วกดปุ่ม <kbd style="background:#eee;padding:2px 4px;border-radius:3px;border:1px solid #ccc">Ctrl</kbd> + <kbd style="background:#eee;padding:2px 4px;border-radius:3px;border:1px solid #ccc">V</kbd> เพื่อวางรูปจาก Clipboard ได้อย่างรวดเร็ว</span></div></div>',
           icon: "info",
           confirmButtonText: "เข้าใจแล้ว 👍",
           heightAuto: false,
@@ -767,6 +848,39 @@
           scrollbarPadding: false,
         });
       },
+      showPageInfo: function () {
+        Swal.fire({
+          title: "วิธีการใช้งานระบบรายงาน",
+          html: `
+            <div style="text-align:left; font-size:12px; line-height:1.6;">
+              <div style="margin-bottom:12px; padding:10px; background:#f8fafc; border-left:4px solid #6366f1; border-radius:4px;">
+                <b style="color:#4338ca;">1. เลือกวันที่และกะ</b><br>
+                เลือกวันที่ทำงาน ระบบจะโหลดข้อมูลแมตซ์และ Ticket ของกะที่เลือกโดยอัตโนมัติ
+              </div>
+              <div style="margin-bottom:12px; padding:10px; background:#f8fafc; border-left:4px solid #6366f1; border-radius:4px;">
+                <b style="color:#4338ca;">2. ตรวจสอบสรุปแมตซ์</b><br>
+                ตรวจสอบสถานะ Start/Stop ของแต่ละคู่ หากมีข้อมูลขาดหาย ระบบจะแสดงสีแจ้งเตือน
+              </div>
+              <div style="margin-bottom:12px; padding:10px; background:#f8fafc; border-left:4px solid #6366f1; border-radius:4px;">
+                <b style="color:#4338ca;">3. แนบหลักฐาน (Evidence)</b><br>
+                คลิกที่พื้นที่อัปเดตเพื่อเลือกรูปภาพ หรือกด <kbd style="background:#eee;padding:2px 4px;border-radius:3px;border:1px solid #ccc">Ctrl+V</kbd> เพื่อวางรูปภาพหลักฐาน
+              </div>
+              <div style="margin-bottom:12px; padding:10px; background:#f8fafc; border-left:4px solid #6366f1; border-radius:4px;">
+                <b style="color:#4338ca;">4. สรุป Ticket & ส่งกะ</b><br>
+                ตรวจสอบรายการงานที่เกิดขึ้น และเลือกรายการที่ต้องการส่งกะ (Handover) ให้ทีมถัดไป
+              </div>
+              <div style="padding:10px; background:#f0fdf4; border-left:4px solid #16a34a; border-radius:4px;">
+                <b style="color:#15803d;">5. ส่งรายงาน</b><br>
+                เลือกผู้รายงานและกลุ่มเป้าหมาย (Group) จากนั้นกดปุ่ม "ส่งรายงาน" เพื่อบันทึกข้อมูล
+              </div>
+            </div>
+          `,
+          icon: "question",
+          confirmButtonText: "รับทราบ",
+          confirmButtonColor: "#6366f1",
+          heightAuto: false,
+        });
+      },
 
       // Helpers
       handleReporterChange: function (v) {
@@ -780,42 +894,192 @@
         el("reporterOther").value = "";
         show("wrapper-reporter-other", false);
       },
-      toggleStartArea: function (v) {
-        var hasCandidates =
-          el("auto-start-list") && el("auto-start-list").children.length > 0;
-        show("start-upload-area", v !== "ไม่มี" || hasCandidates);
+      toggleStartMonoArea: function (v) {
+        var hasCandidates = el("auto-start-mono-list") && el("auto-start-mono-list").children.length > 0;
+        var hasFiles = _files.startMono && _files.startMono.length > 0;
+        show("start-mono-area", v !== "ไม่มี" || hasCandidates || hasFiles);
       },
-      toggleAisActions: function (v) {
-        show("proof-ais-box", v !== "ไม่มี");
+      toggleStopMonoArea: function (v) {
+        var hasCandidates = el("auto-stop-mono-list") && el("auto-stop-mono-list").children.length > 0;
+        var hasFiles = _files.stopMono && _files.stopMono.length > 0;
+        show("stop-mono-area", v !== "ไม่มี" || hasCandidates || hasFiles);
+      },
+      toggleStartAisArea: function (v) {
+        var hasCandidates = el("auto-start-ais-list") && el("auto-start-ais-list").children.length > 0;
+        var hasFiles = _files.startAis && _files.startAis.length > 0;
+        show("start-ais-area", v !== "ไม่มี" || hasCandidates || hasFiles);
+      },
+      toggleStopAisArea: function (v) {
+        var hasCandidates = el("auto-stop-ais-list") && el("auto-stop-ais-list").children.length > 0;
+        var hasFiles = _files.stopAis && _files.stopAis.length > 0;
+        show("stop-ais-area", v !== "ไม่มี" || hasCandidates || hasFiles);
       },
       confirmSend: function () {
         el("preview_modal").close();
         this.submitForm("send");
       },
 
-      // 🌟 ปรับปรุง: รองรับการ Paste (Ctrl+V) ให้ใช้งานได้จริง
-      setupPasteHandlers: function () {
-        ["mono", "ais", "start"].forEach((type) => {
-          var dz = el("dropzone-" + type);
-          if (dz && !dz.hasAttribute("data-listening")) {
-            // เพิ่ม tabindex เพื่อให้ div รับ focus และ event paste ได้
-            dz.setAttribute("tabindex", "0");
-            dz.addEventListener("paste", (e) => {
-              var items = (e.clipboardData || e.originalEvent.clipboardData)
-                .items;
-              for (var i = 0; i < items.length; i++) {
-                if (items[i].type.indexOf("image") !== -1) {
-                  var blob = items[i].getAsFile();
-                  _files[type].push(blob);
-                  ReportManager.renderFileList(type);
-                  if (type === "start") ReportManager._updateStartStatus();
-                  if (typeof UIManager !== "undefined")
-                    UIManager.showToast("วางรูปเรียบร้อย ✅", "success");
-                  e.preventDefault();
-                  return;
-                }
+      switchProofTab: function (tab) {
+        var tabs = ['mono', 'ais'];
+        tabs.forEach(function (t) {
+          var panel = el('proof-panel-' + t);
+          var btn = el('proof-tab-' + t);
+          if (panel) panel.classList.toggle('hidden', t !== tab);
+          if (btn) {
+            if (t === tab) {
+              btn.className = 'flex-1 py-1.5 text-[10px] font-bold uppercase text-center border-b-2 border-primary text-primary transition-colors';
+            } else {
+              btn.className = 'flex-1 py-1.5 text-[10px] font-bold uppercase text-center border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors';
+            }
+          }
+        });
+      },
+
+      // ==================== Settings Panel Toggle ====================
+      toggleSettingsPanel: function () {
+        var body = el('settings-panel-body');
+        var chevron = el('icon-settings-chevron');
+        if (body) body.classList.toggle('hidden');
+        if (chevron) chevron.classList.toggle('rotate-180');
+      },
+
+      // ==================== Shift Transfer Mode ====================
+      _transferMode: 'handover',
+      _handoverChecked: [],
+
+      setTransferMode: function (mode) {
+        this._transferMode = mode;
+        var btnText = el('btn-transfer-text');
+        var btnHandover = el('btn-transfer-handover');
+        var modeText = el('transfer-mode-text');
+        var modeHandover = el('transfer-mode-handover');
+
+        if (mode === 'text') {
+          if (btnText) { btnText.className = 'btn btn-xs bg-primary text-white border-0 shadow-none gap-1 rounded-lg'; }
+          if (btnHandover) { btnHandover.className = 'btn btn-xs btn-ghost text-gray-400 border border-gray-200 gap-1 rounded-lg'; }
+          if (modeText) modeText.classList.remove('hidden');
+          if (modeHandover) modeHandover.classList.add('hidden');
+        } else {
+          if (btnText) { btnText.className = 'btn btn-xs btn-ghost text-gray-400 border border-gray-200 gap-1 rounded-lg'; }
+          if (btnHandover) { btnHandover.className = 'btn btn-xs bg-primary text-white border-0 shadow-none gap-1 rounded-lg'; }
+          if (modeText) modeText.classList.add('hidden');
+          if (modeHandover) modeHandover.classList.remove('hidden');
+          this.loadHandoverTopics();
+        }
+      },
+
+      loadHandoverTopics: function (force = false) {
+        if (!force && _isHandoverLoaded) {
+          console.log("🚚 Handover Cache Hit");
+          return Promise.resolve();
+        }
+
+        var loader = el('transfer-handover-loader');
+        var list = el('transfer-handover-list');
+        var empty = el('transfer-handover-empty');
+
+        if (loader) loader.classList.remove('hidden');
+        if (list) list.innerHTML = '';
+        if (empty) empty.classList.add('hidden');
+        this._handoverChecked = [];
+
+        return Server.call({ func: "getHandovers", silent: true })
+          .then((res) => {
+            if (loader) loader.classList.add('hidden');
+            if (res && res.success) {
+              var items = res.data.items || [];
+              var pending = items.filter((i) => String(i.status || '').trim() !== 'Succeed');
+
+              if (pending.length === 0) {
+                if (list) list.classList.add('hidden');
+                if (empty) empty.classList.remove('hidden');
+                return;
               }
-            });
+
+              if (list) list.classList.remove('hidden');
+              if (empty) empty.classList.add('hidden');
+
+              var html = '';
+              pending.forEach((item) => {
+                var statusIcon = '<i class="fas fa-circle-notch text-amber-500 text-[10px]"></i>';
+                var tagsHtml = '';
+                if (Array.isArray(item.tags) && item.tags.length > 0) {
+                  tagsHtml = item.tags.map(t => `<span class="text-[9px] font-medium text-gray-500 border border-gray-200 bg-white px-1 py-0.5 rounded">${t}</span>`).join(' ');
+                }
+                var dateStr = '';
+                try { dateStr = new Date(item.timestamp).toLocaleDateString('th-TH', { day: '2-digit', month: 'short' }); } catch (e) { }
+
+                html += `<label class="flex items-start gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
+                  <input type="checkbox" class="checkbox checkbox-xs checkbox-primary mt-0.5 shrink-0" value="${(item.topic || '').replace(/"/g, '&quot;')}" onchange="ReportManager.toggleHandoverItem(this)">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      ${statusIcon}<span class="text-xs font-semibold text-gray-800 truncate">${item.topic || '-'}</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <span class="text-[9px] text-gray-400">${item.creator || ''}</span>
+                      ${dateStr ? `<span class="text-[9px] text-gray-300">${dateStr}</span>` : ''}
+                      ${tagsHtml ? `<span class="text-gray-200">|</span>${tagsHtml}` : ''}
+                    </div>
+                  </div>
+                </label>`;
+              });
+              if (list) list.innerHTML = html;
+            } else {
+              if (list) list.classList.add('hidden');
+              if (empty) empty.classList.remove('hidden');
+            }
+            _isHandoverLoaded = true;
+          })
+          .catch((err) => {
+            console.error("Handover Load Error", err);
+            if (empty) empty.classList.remove('hidden');
+          })
+          .finally(() => {
+            if (loader) loader.classList.add('hidden');
+          });
+      },
+
+      toggleHandoverItem: function (checkbox) {
+        var val = checkbox.value;
+        if (checkbox.checked) {
+          if (this._handoverChecked.indexOf(val) === -1) this._handoverChecked.push(val);
+        } else {
+          var idx = this._handoverChecked.indexOf(val);
+          if (idx > -1) this._handoverChecked.splice(idx, 1);
+        }
+      },
+
+      getTransferValue: function () {
+        if (this._transferMode === 'handover' && this._handoverChecked.length > 0) {
+          return this._handoverChecked.map(function (t, i) { return (i + 1) + '. ' + t; }).join('\n');
+        }
+        return el("transferReport") ? el("transferReport").value : '';
+      },
+
+      handlePasteEvent: function (e, type) {
+        var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf("image") !== -1) {
+            var blob = items[i].getAsFile();
+            if (!_files[type]) _files[type] = [];
+            _files[type].push(blob);
+            ReportManager.renderFileList(type);
+            ReportManager._updateStartStatus();
+            if (typeof UIManager !== "undefined")
+              UIManager.showToast("วางรูปเรียบร้อย ✅", "success");
+            e.preventDefault();
+            return;
+          }
+        }
+      },
+
+      // Legacy handler but keeping for safety if needed internally
+      setupPasteHandlers: function () {
+        ["startMono", "stopMono", "startAis", "stopAis"].forEach((type) => {
+          var dz = el("dropzone-" + type.replace(/([A-Z])/g, '-$1').toLowerCase());
+          if (dz && !dz.hasAttribute("data-listening")) {
+            dz.setAttribute("tabindex", "0");
+            dz.addEventListener("paste", (e) => this.handlePasteEvent(e, type));
             dz.setAttribute("data-listening", "true");
           }
         });

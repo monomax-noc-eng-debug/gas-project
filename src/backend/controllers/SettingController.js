@@ -73,9 +73,9 @@ const SettingController = (() => {
             if (sh) ss.deleteSheet(sh);
           });
 
-          ensureSheet(ss, "SYS_Users", ["Role", "Name"], [
-            { Role: "Responsibility", Name: "Admin" },
-            { Role: "Operator", Name: "Staff1" }
+          ensureSheet(ss, "SYS_Users", ["Role", "Name", "EngName"], [
+            { Role: "Responsibility", Name: "Admin", EngName: "Admin" },
+            { Role: "Operator", Name: "Staff1", EngName: "Staff1" }
           ]);
 
           ensureSheet(ss, "SYS_Ticket_Attrs", ["Group", "Name"], [
@@ -98,7 +98,7 @@ const SettingController = (() => {
 
           ensureSheet(ss, "SYS_Email_Profiles", ["ProfileName", "To", "CC"]);
 
-          ensureSheet(ss, "SYS_Email_Templates", ["Type", "TemplateName", "Greeting", "Company", "ContactName", "ContactNum", "SiteEmail", "SiteAddr", "Action"]);
+          ensureSheet(ss, "SYS_Email_Templates", ["Type", "TemplateName", "Greeting", "Company", "ContactName", "ContactNum", "SiteName", "SiteNum", "SiteEmail", "SiteAddr", "Impact", "Action"]);
 
           ensureSheet(ss, "SYS_Handover_Tags", ["TagName"], [
             { TagName: "Ticket" },
@@ -112,12 +112,25 @@ const SettingController = (() => {
       } catch (e) {
         return Response.error("Reset Failed: " + String(e));
       } finally {
+        try { CacheService.getScriptCache().remove("GLOBAL_APP_SETTINGS_V1"); } catch (e) { }
         lock.releaseLock();
       }
     },
 
     apiGetAllSettings: function () {
       try {
+        const cache = CacheService.getScriptCache();
+        const cacheKey = "GLOBAL_APP_SETTINGS_V1";
+        const cachedData = cache.get(cacheKey);
+
+        if (cachedData) {
+          try {
+            return Response.success(JSON.parse(cachedData));
+          } catch (e) {
+            // cache corrupt, fallback to fetch
+          }
+        }
+
         const dbId = typeof CONFIG !== "undefined" ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty("CORE_SHEET_ID");
         const ss = SpreadsheetApp.openById(dbId);
 
@@ -133,7 +146,7 @@ const SettingController = (() => {
 
         const config = {
           staff: [], assignees: [], types: [], statuses: [], severities: [],
-          categories: {}, handoverTags: [], emailProfiles: [], emailDrafts: [], mailDrafts: []
+          categories: {}, handoverTags: [], emailProfiles: [], emailDrafts: [], mailDrafts: [], staffUsers: []
         };
 
         const addUnique = (arr, val) => {
@@ -143,7 +156,16 @@ const SettingController = (() => {
         usersData.forEach(u => {
           const role = String(u.Role || "").toLowerCase();
           const name = String(u.Name || "").trim();
+          const engName = String(u.EngName || "").trim();
           if (!name) return;
+
+          // store raw robust user data
+          config.staffUsers.push({
+            role: String(u.Role || ""),
+            name: name,
+            engName: engName
+          });
+
           if (role.includes("responsibility") || role.includes("leader")) addUnique(config.staff, name);
           if (role.includes("operator") || role.includes("assignee")) addUnique(config.assignees, name);
         });
@@ -187,8 +209,11 @@ const SettingController = (() => {
             company: String(t.Company || ""),
             contactName: String(t.ContactName || ""),
             contactNum: String(t.ContactNum || ""),
+            siteName: String(t.SiteName || ""),
+            siteNum: String(t.SiteNum || ""),
             siteEmail: String(t.SiteEmail || ""),
             siteAddr: String(t.SiteAddr || ""),
+            impact: String(t.Impact || ""),
             action: String(t.Action || "")
           };
           if (!tmpl.name) return;
@@ -203,6 +228,8 @@ const SettingController = (() => {
         config.statuses = [...new Set(config.statuses)];
         config.severities = [...new Set(config.severities)];
         config.handoverTags = [...new Set(config.handoverTags)];
+
+        try { cache.put(cacheKey, JSON.stringify(config), 21600); } catch (e) { } // Cache for 6 hours
 
         return Response.success(config);
 
@@ -220,9 +247,18 @@ const SettingController = (() => {
           const config = payload || {};
 
           const usersRow = [];
-          (config.staff || []).forEach(name => usersRow.push({ Role: "Responsibility", Name: name }));
-          (config.assignees || []).forEach(name => usersRow.push({ Role: "Operator", Name: name }));
-          saveData(ss, "SYS_Users", ["Role", "Name"], usersRow);
+          (config.staffUsers || []).forEach(u => {
+            // For saving, we'll restore exact data from user management if it modifies `staffUsers`.
+            usersRow.push({ Role: u.role, Name: u.name, EngName: u.engName });
+          });
+          // If the payload format from UI doesn't supply staffUsers list (since frontend currently supplies staff/assignees simple arrays only),
+          // We must gracefully handle saving missing properties or maintain UI alignment. 
+          // Current settings page ONLY pulls from usersRow (we'll see if Page_Settings_Users edits users directly). 
+          if (usersRow.length === 0) {
+            (config.staff || []).forEach(name => usersRow.push({ Role: "Responsibility", Name: name, EngName: "" }));
+            (config.assignees || []).forEach(name => usersRow.push({ Role: "Operator", Name: name, EngName: "" }));
+          }
+          saveData(ss, "SYS_Users", ["Role", "Name", "EngName"], usersRow);
 
           const attrsRow = [];
           (config.types || []).forEach(name => attrsRow.push({ Group: "Type", Name: name }));
@@ -246,12 +282,14 @@ const SettingController = (() => {
           saveData(ss, "SYS_Email_Profiles", ["ProfileName", "To", "CC"], profsRow);
 
           const tmplsRow = [];
-          (config.emailDrafts || []).forEach(t => tmplsRow.push({ Type: "Email", TemplateName: t.name, Greeting: t.greeting, Company: t.company, ContactName: t.contactName, ContactNum: t.contactNum, SiteEmail: t.siteEmail, SiteAddr: t.siteAddr, Action: t.action }));
-          (config.mailDrafts || []).forEach(t => tmplsRow.push({ Type: "Mail", TemplateName: t.name, Greeting: t.greeting, Company: t.company, ContactName: t.contactName, ContactNum: t.contactNum, SiteEmail: t.siteEmail, SiteAddr: t.siteAddr, Action: t.action }));
-          saveData(ss, "SYS_Email_Templates", ["Type", "TemplateName", "Greeting", "Company", "ContactName", "ContactNum", "SiteEmail", "SiteAddr", "Action"], tmplsRow);
+          (config.emailDrafts || []).forEach(t => tmplsRow.push({ Type: "Email", TemplateName: t.name, Greeting: t.greeting, Company: t.company, ContactName: t.contactName, ContactNum: t.contactNum, SiteName: t.siteName, SiteNum: t.siteNum, SiteEmail: t.siteEmail, SiteAddr: t.siteAddr, Impact: t.impact, Action: t.action }));
+          (config.mailDrafts || []).forEach(t => tmplsRow.push({ Type: "Mail", TemplateName: t.name, Greeting: t.greeting, Company: t.company, ContactName: t.contactName, ContactNum: t.contactNum, SiteName: t.siteName, SiteNum: t.siteNum, SiteEmail: t.siteEmail, SiteAddr: t.siteAddr, Impact: t.impact, Action: t.action }));
+          saveData(ss, "SYS_Email_Templates", ["Type", "TemplateName", "Greeting", "Company", "ContactName", "ContactNum", "SiteName", "SiteNum", "SiteEmail", "SiteAddr", "Impact", "Action"], tmplsRow);
 
           const tagsRow = (config.handoverTags || []).map(t => ({ TagName: t }));
           saveData(ss, "SYS_Handover_Tags", ["TagName"], tagsRow);
+
+          try { CacheService.getScriptCache().remove("GLOBAL_APP_SETTINGS_V1"); } catch (e) { }
 
           return Response.success({ message: "บันทึกตั้งค่าทั้งหมดสำเร็จ" });
         }

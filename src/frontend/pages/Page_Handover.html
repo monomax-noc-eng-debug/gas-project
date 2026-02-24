@@ -1,115 +1,156 @@
 <div id="page-handover"
-  class="page-section hidden h-full w-full p-4 flex flex-col gap-4 bg-base-200 overflow-hidden font-sans">
+  class="page-section hidden h-full w-full p-3 flex flex-col gap-2 bg-base-200 overflow-hidden font-sans">
 
-  <div
-    class="flex flex-col sm:flex-row justify-between items-center bg-white px-5 py-3 rounded-2xl shadow-sm border border-base-300 shrink-0 gap-3">
-    <div class="flex items-center gap-3 w-full sm:w-auto">
-      <div class="bg-primary/10 p-2 rounded-xl text-primary"><i class="fas fa-people-arrows text-xl"></i></div>
-      <div>
-        <h2 class="text-base font-bold text-gray-800">ระบบส่งกะ (Shift Handover)</h2>
-        <p class="text-[10px] text-gray-400">ส่งมอบงาน, แจ้งปัญหา และติดตามการรับทราบ</p>
+  <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-base-300 shrink-0">
+
+    <div class="flex items-center gap-2">
+      <div class="bg-primary/10 p-1.5 rounded-lg text-primary"><i class="fas fa-people-arrows text-sm"></i></div>
+      <div class="hidden sm:block">
+        <h2 class="text-xs font-bold text-gray-800">Shift Transfer</h2>
       </div>
     </div>
-    <div class="flex items-center gap-2 w-full sm:w-auto">
-      <div class="relative w-full sm:w-48">
-        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-        <input type="text" id="ho_search_input" onkeyup="filterHandovers()"
-          class="input input-sm input-bordered pl-8 w-full text-xs bg-slate-50 focus:bg-white transition-colors rounded-lg"
-          placeholder="ค้นหา หัวข้อ, Tag..." />
-      </div>
+
+    <div class="flex items-center gap-2 ml-auto">
 
       <button id="btn-load-handovers" onclick="loadHandoversWithBtn()"
-        class="btn btn-sm btn-neutral text-white shadow-sm btn-loading-overlay min-w-[90px]">
-        <span class="default-content flex items-center gap-2">
-          <i class="fas fa-sync-alt text-xs"></i>
-          <span class="hidden sm:inline text-xs ml-1">โหลดข้อมูล</span>
+        class="btn btn-xs btn-neutral text-white shadow-sm btn-loading-overlay h-7 px-3">
+        <span class="default-content flex items-center gap-1.5">
+          <i class="fas fa-sync-alt text-[10px]"></i>
+          <span class="text-[10px]">โหลด</span>
         </span>
         <span class="loading-content">
           <span class="custom-loader"></span>
         </span>
       </button>
 
-      <button class="btn btn-sm btn-primary shadow-sm min-w-[90px]" onclick="openCreateModal()">
-        <i class="fas fa-plus text-xs"></i><span class="hidden sm:inline text-xs"> สร้างรายการ</span>
+      <button class="btn btn-xs btn-primary shadow-sm h-7 px-3" onclick="openCreateModal()">
+        <i class="fas fa-plus text-[10px]"></i><span class="text-[10px]"> สร้างรายการ</span>
       </button>
+
+      <div class="hidden sm:block w-px h-6 bg-gray-200 mx-1"></div>
+
+      <select id="ho_status_filter" onchange="filterHandovers()"
+        class="select select-sm select-bordered text-xs bg-slate-50 focus:bg-white transition-colors rounded-lg font-medium text-gray-600 w-full sm:w-auto">
+        <option value="all">สถานะทั้งหมด</option>
+        <option value="pending">⏳ รอดำเนินการ</option>
+        <option value="succeed">✅ เสร็จสิ้น</option>
+      </select>
+
+      <div class="relative w-full sm:w-48">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+        <input type="text" id="ho_search_input" oninput="filterHandovers()"
+          class="input input-sm input-bordered pl-8 w-full text-xs bg-slate-50 focus:bg-white transition-colors rounded-lg"
+          placeholder="ค้นหา หัวข้อ, Tag..." />
+      </div>
+
     </div>
   </div>
 
-  <div class="flex-1 overflow-hidden min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4">
+  <div
+    class="flex-1 overflow-hidden min-h-0 grid grid-cols-1 lg:grid-cols-12 bg-white rounded-2xl shadow-sm border border-base-200">
 
-    <div class="lg:col-span-5 xl:col-span-4 flex flex-col gap-4 overflow-hidden h-full">
-      <div
-        class="card bg-white shadow-sm border border-base-300 flex-1 flex flex-col overflow-hidden rounded-2xl min-h-0">
-        <div class="px-5 py-3 border-b border-base-100 bg-white flex justify-between items-center shrink-0">
-          <h3 class="font-bold text-sm text-gray-700 flex items-center gap-2">
-            <i class="fas fa-list-ul text-primary"></i> รายการทั้งหมด
-          </h3>
-          <span class="badge badge-neutral badge-sm font-mono" id="ho_count_badge">0</span>
-        </div>
-
-        <div id="ho_list_container" class="overflow-y-auto flex-1 p-2 space-y-1.5 bg-gray-50/30 custom-scrollbar">
-        </div>
+    <div class="lg:col-span-5 xl:col-span-4 flex flex-col overflow-hidden h-full lg:border-r border-gray-100">
+      <div class="px-5 py-4 border-b border-gray-100 bg-white flex justify-between items-center shrink-0">
+        <h3 class="font-semibold text-sm text-gray-800">รายการส่งกะ</h3>
+        <span class="badge badge-sm font-mono bg-gray-100 text-gray-600 border-0 px-2 py-1 rounded"
+          id="ho_count_badge">0</span>
       </div>
+      <div id="ho_list_container" class="overflow-y-auto flex-1 p-2 space-y-0.5 custom-scrollbar bg-slate-50/30"></div>
     </div>
 
     <div id="ho_detail_wrapper"
-      class="hidden lg:flex lg:col-span-7 xl:col-span-8 flex-col h-full overflow-hidden relative rounded-2xl">
+      class="hidden lg:flex lg:col-span-7 xl:col-span-8 flex-col h-full overflow-hidden relative bg-white">
 
-      <div id="ho_empty_state"
-        class="absolute inset-0 flex flex-col items-center justify-center bg-white border border-base-300 rounded-2xl shadow-sm z-20">
-        <div class="bg-gray-50 p-6 rounded-full text-gray-300 mb-4"><i class="fas fa-inbox text-5xl"></i></div>
-        <h3 class="text-sm font-bold text-gray-500">เลือกรายการเพื่อดูรายละเอียด</h3>
+      <div id="ho_empty_state" class="absolute inset-0 flex flex-col items-center justify-center bg-white z-20">
+        <div class="text-gray-200 mb-4"><i class="fas fa-file-alt text-6xl"></i></div>
+        <h3 class="text-sm font-medium text-gray-400">เลือกรายการเพื่อดูรายละเอียด</h3>
       </div>
 
-      <div id="ho_detail_content" class="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3 pb-2 pr-1 hidden">
+      <div id="ho_skeleton_state" class="absolute inset-0 flex flex-col bg-white z-20 p-6 md:p-8 hidden">
+        <div class="flex justify-between items-start mb-6 gap-4">
+          <div class="flex gap-2">
+            <div class="skeleton h-6 w-20"></div>
+            <div class="skeleton h-6 w-16"></div>
+          </div>
+          <div class="flex gap-2">
+            <div class="skeleton h-8 w-8"></div>
+            <div class="skeleton h-8 w-8"></div>
+            <div class="skeleton h-8 w-8"></div>
+          </div>
+        </div>
+        <div class="skeleton h-10 w-3/4 mb-4"></div>
+        <div class="flex gap-4 mb-8">
+          <div class="skeleton h-4 w-32"></div>
+          <div class="skeleton h-4 w-32"></div>
+        </div>
+        <hr class="mb-8 border-gray-100">
+        <div class="skeleton h-4 w-48 mb-4"></div>
+        <div class="skeleton h-3 mb-2 w-full"></div>
+        <div class="skeleton h-3 mb-2 w-5/6"></div>
+        <div class="skeleton h-3 mb-2 w-4/6"></div>
+      </div>
 
-        <div class="card bg-white shadow-sm border border-base-300 p-5 rounded-2xl shrink-0">
-          <div class="flex justify-between items-start mb-4">
-            <div class="flex flex-wrap items-center gap-2">
-              <span id="ho_detail_status" class="badge badge-sm font-bold shadow-sm"></span>
-              <span id="ho_detail_shift"
-                class="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-200"></span>
+      <div id="ho_detail_content" class="flex-1 overflow-y-auto custom-scrollbar flex-col hidden">
+
+        <div class="p-6 md:p-8 pb-6 shrink-0 border-b border-gray-100">
+          <div class="flex justify-between items-start mb-6 gap-4">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span id="ho_detail_status"></span>
+              <span id="ho_detail_shift"></span>
               <div id="ho_detail_tags_container" class="flex flex-wrap gap-1"></div>
             </div>
-            <div class="flex gap-1">
-              <button class="btn btn-xs btn-square btn-ghost text-amber-500 hover:bg-amber-50"
+
+            <div class="flex gap-1.5 shrink-0 items-center">
+              <button id="btn_quick_resolve"
+                class="hidden btn btn-sm bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white border-0 shadow-none font-sans gap-1.5 rounded-lg transition-colors"
+                onclick="quickResolveHandover()">
+                <i class="fas fa-check"></i> <span class="hidden sm:inline font-semibold">ปิดงาน</span>
+              </button>
+              <div class="w-px h-4 bg-gray-200 mx-1 hidden sm:block"></div>
+              <button
+                class="btn btn-sm btn-square btn-ghost text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg"
                 onclick="openEditModal()"><i class="fas fa-pen"></i></button>
-              <button class="btn btn-xs btn-square btn-ghost text-red-500 hover:bg-red-50" onclick="deleteHandover()"><i
-                  class="fas fa-trash"></i></button>
-              <button class="btn btn-xs btn-square btn-ghost text-gray-400 hover:bg-gray-100" onclick="closeDetail()"><i
-                  class="fas fa-times"></i></button>
+              <button
+                class="btn btn-sm btn-square btn-ghost text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                onclick="deleteHandover()"><i class="fas fa-trash"></i></button>
+              <button class="btn btn-sm btn-square btn-ghost text-gray-400 hover:bg-gray-100 rounded-lg"
+                onclick="closeDetail()"><i class="fas fa-times"></i></button>
             </div>
           </div>
 
-          <h2 id="ho_detail_topic" class="text-xl font-bold text-gray-800 mb-3"></h2>
+          <h2 id="ho_detail_topic"
+            class="text-2xl md:text-3xl font-extrabold text-gray-900 leading-tight mb-4 tracking-tight"></h2>
 
-          <div class="flex gap-4 text-[10px] text-gray-500 font-mono">
-            <span class="flex items-center gap-1"><i class="fas fa-clock text-gray-400"></i> <span
+          <div class="flex flex-wrap gap-4 text-xs text-gray-500 font-medium">
+            <span class="flex items-center gap-1.5"><i class="fas fa-clock text-gray-400"></i> <span
                 id="ho_detail_time_text"></span></span>
-            <span class="flex items-center gap-1"><i class="fas fa-user text-gray-400"></i> <span
+            <span class="flex items-center gap-1.5"><i class="fas fa-user-circle text-gray-400 text-sm"></i> <span
                 id="ho_detail_creator_text"></span></span>
           </div>
         </div>
 
-        <div class="card bg-white shadow-sm border border-base-300 p-5 rounded-2xl shrink-0 gap-4">
+        <div class="p-6 md:p-8 flex-1 shrink-0 space-y-8">
           <div>
-            <span class="text-[10px] font-bold uppercase text-gray-400 mb-4 block"><i
-                class="fas fa-list-check text-primary mr-1"></i> รายละเอียด / ขั้นตอนที่ทำไปแล้ว</span>
-            <div id="ho_detail_timeline" class="space-y-3"></div>
+            <h3 class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <i class="fas fa-align-left"></i> รายละเอียด / ขั้นตอนที่ทำไปแล้ว
+            </h3>
+            <div id="ho_detail_timeline" class="space-y-1 text-gray-700 leading-relaxed text-sm"></div>
           </div>
-          <div id="ho_detail_contact_wrap" class="hidden mt-4 pt-4 border-t border-slate-100">
-            <span class="text-[10px] font-bold uppercase text-gray-400 mb-3 block"><i
-                class="fas fa-address-book text-info mr-1"></i> ข้อมูลผู้ติดต่อ</span>
-            <div id="ho_detail_contact_grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+
+          <div id="ho_detail_contact_wrap" class="hidden pt-6 border-t border-gray-100">
+            <h3 class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <i class="fas fa-address-book"></i> ข้อมูลผู้ติดต่อ
+            </h3>
+            <div id="ho_detail_contact_grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm"></div>
+          </div>
+
+          <div class="pt-6 border-t border-gray-100">
+            <h3 class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <i class="fas fa-check-double text-emerald-500"></i> สถานะการรับทราบ
+            </h3>
+            <div id="ho_ack_container" class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3"></div>
           </div>
         </div>
-
-        <div class="card bg-white shadow-sm border border-base-300 p-5 rounded-2xl shrink-0">
-          <span class="text-[10px] font-bold uppercase text-gray-400 mb-3 block"><i
-              class="fas fa-check-circle text-success mr-1"></i> สถานะการรับทราบ (Acknowledge)</span>
-          <div id="ho_ack_container" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2"></div>
-        </div>
-
       </div>
     </div>
   </div>
@@ -117,7 +158,7 @@
   <dialog id="ho_modal" class="modal modal-bottom sm:modal-middle font-sans">
     <div class="modal-box p-0 rounded-2xl max-w-2xl bg-base-200">
       <div class="bg-neutral text-white px-5 py-4 font-bold flex justify-between items-center">
-        <span id="ho_modal_title" class="flex items-center gap-2"><i class="fas fa-edit"></i> สร้างรายการส่งกะ</span>
+        <span id="ho_modal_title" class="flex items-center gap-2"></span>
         <button onclick="document.getElementById('ho_modal').close()"
           class="btn btn-xs btn-circle btn-ghost text-white opacity-70 hover:opacity-100"><i
             class="fas fa-times"></i></button>
@@ -126,15 +167,60 @@
       <div class="p-5 flex flex-col gap-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
         <input type="hidden" id="ho_edit_id">
 
-        <div class="grid grid-cols-2 gap-3">
-          <div class="card bg-white shadow-sm border border-base-300 p-3 rounded-xl gap-1">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- ผู้รายงาน -->
+          <div
+            class="card bg-white shadow-sm border border-base-300 p-4 rounded-xl flex flex-col justify-center items-center gap-2">
             <span class="text-[10px] font-bold uppercase text-gray-400">ผู้รายงาน (Creator)</span>
             <select id="ho_creator_select"
-              class="select select-sm select-bordered w-full text-xs bg-slate-50 focus:bg-white"></select>
+              class="select select-sm select-bordered w-full text-xs bg-slate-50 focus:bg-white text-center font-semibold"></select>
           </div>
-          <div class="card bg-white shadow-sm border border-base-300 p-3 rounded-xl gap-1">
-            <span class="text-[10px] font-bold uppercase text-gray-400">กะเวลา (Shift)</span>
-            <div id="ho_modal_shift_display" class="flex items-center gap-2 font-bold text-xs mt-1 text-slate-700">
+
+          <!-- เวลา & กะ -->
+          <div class="card bg-white shadow-sm border border-base-300 p-3 rounded-xl flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-bold uppercase text-gray-400">เวลา & กะทำงาน (Time & Shift)</span>
+              <button type="button" class="btn btn-xs btn-ghost text-primary text-[10px] h-6 min-h-0 px-2 rounded-lg"
+                onclick="
+                  document.getElementById('ho_modal_time_controls').classList.toggle('hidden');
+                  document.getElementById('ho_auto_time_display').classList.toggle('hidden');
+                ">
+                ระบุเอง
+              </button>
+            </div>
+
+            <div class="relative w-full h-[80px]">
+              <!-- Default Auto Display -->
+              <div id="ho_auto_time_display"
+                class="absolute inset-0 flex flex-col items-center justify-center bg-emerald-50 border border-emerald-100 rounded-lg p-2 transition-all">
+                <span
+                  class="text-emerald-600 font-bold text-xs uppercase tracking-wider flex items-center gap-2 text-center leading-tight">
+                  <i class="fas fa-magic text-emerald-400 text-sm"></i>
+                  <span class="hidden sm:inline">ระบบจะคำนวณให้อัตโนมัติ</span>
+                  <span class="sm:hidden text-[10px]">เวลาอัตโนมัติ</span>
+                </span>
+              </div>
+
+              <!-- Manual Controls (Hidden by default) -->
+              <div id="ho_modal_time_controls"
+                class="absolute inset-0 hidden flex-col justify-between gap-1 transition-all bg-white z-10">
+                <span
+                  class="text-[9px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded text-center w-full truncate border border-amber-100/50">
+                  ⚠️ การระบุเองใช้สำหรับลงข้อมูลย้อนหลัง
+                </span>
+                <div class="grid grid-cols-2 gap-2">
+                  <input type="date" id="ho_date_input"
+                    class="input input-sm h-7 min-h-0 input-bordered w-full text-[10px] bg-slate-50 focus:bg-white px-2 font-medium" />
+                  <input type="time" id="ho_time_input"
+                    class="input input-sm h-7 min-h-0 input-bordered w-full text-[10px] bg-slate-50 focus:bg-white px-2 font-medium" />
+                </div>
+                <select id="ho_modal_shift_select"
+                  class="select select-sm h-7 min-h-0 select-bordered w-full text-[10px] bg-slate-50 focus:bg-white font-semibold">
+                  <option value="Auto">อัตโนมัติ (Auto)</option>
+                  <option value="Day">Day Shift</option>
+                  <option value="Night">Night Shift</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -145,6 +231,11 @@
             <input type="text" id="ho_topic"
               class="input input-sm input-bordered w-full text-xs bg-slate-50 focus:bg-white font-semibold"
               placeholder="ระบุหัวข้อ..." />
+          </div>
+          <div class="form-control w-full">
+            <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">ประเภท (Type)</span>
+            <select id="ho_type_select"
+              class="select select-sm select-bordered w-full text-xs bg-slate-50 focus:bg-white"></select>
           </div>
           <div class="form-control w-full">
             <span class="text-[10px] font-bold uppercase text-gray-400 mb-1">Tag (เลือกได้หลายอัน)</span>
@@ -174,18 +265,19 @@
           <div id="dynamic_contact_container" class="space-y-2"></div>
           <button type="button"
             class="btn btn-xs btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 mt-2 self-start rounded-lg"
-            onclick="addDynamicRow('dynamic_contact_container', 'ชื่อ - เบอร์โทร', 'input')">
+            onclick="addDynamicContactRow('dynamic_contact_container', 'ชื่อ - เบอร์โทร หรือ อีเมล')">
             <i class="fas fa-plus text-[10px]"></i> เพิ่มข้อมูลติดต่อ
           </button>
         </div>
       </div>
 
       <div class="p-4 flex justify-end gap-2 bg-white border-t border-slate-200 rounded-b-2xl">
-        <form method="dialog"><button class="btn btn-sm btn-ghost text-slate-500">ยกเลิก</button></form>
+        <form method="dialog"><button class="btn btn-sm btn-ghost text-slate-500 rounded-lg">ยกเลิก</button></form>
         <button type="button" id="btn_submit_ho"
-          class="btn btn-sm btn-success text-white shadow-sm gap-2 min-w-[110px] relative" onclick="submitHandover()">
+          class="btn btn-sm btn-primary text-white shadow-sm gap-2 min-w-[110px] relative rounded-lg"
+          onclick="submitHandover()">
           <span id="submit-ho-text" class="flex items-center gap-2 justify-center transition-opacity"><i
-              class="fas fa-check"></i> บันทึกข้อมูล</span>
+              class="fas fa-save"></i> บันทึกข้อมูล</span>
           <span id="submit-ho-spinner"
             class="loading loading-spinner loading-xs absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity"></span>
         </button>
