@@ -173,6 +173,12 @@
         EmailSendManager.updatePreview();
       },
 
+      onShow: function () {
+        console.log('📄 EmailSendManager: onShow');
+        // Refresh dropdowns or preview if needed
+        EmailSendManager.updatePreview();
+      },
+
       setupListeners: () => {
         const inputs = document.querySelectorAll('#page-email-send input, #page-email-send textarea, #page-email-send select');
         inputs.forEach(el => {

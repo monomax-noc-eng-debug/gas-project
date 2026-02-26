@@ -16,6 +16,12 @@
         }
       },
 
+      onShow: function () {
+        console.log('📄 EmailFetchManager: onShow');
+        // Optional: auto scan on show? User might prefer manual.
+        // For now just logging to pass integrity check.
+      },
+
       scanEmails: () => {
         UIManager.showLoading("สแกนหาอีเมล...");
 

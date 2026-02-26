@@ -71,6 +71,7 @@ const MatchService = {
         home: findColExt(["home", "team 1"]),
         away: findColExt(["away", "team 2"]),
         score: findColExt(["score", "ft", "ผล"]),
+        channel: findColExt(["channel", "ช่อง", "tv"]),
       };
 
       // 🔥 เทคนิคเพิ่มความเร็ว: ดึงแค่ 1,000 บรรทัดล่าสุดจากก้นชีต
@@ -133,8 +134,8 @@ const MatchService = {
       const dataDb =
         lastRowDb > 1
           ? sheetDb
-              .getRange(lastRowDb - numRowsDb + 1, 1, numRowsDb, lastColDb)
-              .getValues()
+            .getRange(lastRowDb - numRowsDb + 1, 1, numRowsDb, lastColDb)
+            .getValues()
           : [];
 
       const norm = (str) =>
@@ -145,33 +146,18 @@ const MatchService = {
       // 🧠 สร้าง Hash Map (สารบัญ) สำหรับจับคู่รูปภาพ O(1) Speed
       const dbImageMap = new Map();
       const col = {
-        date: headersDb.findIndex((h) =>
-          String(h).toLowerCase().includes("date"),
-        ),
-        time: headersDb.findIndex(
-          (h) =>
-            String(h).toLowerCase().includes("time") ||
-            String(h).toLowerCase().includes("kickoff"),
-        ),
-        home: headersDb.findIndex(
-          (h) =>
-            String(h).toLowerCase().includes("home") ||
-            String(h).toLowerCase().includes("team 1"),
-        ),
-        away: headersDb.findIndex(
-          (h) =>
-            String(h).toLowerCase().includes("away") ||
-            String(h).toLowerCase().includes("team 2"),
-        ),
-        start: headersDb.findIndex((h) =>
-          String(h).toLowerCase().includes("start"),
-        ),
-        stop: headersDb.findIndex((h) =>
-          String(h).toLowerCase().includes("stop"),
-        ),
-        league: headersDb.findIndex((h) =>
-          String(h).toLowerCase().includes("league"),
-        ),
+        date: headersDb.findIndex((h) => String(h).toLowerCase() === "date" || String(h).trim() === "วันที่"),
+        time: headersDb.findIndex((h) => String(h).toLowerCase() === "time" || String(h).toLowerCase() === "kickoff" || String(h).trim() === "เวลา"),
+        home: headersDb.findIndex((h) => String(h).toLowerCase() === "home" || String(h).toLowerCase() === "team 1" || String(h).trim() === "เจ้าบ้าน"),
+        away: headersDb.findIndex((h) => String(h).toLowerCase() === "away" || String(h).toLowerCase() === "team 2" || String(h).trim() === "ทีมเยือน"),
+        startMono: headersDb.findIndex((h) => String(h).trim() === "Start Mono"),
+        stopMono: headersDb.findIndex((h) => String(h).trim() === "Stop Mono"),
+        startAis: headersDb.findIndex((h) => String(h).trim() === "Start AIS"),
+        stopAis: headersDb.findIndex((h) => String(h).trim() === "Stop AIS"),
+        start: headersDb.findIndex((h) => String(h).trim() === "Start"),
+        stop: headersDb.findIndex((h) => String(h).trim() === "Stop"),
+        league: headersDb.findIndex((h) => String(h).toLowerCase() === "league" || String(h).toLowerCase() === "program"),
+        channel: headersDb.findIndex((h) => String(h).trim() === "Channel" || String(h).trim() === "ช่อง"),
       };
 
       dataDb.forEach((rowDb) => {
@@ -190,6 +176,7 @@ const MatchService = {
         const dateExt = API_UTILS.formatDateTime(rowExt[idxExt.date], "date");
         const leagueExt = rowExt[idxExt.league] || "";
         const scoreExt = idxExt.score > -1 ? rowExt[idxExt.score] : "-";
+        const channelExt = idxExt.channel > -1 ? rowExt[idxExt.channel] : "";
 
         // ค้นหารูปจากสารบัญ (ไม่ต้องวนลูปซ้อนลูป)
         const matchedDb = dbImageMap.get(`${norm(homeExt)}_${norm(awayExt)}`);
@@ -200,15 +187,36 @@ const MatchService = {
           home: homeExt,
           away: awayExt,
           league: leagueExt,
-          startImg: "",
-          stopImg: "",
+          start_mono: "",
+          stop_mono: "",
+          start_ais: "",
+          stop_ais: "",
+          channel: channelExt,
+          startImg: "", // fallback
+          stopImg: ""  // fallback
         };
 
         if (matchedDb) {
-          dbData.startImg = col.start > -1 ? matchedDb[col.start] : "";
-          dbData.stopImg = col.stop > -1 ? matchedDb[col.stop] : "";
-          if (col.league > -1 && matchedDb[col.league])
-            dbData.league = matchedDb[col.league];
+          const getImgVal = (idx) => {
+            if (idx === -1) return "";
+            let val = matchedDb[idx];
+            if (typeof val === "string" && val.startsWith("[")) {
+              try { return JSON.parse(val); } catch (e) { return val; }
+            }
+            return val;
+          };
+
+          dbData.start_mono = getImgVal(col.startMono) || getImgVal(col.start) || "";
+          dbData.stop_mono = getImgVal(col.stopMono) || getImgVal(col.stop) || "";
+          dbData.start_ais = getImgVal(col.startAis) || "";
+          dbData.stop_ais = getImgVal(col.stopAis) || "";
+
+          // Legacy fallbacks for stats
+          dbData.startImg = dbData.start_mono;
+          dbData.stopImg = dbData.stop_mono;
+
+          if (col.league > -1 && matchedDb[col.league]) dbData.league = matchedDb[col.league];
+          if (col.channel > -1 && matchedDb[col.channel]) dbData.channel = matchedDb[col.channel];
         }
 
         return {

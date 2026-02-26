@@ -136,10 +136,10 @@
       try {
         let id = null;
         if (url.indexOf("/d/") !== -1) {
-          const match = url.match(/\/d\/(.+?)(\/|$)/);
+          const match = url.match(/\/d\/([a-zA-Z0-9_-]{25,})[/?#\s]?/);
           if (match) id = match[1];
         } else if (url.indexOf("id=") !== -1) {
-          const match = url.match(/id=([^&]+)/);
+          const match = url.match(/id=([a-zA-Z0-9_-]{25,})[&#\s]?/);
           if (match) id = match[1];
         }
         if (id)
@@ -163,20 +163,28 @@
       },
 
       onShow: function () {
-        if (_pickers.main) _pickers.main.setDate(_currentDate, true);
-        if (!_isLoaded) {
-          Dashboard.loadWorkList(true);
-        } else {
-          Dashboard.renderFilteredList();
-        }
+        console.log('📄 Dashboard: onShow');
+        try {
+          if (_pickers.main) _pickers.main.setDate(_currentDate, true);
+          if (!_isLoaded) {
+            Dashboard.loadWorkList(true);
+          } else {
+            Dashboard.renderFilteredList();
+          }
 
-        // ✨ อัปเดต UI (ป้ายเวลาและสถานะ) แบบเรียลไทม์ (ทุก 30 วินาที) เฉพาะตอนหน้า Dashboard แสดง
-        if (!this._intervalId) {
-          this._intervalId = setInterval(() => {
-            if (Router.activePage === "page-dashboard" && _isLoaded) {
-              Dashboard.renderFilteredList();
-            }
-          }, 30000);
+          // ✨ อัปเดต UI (ป้ายเวลาและสถานะ) แบบเรียลไทม์ (ทุก 30 วินาที) เฉพาะตอนหน้า Dashboard แสดง
+          if (!this._intervalId) {
+            this._intervalId = setInterval(() => {
+              if (Router.activePage === "page-dashboard" && _isLoaded) {
+                Dashboard.renderFilteredList();
+              }
+            }, 30000);
+          }
+        } catch (e) {
+          console.error('❌ Dashboard: onShow error', e);
+          if (typeof UIManager !== 'undefined') {
+            UIManager.showToast('เกิดข้อผิดพลาดในการโหลด Dashboard: ' + e.message, 'error');
+          }
         }
       },
 
@@ -234,12 +242,10 @@
                 <td class="text-center"><div class="skeleton h-4 w-12 mx-auto bg-gray-200"></div></td>
                 <td class="text-center"><div class="skeleton h-10 w-10 mx-auto rounded-lg bg-gray-200"></div></td>
                 <td class="text-center"><div class="skeleton h-10 w-10 mx-auto rounded-lg bg-gray-200"></div></td>
+                <td class="text-center"><div class="skeleton h-10 w-10 mx-auto rounded-lg bg-gray-200"></div></td>
+                <td class="text-center"><div class="skeleton h-10 w-10 mx-auto rounded-lg bg-gray-200"></div></td>
                 <td class="text-center"><div class="skeleton h-6 w-14 mx-auto rounded-full bg-gray-200"></div></td>
-                <td class="text-center">
-                  <div class="flex flex-col items-center gap-1">
-                    <div class="skeleton h-5 w-16 mx-auto bg-gray-200"></div>
-                  </div>
-                </td>
+                <td class="text-center"><div class="skeleton h-5 w-16 mx-auto bg-gray-200"></div></td>
               </tr>
             `;
           }
@@ -302,7 +308,8 @@
         if (empty) empty.classList.add("hidden");
 
         var html = "";
-        data.forEach(function (item) {
+        data.forEach(function (item, index) {
+          console.log("Rendering item:", item.home, "vs", item.away, item);
           var isDone = item.status === "DONE";
           var now = new Date();
           var matchTimeStr = item.date + "T" + item.time + ":00";
@@ -372,11 +379,9 @@
                 "<div onclick=\"Dashboard.openEditModal('" +
                 itemJson +
                 "', '" +
-                label.toLowerCase() +
-                '\')" class="tooltip cursor-pointer w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto hover:bg-slate-200 transition-colors" data-tip="ยังไม่ใส่รูป ' +
-                label +
-                ' (คลิกเพื่อเพิ่ม)">' +
-                '<span class="text-[9px] text-slate-400 font-bold leading-tight">No<br>Img</span>' +
+                label.toLowerCase().replace(" ", "-") +
+                '\')" class="tooltip cursor-pointer w-10 h-10 rounded-lg bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center mx-auto hover:bg-slate-100 hover:border-primary/30 transition-all group" data-tip="เพิ่ม ' + label + '">' +
+                '<i class="fas fa-plus text-[10px] text-slate-300 group-hover:text-primary transition-colors"></i>' +
                 "</div>"
               );
             }
@@ -435,7 +440,7 @@
             '</div>' +
             '</div>';
 
-          // 3. คอลัมน์ Plan Start (ใหม่)
+          // 3. คอลัมน์ Plan Start
           var planColumnHtml = planTimeDisplay ?
             '<div class="font-mono text-[14px] font-black text-red-600">' + planTimeDisplay + '</div>' :
             '<div class="text-[14px] text-gray-300">-</div>';
@@ -445,12 +450,14 @@
             '<tr class="hover:bg-slate-50 transition-colors border-b border-gray-100 last:border-none h-[72px]">' +
             '<td class="text-center align-middle">' + timeColumnHtml + '</td>' +
             '<td class="text-center align-middle bg-red-50/20">' + planColumnHtml + '</td>' +
-            '<td class="pl-4 align-middle overflow-hidden">' + matchColumnHtml + '</td>' +
-            '<td class="text-center align-middle px-1 max-w-[80px] overflow-hidden"><span class="block w-full truncate badge badge-ghost badge-sm font-mono text-[10px] bg-gray-100 border-0 text-gray-500 leading-5" title="' + (item.channel || "-").replace(/"/g, '&quot;') + '">' + (item.channel || "-") + '</span></td>' +
-            '<td class="text-center align-middle">' + btnProof(item.start_img, "Start") + '</td>' +
-            '<td class="text-center align-middle">' + btnProof(item.stop_img, "Stop") + '</td>' +
-            '<td class="text-center align-middle bg-slate-50/30 h-[72px]">' + statusWidget + '</td>' +
-            '<td class="text-center align-middle">' + actionWidget + "</td></tr>";
+            '<td class="pl-4 align-middle overflow-hidden w-40">' + matchColumnHtml + '</td>' +
+            '<td class="text-center align-middle px-1 w-24 overflow-hidden"><span class="block w-full truncate badge badge-ghost badge-sm font-mono text-[10px] bg-gray-100 border-0 text-gray-500 leading-5" title="' + (item.channel || "-").replace(/"/g, '&quot;') + '">' + (item.channel || "-") + '</span></td>' +
+            '<td class="text-center align-middle w-20">' + btnProof(item.start_mono || (index === 0 ? item.start_img : ""), "Start Mono") + '</td>' +
+            '<td class="text-center align-middle w-20">' + btnProof(item.start_ais, "Start AIS") + '</td>' +
+            '<td class="text-center align-middle w-20">' + btnProof(item.stop_mono || (index === 0 ? item.stop_img : ""), "Stop Mono") + '</td>' +
+            '<td class="text-center align-middle w-20">' + btnProof(item.stop_ais, "Stop AIS") + '</td>' +
+            '<td class="text-center align-middle bg-slate-50/10 h-[72px] w-24">' + statusWidget + '</td>' +
+            '<td class="text-center align-middle w-32">' + actionWidget + "</td></tr>";
         });
 
         tbody.innerHTML = html;
@@ -554,12 +561,19 @@
       },
 
       viewWorkImages: function (id, type) {
+        // type might be 'start mono', 'start ais', etc.
         const item = _allWorkData.find((d) => d.id === id);
         if (!item) return;
 
-        let rawData = type === "start" ? item.start_img : item.stop_img;
-        let list = [];
+        let key = type.toLowerCase().replace(" ", "_");
+        let rawData = item[key];
 
+        // Fallback for combined view if specific columns are empty
+        if (!rawData && (type === "start" || type === "stop")) {
+          rawData = type === "start" ? item.start_img : item.stop_img;
+        }
+
+        let list = [];
         if (Array.isArray(rawData)) list = rawData;
         else if (rawData) list = [rawData];
 
@@ -810,6 +824,19 @@
 
         getEl("modal-add-work").showModal();
         this.calcPlanStart(); // ✨ สั่งคำนวณ Plan Start ตอนเปิดหน้า
+
+        // ✨ Shortcut: Scroll to specific section if mode is provided
+        if (mode && mode !== "all") {
+          setTimeout(() => {
+            const sectionId = "section-img-" + mode;
+            const target = getEl(sectionId);
+            if (target) {
+              target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              target.classList.add("ring-2", "ring-primary", "ring-offset-2");
+              setTimeout(() => target.classList.remove("ring-2", "ring-primary", "ring-offset-2"), 2000);
+            }
+          }, 300);
+        }
       },
 
       checkFormInput: function () {

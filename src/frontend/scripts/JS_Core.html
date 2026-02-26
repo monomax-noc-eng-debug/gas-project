@@ -2,96 +2,155 @@
   // ----------------------------------------------------------------------
   // 1. ROUTER: Page Switching with Lifecycle Hooks
   // ----------------------------------------------------------------------
-  const Router = {
+  var Router = {
     activePage: null,
-    _controllers: {}, // Registry: { 'page-dashboard': { onShow, onHide } }
+    _controllers: {},
     _previousPage: null,
 
-    /**
-     * Register a Page Controller
-     * @param {string} pageId - ID of the page element (e.g., 'page-history')
-     * @param {object} controller - Object with optional onShow() and onHide() methods
-     */
     register: function (pageId, controller) {
       this._controllers[pageId] = controller;
-      console.log("📌 Router: Registered controller for", pageId);
+      console.log("✅ Router: Registered controller for", pageId);
     },
 
     /**
-     * Navigate to a page
-     * @param {string} pageId - ID of the target page element
+     * ตรวจสอบความพร้อมของหน้าก่อนเปลี่ยนหน้า
+     * @returns {Object} { isReady: boolean, missing: string[] }
      */
-    navigateTo: function (pageId) {
-      // 1. Validate target exists
+    checkPageIntegrity: function (pageId) {
+      var issues = [];
+      
+      // 1. ตรวจสอบว่ามี HTML Element หรือไม่
       var target = document.getElementById(pageId);
       if (!target) {
-        console.warn("⚠️ Router: Page not found -", pageId);
+        issues.push("❌ HTML element not found: #" + pageId);
+      }
+      
+      // 2. ตรวจสอบว่ามี Controller register หรือไม่
+      if (!this._controllers[pageId]) {
+        issues.push("⚠️ Controller not registered for: " + pageId);
+      }
+      
+      // 3. ตรวจสอบว่า Controller มี onShow method หรือไม่
+      if (this._controllers[pageId] && typeof this._controllers[pageId].onShow !== "function") {
+        issues.push("⚠️ Controller missing onShow() method: " + pageId);
+      }
+      
+      return {
+        isReady: issues.length === 0,
+        missing: issues
+      };
+    },
+
+    navigateTo: function (pageId) {
+      console.log("🔄 Router: Navigating to", pageId);
+      
+      // ✨ Integrity Check
+      var integrity = this.checkPageIntegrity(pageId);
+      if (!integrity.isReady) {
+        console.error("🚨 Page Integrity Check Failed:", pageId);
+        integrity.missing.forEach(function(issue) {
+          console.error(issue);
+        });
+        
+        // แสดง Toast แจ้งเตือนผู้ใช้
+        if (typeof UIManager !== "undefined") {
+          UIManager.showToast("ไม่สามารถเปิดหน้านี้ได้ กรุณาติดต่อผู้ดูแลระบบ", "error");
+        }
+        
+        // Fallback ไป Dashboard ถ้าไม่ใช่ Dashboard อยู่แล้ว
+        if (pageId !== 'page-dashboard') {
+          console.warn("⚠️ Falling back to Dashboard");
+          this.navigateTo('page-dashboard');
+        }
         return;
       }
 
-      // 2. Skip if already on this page
+      var target = document.getElementById(pageId);
       if (this.activePage === pageId) return;
 
-      // 3. Call onHide() on the previous page controller
       this._previousPage = this.activePage;
       if (this._previousPage && this._controllers[this._previousPage]) {
         var prevCtrl = this._controllers[this._previousPage];
         if (typeof prevCtrl.onHide === "function") {
-          try {
-            prevCtrl.onHide();
-          } catch (e) {
-            console.error("Router: onHide error for", this._previousPage, e);
+          try { 
+            prevCtrl.onHide(); 
+          } catch (e) { 
+            console.error("❌ Router: onHide error for", this._previousPage, e); 
           }
         }
       }
 
-      // 4. Hide all pages
+      // Hide all page sections to prevent overlap
       var sections = document.querySelectorAll(".page-section");
       for (var i = 0; i < sections.length; i++) {
         sections[i].classList.add("hidden");
         sections[i].classList.remove("fade-in");
       }
 
-      // 5. Show target page with animation
+      // Show target page
       target.classList.remove("hidden");
       target.classList.add("fade-in");
       this.activePage = pageId;
-
-      // ✅ [เพิ่มใหม่] บันทึกหน้าปัจจุบันลง LocalStorage
       localStorage.setItem("gas_last_page", pageId);
 
-      // 6. Update Sidebar active state
+      // Update Sidebar state
       var links = document.querySelectorAll("aside a[data-target]");
       for (var i = 0; i < links.length; i++) {
         var link = links[i];
         link.classList.remove("active", "bg-primary", "text-white");
         if (link.dataset.target === pageId) {
           link.classList.add("active", "bg-primary", "text-white");
-          // Update Header Title
           var titleEl = document.getElementById("header-title");
-          if (titleEl) titleEl.innerText = link.innerText.trim();
+          if (titleEl) {
+            var span = link.querySelector('span');
+            titleEl.innerText = span ? span.innerText.trim() : link.innerText.trim();
+          }
+          if (typeof closeDrawerOnMobile === 'function') closeDrawerOnMobile();
         }
       }
 
-      // 7. Call onShow() on the new page controller
       if (this._controllers[pageId]) {
         var ctrl = this._controllers[pageId];
         if (typeof ctrl.onShow === "function") {
-          try {
-            ctrl.onShow();
-          } catch (e) {
-            console.error("Router: onShow error for", pageId, e);
+          try { 
+            ctrl.onShow(); 
+            console.log("✅ Router: onShow executed for", pageId);
+          } catch (e) { 
+            console.error("❌ Router: onShow error for", pageId, e);
+            // แสดง Error ให้ผู้ใช้เห็น
+            if (typeof UIManager !== "undefined") {
+              UIManager.showToast("เกิดข้อผิดพลาดในการโหลดหน้า: " + e.message, "error");
+            }
           }
         }
       }
 
-      // 8. Dispatch event for backward compatibility (existing listeners)
       setTimeout(function () {
-        document.dispatchEvent(
-          new CustomEvent("page-change", { detail: { pageId: pageId } }),
-        );
+        document.dispatchEvent(new CustomEvent("page-change", { detail: { pageId: pageId } }));
       }, 50);
     },
+
+    /**
+     * ตรวจสอบความพร้อมของทุกหน้าในระบบ (สำหรับ Debug)
+     */
+    diagnoseAll: function () {
+      console.log("🔍 Router Diagnostic Report:");
+      var allPages = document.querySelectorAll(".page-section");
+      var report = [];
+      
+      allPages.forEach(function(page) {
+        var pageId = page.id;
+        var integrity = Router.checkPageIntegrity(pageId);
+        report.push({
+          pageId: pageId,
+          status: integrity.isReady ? "✅ OK" : "❌ FAILED",
+          issues: integrity.missing
+        });
+      });
+      
+      console.table(report);
+      return report;
+    }
   };
 
   /** Global helper function */
@@ -100,20 +159,19 @@
   }
 
   // ----------------------------------------------------------------------
-  // 2. SERVER (Routes { func } calls through apiHandler with Retry Mechanism)
+  // 2. SERVER
   // ----------------------------------------------------------------------
-  const Server = {
+  var Server = {
     call: function (target) {
       var args = Array.prototype.slice.call(arguments, 1);
       return new Promise(function (resolve, reject) {
         if (typeof google === "undefined" || !google.script) {
-          console.error("Local Dev Mode: Google Script not found");
-          reject(new Error("Local Dev Mode"));
+          console.error("Server: google.script not found");
+          reject(new Error("google.script not found"));
           return;
         }
 
         var funcName = target;
-        // ✨ กำหนดจำนวนรอบที่จะลองใหม่ (retries) เป็น 2
         var options = { silent: false, loadingMsg: null, retries: 2 };
         var useApiHandler = false;
 
@@ -127,7 +185,6 @@
 
         if (!options.silent) UIManager.showLoading(options.loadingMsg);
 
-        // ✨ สร้างฟังก์ชันสำหรับลองเรียก API
         const attempt = function (currentTry) {
           var runner = google.script.run
             .withSuccessHandler(function (res) {
@@ -140,23 +197,13 @@
               }
             })
             .withFailureHandler(function (err) {
-              // ✨ ระบบ Retry อัตโนมัติหากเชื่อมต่อ Google ไม่สำเร็จ
               if (currentTry < options.retries) {
-                console.warn(
-                  "Connection issue, retrying... (" +
-                  (currentTry + 1) +
-                  "/" +
-                  options.retries +
-                  ")",
-                );
-                setTimeout(function () {
-                  attempt(currentTry + 1);
-                }, 1500); // รอ 1.5 วิแล้วลองใหม่
+                console.warn("Retrying... (" + (currentTry + 1) + "/" + options.retries + ")");
+                setTimeout(function () { attempt(currentTry + 1); }, 1500);
               } else {
                 if (!options.silent) UIManager.hideLoading();
                 console.error("Server Error:", err);
-                if (typeof UIManager !== "undefined")
-                  UIManager.showToast(err.message, "error");
+                if (typeof UIManager !== "undefined") UIManager.showToast(err.message, "error");
                 reject(err);
               }
             });
@@ -164,16 +211,11 @@
           if (useApiHandler) {
             runner.apiHandler({ func: funcName, data: args[0] });
           } else {
-            if (typeof runner[funcName] !== "function") {
-              if (!options.silent) UIManager.hideLoading();
-              reject(new Error("Function not found: " + funcName));
-              return;
-            }
             runner[funcName].apply(runner, args);
           }
         };
 
-        attempt(0); // เริ่มเรียกครั้งแรก
+        attempt(0);
       });
     },
   };
@@ -253,7 +295,7 @@
             cancelButtonColor: "#3085d6",
             confirmButtonText: "Yes",
             didOpen: function () {
-              // บังคับ SweetAlert ให้อยู่เหนือ Modal ปกติ
+              // Force SweetAlert to stay above normal Modals
               var container = Swal.getContainer();
               if (container) container.style.zIndex = "100000";
             },
@@ -275,7 +317,7 @@
     state: { currentUser: null, settings: {}, isAppLoaded: false },
     init: function () {
       var self = this;
-      // ✨ [แก้ไข] เปลี่ยนวิธีเรียก API ให้ผ่าน Router apiHandler และปิดโหมดแจ้งเตือนตอนโหลด
+      // Init user settings from GAS
       return Server.call({ func: "getUserSettings", silent: true })
         .then(function (res) {
           if (res) {

@@ -6,15 +6,28 @@ const HandoverController = (() => {
 
   function _getTeamMembers() {
     try {
-      const settings = SettingController.apiGetAllSettings().data;
-      if (settings && settings.staff) return settings.staff;
-    } catch (e) { }
+      const res = SettingController.apiGetAllSettings();
+      const settings = (typeof res === 'string') ? JSON.parse(res).data : res.data;
+
+      if (settings && settings.staffUsers && settings.staffUsers.length > 0) {
+        return settings.staffUsers.map(u => ({
+          name: u.name,
+          role: u.role || ""
+        }));
+      }
+      if (settings && settings.staff) {
+        return settings.staff.map(name => ({ name: name, role: "Responsibility" }));
+      }
+    } catch (e) {
+      console.error("Error getting team members:", e);
+    }
     return [];
   }
 
   function _getTags() {
     try {
-      const settings = SettingController.apiGetAllSettings().data;
+      const resStr = SettingController.apiGetAllSettings();
+      const settings = JSON.parse(resStr).data;
       if (settings && settings.handoverTags) return settings.handoverTags;
     } catch (e) { }
     return ["Ticket", "REQ", "Customer", "Routine", "Incident"];
@@ -22,7 +35,8 @@ const HandoverController = (() => {
 
   function _getTypes() {
     try {
-      const settings = SettingController.apiGetAllSettings().data;
+      const resStr = SettingController.apiGetAllSettings();
+      const settings = JSON.parse(resStr).data;
       if (settings && settings.types) return settings.types;
     } catch (e) { }
     return ["Incident", "Request"];
@@ -152,6 +166,11 @@ const HandoverController = (() => {
         ];
 
         sheet.appendRow(newRow);
+
+        // Clear Cache
+        const dbId = typeof CONFIG !== "undefined" ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty("CORE_SHEET_ID");
+        CacheService.getScriptCache().remove(`SHEET_DATA_${dbId}_${TABLE_NAME}`);
+
         return Response.success({ message: "สร้างการส่งกะเรียบร้อย", id: newId });
 
       } catch (e) {
@@ -162,7 +181,8 @@ const HandoverController = (() => {
     },
 
     acknowledgeHandover: function (payload) {
-      const { id, name } = payload;
+      const { id } = payload;
+      const name = (payload.name || "").trim();
       const lock = LockService.getScriptLock();
       try {
         if (!lock.tryLock(15000)) return Response.error("ระบบกำลังยุ่ง กรุณาลองใหม่ในอีกสักครู่");
@@ -195,8 +215,9 @@ const HandoverController = (() => {
         }
 
         const team = _getTeamMembers();
+        const responsibleTeam = team.filter(m => m.role && String(m.role).toLowerCase().includes("responsibility"));
         let status = "Pending";
-        if (team.length > 0 && Object.keys(ackObj).length >= team.length) {
+        if (responsibleTeam.length > 0 && Object.keys(ackObj).length >= responsibleTeam.length) {
           status = "Succeed";
         }
 
@@ -204,7 +225,11 @@ const HandoverController = (() => {
         sheet.getRange(rowIdx, 9).setValue(JSON.stringify(ackObj));
         sheet.getRange(rowIdx, 10).setValue(status);
 
-        return Response.success({ message: actionMsg, status: status });
+        // Clear Cache
+        const dbId = typeof CONFIG !== "undefined" ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty("CORE_SHEET_ID");
+        CacheService.getScriptCache().remove(`SHEET_DATA_${dbId}_${TABLE_NAME}`);
+
+        return Response.success({ message: actionMsg, status: status, acknowledged: ackObj });
 
       } catch (e) {
         return Response.error(e.message);
@@ -266,6 +291,10 @@ const HandoverController = (() => {
         sheet.getRange(rowIdx, 8).setValue(data.contact);
         sheet.getRange(rowIdx, 11).setValue(data.type || "");
 
+        // Clear Cache
+        const dbId = typeof CONFIG !== "undefined" ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty("CORE_SHEET_ID");
+        CacheService.getScriptCache().remove(`SHEET_DATA_${dbId}_${TABLE_NAME}`);
+
         return Response.success({ message: "อัปเดตข้อมูลเรียบร้อย" });
 
       } catch (e) {
@@ -294,6 +323,11 @@ const HandoverController = (() => {
         if (rowIdx === -1) return Response.error("ไม่พบรายการ");
 
         sheet.deleteRow(rowIdx);
+
+        // Clear Cache
+        const dbId = typeof CONFIG !== "undefined" ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty("CORE_SHEET_ID");
+        CacheService.getScriptCache().remove(`SHEET_DATA_${dbId}_${TABLE_NAME}`);
+
         return Response.success({ message: "ลบรายการเรียบร้อย" });
 
       } catch (e) {
@@ -323,6 +357,10 @@ const HandoverController = (() => {
 
         // คอลัมน์ที่ 10 คือ Status
         sheet.getRange(rowIdx, 10).setValue("Succeed");
+
+        // Clear Cache
+        const dbId = typeof CONFIG !== "undefined" ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty("CORE_SHEET_ID");
+        CacheService.getScriptCache().remove(`SHEET_DATA_${dbId}_${TABLE_NAME}`);
 
         return Response.success({ message: "สถานะเปลี่ยนเป็นเสร็จสิ้นเรียบร้อย" });
 

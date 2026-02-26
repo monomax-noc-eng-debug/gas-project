@@ -84,9 +84,21 @@
           Router.register("page-settings-system", this);
         }
       },
-      onShow() { if (!_loaded) this.loadData(); },
+      onShow() { 
+        console.log('📄 SysSettings: onShow');
+        try {
+          if (!_loaded) this.loadData();
+        } catch (e) {
+          console.error('❌ SysSettings: onShow error', e);
+          if (typeof UIManager !== 'undefined') {
+            UIManager.showToast('เกิดข้อผิดพลาดในการโหลดการตั้งค่าระบบ: ' + e.message, 'error');
+          }
+        }
+      },
 
       loadData(force) {
+        let btnRefresh = el('btn-refresh-settings-system');
+        if (btnRefresh) btnRefresh.classList.add('is-loading');
         const tbody = el('sys-table-body');
         const empty = el('sys-empty');
         const loader = el('sys-loader');
@@ -108,6 +120,8 @@
           })
           .catch(() => UIManager.showToast("Load Error", "error"))
           .finally(() => {
+            let btnRefresh = el('btn-refresh-settings-system');
+            if (btnRefresh) btnRefresh.classList.remove('is-loading');
             if (loader) loader.classList.add('hidden');
           });
       },

@@ -1,7 +1,9 @@
 <script>
   let currentTeamMembers = [];
   let handoverItems = [];
-  let filteredItems = [];
+  let filteredItems = []; // for pagination
+  let _hoCurrentPage = 1;
+  let _hoItemsPerPage = 15;
   let handoverTags = [];
   let handoverTypes = [];
   let selectedHandoverId = null;
@@ -16,7 +18,15 @@
         }
       },
       onShow: function () {
-        loadHandovers();
+        console.log('📄 HandoverManager: onShow');
+        try {
+          loadHandovers();
+        } catch (e) {
+          console.error('❌ HandoverManager: onShow error', e);
+          if (typeof UIManager !== 'undefined') {
+            UIManager.showToast('เกิดข้อผิดพลาดในการโหลดหน้าส่งกะ: ' + e.message, 'error');
+          }
+        }
       }
     };
   })();
@@ -45,15 +55,16 @@
       let skeletonHtml = '';
       for (let i = 0; i < 6; i++) {
         skeletonHtml += `
-          <div class="px-3 py-3 mb-1 bg-white rounded-lg border border-gray-100">
-            <div class="flex items-start gap-3">
-              <div class="skeleton w-3 h-3 rounded-full mt-0.5 shrink-0 bg-gray-200"></div>
-              <div class="flex-1 space-y-2">
-                <div class="skeleton h-3 w-3/4 rounded bg-gray-200"></div>
-                <div class="skeleton h-2 w-1/2 rounded bg-gray-200"></div>
-              </div>
-            </div>
-          </div>`;
+          <tr class="bg-white">
+            <td class="text-xs opacity-70 font-mono text-center py-4"><div class="skeleton h-3 w-16 mx-auto rounded bg-gray-200"></div></td>
+            <td class="font-bold text-[11px]"><div class="skeleton h-3 w-12 rounded bg-gray-200"></div></td>
+            <td><div class="skeleton h-3 w-full max-w-[200px] rounded bg-gray-200"></div></td>
+            <td><div class="skeleton h-3 w-16 rounded bg-gray-200"></div></td>
+            <td><div class="skeleton h-3 w-20 rounded bg-gray-200"></div></td>
+            <td class="font-medium text-[11px]"><div class="skeleton h-3 w-16 rounded bg-gray-200"></div></td>
+            <td class="text-center align-middle"><div class="skeleton h-4 w-16 mx-auto rounded bg-gray-200"></div></td>
+            <td class="text-center"><div class="skeleton h-6 w-6 mx-auto rounded bg-gray-200"></div></td>
+          </tr>`;
       }
       listContainer.innerHTML = skeletonHtml;
     }
@@ -86,8 +97,12 @@
     searchTimeout = setTimeout(() => {
       const searchInput = document.getElementById('ho_search_input');
       const statusFilter = document.getElementById('ho_status_filter');
+      const typeFilter = document.getElementById('ho_type_filter');
+      const tagFilter = document.getElementById('ho_tag_filter');
       const searchText = searchInput ? searchInput.value.toLowerCase().trim() : '';
       const statusVal = statusFilter ? statusFilter.value : 'all';
+      const typeVal = typeFilter ? typeFilter.value : 'all';
+      const tagVal = tagFilter ? tagFilter.value : 'all';
 
       filteredItems = handoverItems.filter(item => {
         let textMatched = true;
@@ -100,31 +115,80 @@
         let statusMatched = true;
         if (statusVal === 'pending') statusMatched = item.status !== 'Succeed';
         if (statusVal === 'succeed') statusMatched = item.status === 'Succeed';
-        return textMatched && statusMatched;
+
+        let typeMatched = true;
+        if (typeVal !== 'all') typeMatched = item.type === typeVal;
+
+        let tagMatched = true;
+        if (tagVal !== 'all') tagMatched = Array.isArray(item.tags) && item.tags.includes(tagVal);
+
+        return textMatched && statusMatched && typeMatched && tagMatched;
       });
-      renderHandoverCards(filteredItems, keepSelection);
+      _hoCurrentPage = 1;
+      renderHandoverCurrentPage();
+
+      if (filteredItems.length === 0) {
+        showEmptyState();
+      } else {
+        document.getElementById('ho_empty_state').classList.add('hidden');
+        if (keepSelection && selectedHandoverId && filteredItems.find(i => i.id === selectedHandoverId)) {
+          selectHandover(selectedHandoverId);
+        }
+      }
     }, 200);
+  }
+
+  function changeHandoverPage(page) {
+    _hoCurrentPage = page;
+    renderHandoverCurrentPage();
+  }
+
+  function renderHandoverCurrentPage() {
+    const start = (_hoCurrentPage - 1) * _hoItemsPerPage;
+    const end = start + _hoItemsPerPage;
+    const pageData = filteredItems.slice(start, end);
+    renderHandoverTable(pageData);
+    renderHandoverPagination(filteredItems.length, _hoItemsPerPage, _hoCurrentPage);
   }
 
   function updateTagsDropdown(tags) {
     const select = document.getElementById('ho_tags_select');
-    if (!select) return;
-    select.innerHTML = '<option value="" disabled selected>-- เลือก Tag --</option>';
-    tags.forEach(tag => select.innerHTML += `<option value="${tag}">${tag}</option>`);
+    const filter = document.getElementById('ho_tag_filter');
+    if (select) {
+      select.innerHTML = '<option value="" disabled selected>-- เลือก Tag --</option>';
+      tags.forEach(tag => select.innerHTML += `<option value="${tag}">${tag}</option>`);
+    }
+    if (filter) {
+      filter.innerHTML = '<option value="all">ทุก Tag</option>';
+      tags.forEach(tag => filter.innerHTML += `<option value="${tag}">${tag}</option>`);
+    }
   }
 
   function updateTypeDropdown(types) {
     const select = document.getElementById('ho_type_select');
-    if (!select) return;
-    select.innerHTML = '<option value="">-- ไม่ระบุ --</option>';
-    types.forEach(type => select.innerHTML += `<option value="${type}">${type}</option>`);
+    const filter = document.getElementById('ho_type_filter');
+    if (select) {
+      select.innerHTML = '<option value="">-- ไม่ระบุ --</option>';
+      types.forEach(type => select.innerHTML += `<option value="${type}">${type}</option>`);
+    }
+    if (filter) {
+      filter.innerHTML = '<option value="all">ทุกประเภท</option>';
+      types.forEach(type => filter.innerHTML += `<option value="${type}">${type}</option>`);
+    }
   }
 
   function populateCreatorDropdown() {
     const select = document.getElementById('ho_creator_select');
     if (!select) return;
     select.innerHTML = '<option value="Unknown">-- เลือกผู้รายงาน --</option>';
-    currentTeamMembers.forEach(name => {
+
+    // กรองเฉพาะผู้ที่มีบทบาท 'Responsibility' เหมือนกับปุ่มรับทราบ
+    const targetMembers = currentTeamMembers.filter(m =>
+      m.role && String(m.role).toLowerCase().includes("responsibility")
+    );
+
+    targetMembers.forEach(m => {
+      const name = typeof m === 'object' ? m.name : m;
       select.innerHTML += `<option value="${name}">${name}</option>`;
     });
   }
@@ -255,95 +319,187 @@
     }
   }
 
-  function renderHandoverCards(items, keepSelection) {
+  function renderHandoverTable(items) {
     const container = document.getElementById('ho_list_container');
-    const badge = document.getElementById('ho_count_badge');
-    if (badge) badge.innerText = items.length;
+    if (!container) return;
+
+    const emptyState = document.getElementById('ho_empty_state');
     if (items.length === 0) {
-      container.innerHTML = `<div class="text-center py-10 text-xs text-gray-400">ไม่มีรายการ</div>`;
-      showEmptyState();
+      container.innerHTML = `<tr><td colspan="8" class="text-center py-10 text-xs text-gray-400 font-medium whitespace-nowrap">ไม่พบข้อมูลรายงานสำหรับกะนี้</td></tr>`;
+      if (emptyState) emptyState.classList.remove('hidden');
+      _hoItemsPerPage = 15; // Reset just in case
       return;
     }
+    if (emptyState) emptyState.classList.add('hidden');
+
     let html = '';
     items.forEach(item => {
       const isSelected = selectedHandoverId === item.id;
-      const cardClass = isSelected ? "bg-gray-100/80 rounded-lg shadow-sm border border-gray-200" : "bg-transparent border border-transparent hover:bg-gray-50 hover:border-gray-200 rounded-lg";
-      const statusColor = item.status === 'Succeed' ? 'text-emerald-500' : 'text-amber-500';
-      const statusIcon = item.status === 'Succeed' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-circle-notch"></i>';
-      const shiftIcon = item.shift === 'Day' ? '<i class="fas fa-sun text-gray-400"></i>' : '<i class="fas fa-moon text-gray-400"></i>';
-      const timeStr = new Date(item.timestamp).toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      const rowClass = isSelected ? "bg-slate-50 border-primary/20" : "hover bg-white";
+      const statusBadge = item.status === 'Succeed' ? '<div class="badge badge-success gap-1 text-white border-0 shadow-sm badge-sm text-[10px]"><i class="fas fa-check"></i> เสร็จสิ้น</div>' : '<div class="badge badge-warning gap-1 text-amber-800 border-0 shadow-sm badge-sm text-[10px]"><i class="fas fa-hourglass-half"></i> รอดำเนินการ</div>';
+
+      const dt = new Date(item.timestamp);
+      const dateStr = dt.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const timeStr = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      const typeBadge = item.type ? `<span class="bg-blue-50 text-blue-600 font-bold px-1.5 py-0.5 rounded text-[9px] border border-blue-200">${item.type}</span>` : '';
+
       let tagsHtml = '';
       if (Array.isArray(item.tags) && item.tags.length > 0) {
-        tagsHtml = item.tags.slice(0, 1).map(t => `<span class="text-[10px] font-medium text-gray-500 border border-gray-200 bg-white px-1.5 py-0.5 rounded">${t}</span>`).join('');
-        if (item.tags.length > 1) tagsHtml += `<span class="text-[10px] font-medium text-gray-400 ml-1">+${item.tags.length - 1}</span>`;
+        tagsHtml = item.tags.slice(0, 2).map(t => `<span class="bg-slate-100 text-slate-500 font-medium px-1.5 py-0.5 rounded text-[9px]">${t}</span>`).join('');
+        if (item.tags.length > 2) tagsHtml += `<span class="text-[9px] font-medium text-slate-400 ml-0.5">+${item.tags.length - 2}</span>`;
       }
+
       html += `
-        <div class="px-3 py-2.5 mb-1 cursor-pointer transition-all ${cardClass}" onclick="selectHandover('${item.id}')" id="card_${item.id}">
-          <div class="flex items-start gap-2.5">
-            <div class="mt-0.5 ${statusColor} text-[10px] shrink-0" title="${item.status}">${statusIcon}</div>
-            <div class="flex-1 min-w-0">
-              <h3 class="font-semibold text-[13px] text-gray-800 leading-tight truncate mb-1.5">${item.topic || '-'}</h3>
-              <div class="flex items-center gap-2 text-[11px] text-gray-500 font-medium">
-                <span class="flex items-center gap-1">${shiftIcon} ${timeStr}</span>
-                <span class="text-gray-300">|</span>
-                <span class="truncate max-w-[80px]">${item.creator || ''}</span>
-                ${item.type ? `<span class="ml-1 font-bold text-blue-500">[${item.type}]</span>` : ''}
-                <div class="ml-auto flex gap-1">${tagsHtml}</div>
-              </div>
-            </div>
-          </div>
-        </div>`;
+        <tr class="${rowClass} cursor-pointer transition-colors border-b border-slate-100 last:border-none group" onclick="selectHandover('${item.id}')">
+            <td class="text-xs opacity-70 font-mono whitespace-nowrap text-center">
+                <div class="flex flex-col items-center">
+                    <span class="flex items-center gap-1.5"><i class="far fa-calendar-alt opacity-50"></i> ${dateStr}</span>
+                    <span class="text-[9px] opacity-60 mt-0.5">${timeStr}</span>
+                </div>
+            </td>
+            <td class="font-bold text-[11px] whitespace-nowrap">
+                <div class="flex items-center gap-1.5">
+                    ${item.shift === 'Day' ? '<i class="fas fa-sun text-amber-500 text-[10px]"></i>' : '<i class="fas fa-moon text-indigo-500 text-[10px]"></i>'} 
+                    ${item.shift}
+                </div>
+            </td>
+            <td>
+                <div class="font-bold text-[13px] truncate max-w-[150px] md:max-w-[200px] xl:max-w-[250px] text-slate-700 group-hover:text-primary transition-colors">${item.topic || '-'}</div>
+            </td>
+            <td class="whitespace-nowrap">
+                ${typeBadge}
+            </td>
+            <td>
+                <div class="flex flex-wrap items-center gap-1">
+                    ${tagsHtml}
+                </div>
+            </td>
+            <td class="text-[11px] font-medium text-slate-600 whitespace-nowrap">
+                <div class="flex items-center gap-1.5">
+                    <i class="fas fa-user-circle text-slate-400 text-[10px]"></i> ${item.creator || '-'}
+                </div>
+            </td>
+            <td class="text-center align-middle">
+                ${statusBadge}
+            </td>
+            <td class="text-center">
+                <div class="flex justify-center gap-1.5">
+                    <button class="btn btn-square btn-xs btn-ghost bg-white shadow-sm border border-slate-200 text-slate-400 hover:text-primary hover:border-primary/30 transition-all tooltip tooltip-left" 
+                            data-tip="ดูรายละเอียด"
+                            onclick="event.stopPropagation(); selectHandover('${item.id}')">
+                        <i class="fas fa-eye text-[10px]"></i>
+                    </button>
+                    <button class="btn btn-square btn-xs btn-ghost bg-white shadow-sm border border-slate-200 text-slate-400 hover:text-amber-500 hover:border-amber-500/30 transition-all tooltip tooltip-left" 
+                            data-tip="แก้ไข"
+                            onclick="event.stopPropagation(); openEditDrawer('${item.id}')">
+                        <i class="fas fa-pen text-[10px]"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+      `;
     });
     container.innerHTML = html;
-    if (keepSelection && selectedHandoverId && items.find(i => i.id === selectedHandoverId)) {
-      selectHandover(selectedHandoverId);
-    } else {
-      showEmptyState();
+  }
+
+  function renderHandoverPagination(totalItems, itemsPerPage, currentPage) {
+    const infoMsg = document.getElementById('ho-pagination-info');
+    const controls = document.getElementById('ho-pagination-controls');
+    if (!infoMsg || !controls) return;
+
+    const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+    const start = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+    const end = Math.min(currentPage * itemsPerPage, totalItems);
+
+    infoMsg.innerText = `แสดง ${start}-${end} จาก ${totalItems} รายการ`;
+
+    let buttonsHTML = '';
+
+    // Prev button
+    buttonsHTML += `
+    <button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 ${currentPage === 1 ? 'btn-disabled bg-slate-50 text-slate-300' : ''}" 
+            onclick="changeHandoverPage(${currentPage - 1})">
+        <i class="fas fa-chevron-left text-[9px]"></i>
+    </button>`;
+
+    // Generate page numbers
+    let startPage = Math.max(1, currentPage - 2);
+    let endPage = Math.min(totalPages, currentPage + 2);
+
+    if (startPage > 1) {
+      buttonsHTML += `<button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50" onclick="changeHandoverPage(1)">1</button>`;
+      if (startPage > 2) buttonsHTML += `<button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-400 btn-disabled">...</button>`;
     }
+
+    for (let i = startPage; i <= endPage; i++) {
+      const activeClass = i === currentPage ? 'btn-primary text-white border-primary' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50';
+      buttonsHTML += `<button class="join-item btn btn-xs ${activeClass}" onclick="changeHandoverPage(${i})">${i}</button>`;
+    }
+
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) buttonsHTML += `<button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-400 btn-disabled">...</button>`;
+      buttonsHTML += `<button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50" onclick="changeHandoverPage(${totalPages})">${totalPages}</button>`;
+    }
+
+    // Next button
+    buttonsHTML += `
+    <button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 ${currentPage === totalPages ? 'btn-disabled bg-slate-50 text-slate-300' : ''}" 
+            onclick="changeHandoverPage(${currentPage + 1})">
+        <i class="fas fa-chevron-right text-[9px]"></i>
+    </button>`;
+
+    controls.innerHTML = buttonsHTML;
   }
 
   function showEmptyState() {
     selectedHandoverId = null;
+    const checkbox = document.getElementById('drawer-handover-toggle');
+    if (checkbox) checkbox.checked = false;
+
     document.getElementById('ho_empty_state').classList.remove('hidden');
     document.getElementById('ho_skeleton_state').classList.add('hidden');
     const detailContent = document.getElementById('ho_detail_content');
     detailContent.classList.add('hidden');
     detailContent.classList.remove('flex');
-    document.querySelectorAll('#ho_list_container > div').forEach(card => {
-      card.classList.remove('bg-gray-100/80', 'shadow-sm', 'border-gray-200');
-      card.classList.add('bg-transparent', 'border-transparent', 'hover:bg-gray-50', 'hover:border-gray-200');
+
+    document.querySelectorAll('#ho_list_container > tr').forEach(row => {
+      row.classList.remove('bg-slate-50', 'border-primary/20');
+      row.classList.add('hover', 'bg-white');
     });
-    if (window.innerWidth < 1024) {
-      const wrap = document.getElementById('ho_detail_wrapper');
-      wrap.classList.remove('flex', 'absolute', 'inset-0', 'z-50', 'bg-base-200', 'p-4');
-      wrap.classList.add('hidden');
-    }
   }
 
   function selectHandover(id) {
     selectedHandoverId = id;
-    document.querySelectorAll('#ho_list_container > div').forEach(card => {
-      card.classList.remove('bg-gray-100/80', 'shadow-sm', 'border-gray-200');
-      card.classList.add('bg-transparent', 'border-transparent', 'hover:bg-gray-50', 'hover:border-gray-200');
+
+    const checkbox = document.getElementById('drawer-handover-toggle');
+    if (checkbox) checkbox.checked = true;
+
+    document.querySelectorAll('#ho_list_container > tr').forEach(row => {
+      row.classList.remove('bg-slate-50', 'border-primary/20');
+      row.classList.add('hover', 'bg-white');
     });
-    const activeCard = document.getElementById(`card_${id}`);
-    if (activeCard) {
-      activeCard.classList.remove('bg-transparent', 'border-transparent', 'hover:bg-gray-50', 'hover:border-gray-200');
-      activeCard.classList.add('bg-gray-100/80', 'shadow-sm', 'border-gray-200');
-    }
+
+    // The rendered row id is implicit we need to find it by rebuilding it or finding by row onclick
+    // but the original code didn't set ID on tr. Let's add an explicit ID to tr if possible, but
+    // since we can't we'll just re-render the list or find by href. Wait, `renderHandoverTable` didn't set ID for tr!
+    // I should fix `renderHandoverTable` to set ID on tr or we can just renderHandoverCurrentPage.
+    // Let's call renderHandoverCurrentPage to update the selected row visually
+    renderHandoverCurrentPage();
+
     document.getElementById('ho_empty_state').classList.add('hidden');
     document.getElementById('ho_skeleton_state').classList.add('hidden');
+
+    // Switch to Detail View
     const detailContent = document.getElementById('ho_detail_content');
-    detailContent.classList.remove('hidden');
-    detailContent.classList.add('flex');
-    const wrap = document.getElementById('ho_detail_wrapper');
-    if (window.innerWidth < 1024) {
-      wrap.classList.remove('hidden');
-      wrap.classList.add('flex', 'absolute', 'inset-0', 'z-50', 'bg-base-200', 'p-4');
-    } else {
-      wrap.classList.remove('hidden');
-      wrap.classList.add('flex');
-    }
+    const detailActions = document.getElementById('ho_detail_actions');
+    const formContent = document.getElementById('ho_form_content');
+    const formActions = document.getElementById('ho_form_actions');
+
+    if (detailContent) { detailContent.classList.remove('hidden'); detailContent.classList.add('flex'); }
+    if (detailActions) { detailActions.classList.remove('hidden'); detailActions.classList.add('flex'); }
+    if (formContent) { formContent.classList.add('hidden'); formContent.classList.remove('flex'); }
+    if (formActions) { formActions.classList.add('hidden'); formActions.classList.remove('flex'); }
+
     const item = handoverItems.find(i => i.id === id);
     if (item) renderDetailData(item);
   }
@@ -367,35 +523,54 @@
   function closeDetail() { showEmptyState(); }
 
   function renderDetailData(item) {
+    const subtitleEl = document.getElementById('ho_drawer_subtitle');
+    if (subtitleEl) subtitleEl.innerText = 'ID: ' + item.id;
+
     document.getElementById('ho_detail_topic').innerText = item.topic || '-';
     document.getElementById('ho_detail_time_text').innerText = new Date(item.timestamp).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
     document.getElementById('ho_detail_creator_text').innerText = item.creator || 'Unknown';
-    const tagsContainer = document.getElementById('ho_detail_tags_container');
-    tagsContainer.innerHTML = (Array.isArray(item.tags) && item.tags.length > 0)
-      ? item.tags.map(t => `<span class="text-xs font-medium text-gray-600 bg-gray-100/80 px-2 py-0.5 rounded-md border border-gray-200/50">${t}</span>`).join('')
-      : '';
     const statusEl = document.getElementById('ho_detail_status');
     if (item.status === 'Succeed') {
-      statusEl.className = 'text-[11px] font-semibold border border-emerald-200 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md flex items-center gap-1.5 shadow-sm';
-      statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Succeed';
+      statusEl.className = 'text-[11px] font-bold border border-emerald-200 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-sm transition-all';
+      statusEl.innerHTML = '<i class="fas fa-check-circle text-emerald-500"></i> เสร็จสิ้น';
     } else {
-      statusEl.className = 'text-[11px] font-semibold border border-amber-200 text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md flex items-center gap-1.5 shadow-sm';
-      statusEl.innerHTML = '<i class="fas fa-circle-notch"></i> Pending';
+      statusEl.className = 'text-[11px] font-bold border border-amber-200 text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-sm transition-all';
+      statusEl.innerHTML = '<i class="fas fa-clock text-amber-500"></i> รอดำเนินการ';
     }
+
     const shiftIcon = item.shift === 'Day' ? '<i class="fas fa-sun text-amber-500"></i>' : '<i class="fas fa-moon text-indigo-500"></i>';
     const shiftEl = document.getElementById('ho_detail_shift');
-    const typeHtml = item.type ? `<span class="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md ml-2">${item.type}</span>` : '';
-    shiftEl.innerHTML = `${shiftIcon} <span class="ml-1">${item.shift || '-'} Shift</span>${typeHtml}`;
-    shiftEl.className = 'text-[11px] font-semibold text-gray-600 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-200 flex items-center shadow-sm';
+    shiftEl.innerHTML = `${shiftIcon} <span class="ml-1.5">${item.shift || '-'} Shift</span>`;
+    shiftEl.className = 'text-[11px] font-bold text-slate-600 bg-slate-100/80 px-2.5 py-1 rounded-lg border border-slate-200 flex items-center shadow-sm';
+
+    const typeEl = document.getElementById('ho_detail_type');
+    if (item.type) {
+      typeEl.innerHTML = item.type;
+      typeEl.className = 'text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg shadow-sm';
+      typeEl.classList.remove('hidden');
+    } else {
+      typeEl.innerHTML = '';
+      typeEl.classList.add('hidden');
+    }
+
+    const tagsContainer = document.getElementById('ho_detail_tags_container');
+    tagsContainer.innerHTML = (Array.isArray(item.tags) && item.tags.length > 0)
+      ? item.tags.map(t => `<span class="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg shadow-sm">${t}</span>`).join('')
+      : '';
     let detailsArr = [];
     try { detailsArr = JSON.parse(item.detail); } catch (e) { detailsArr = [item.detail]; }
     const timelineContainer = document.getElementById('ho_detail_timeline');
     timelineContainer.innerHTML = (Array.isArray(detailsArr) && detailsArr.length > 0)
-      ? detailsArr.map((txt, idx) => `
-          <div class="flex gap-3 items-start pb-3">
-            <div class="w-5 h-5 rounded-md bg-gray-100 text-gray-500 font-semibold flex items-center justify-center shrink-0 mt-0.5 text-[11px] border border-gray-200/50">${idx + 1}</div>
-            <div class="text-[13px] text-gray-700 leading-relaxed w-full whitespace-pre-line pt-0.5">${txt.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
-          </div>`).join('')
+      ? detailsArr.map((txt, idx) => {
+        const numberBadge = detailsArr.length > 1
+          ? `<div class="w-5 h-5 rounded-md bg-gray-100 text-gray-500 font-semibold flex items-center justify-center shrink-0 mt-0.5 text-[11px] border border-gray-200/50">${idx + 1}</div>`
+          : '';
+        return `
+            <div class="flex gap-3 items-start pb-3">
+                ${numberBadge}
+                <div class="text-[13px] text-gray-700 leading-relaxed w-full whitespace-pre-line pt-0.5">${txt.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+            </div>`;
+      }).join('')
       : '<span class="text-sm text-gray-400 italic">- ไม่มีข้อมูล -</span>';
     let contactsArr = [];
     try { contactsArr = JSON.parse(item.contact); } catch (e) { contactsArr = [item.contact]; }
@@ -415,8 +590,8 @@
         if (val.trim() === '') return '';
         const icon = type === 'email' ? '<i class="fas fa-envelope text-gray-400 text-[10px]"></i>' : '<i class="fas fa-phone text-gray-400 text-[10px]"></i>';
         return `<div class="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg border border-gray-100">
-          ${icon}
-          <p class="text-[13px] font-medium text-gray-700">${val.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
+            ${icon}
+            <p class="text-[13px] font-medium text-gray-700">${val.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
         </div>`;
       }).join('');
     } else { contactWrap.classList.add('hidden'); }
@@ -430,14 +605,36 @@
 
   function renderAcknowledgeSection(item) {
     const container = document.getElementById('ho_ack_container');
-    if (currentTeamMembers.length === 0) { container.innerHTML = `<div class="col-span-full text-[10px] text-error">ไม่พบข้อมูลทีม</div>`; return; }
-    container.innerHTML = currentTeamMembers.map(fullName => {
+    if (!currentTeamMembers || currentTeamMembers.length === 0) {
+      container.innerHTML = `<div class="col-span-full text-[10px] text-error">ไม่พบข้อมูลทีม</div>`;
+      return;
+    }
+
+    // Filter by role: 'Responsibility'
+    const targetMembers = currentTeamMembers.filter(m =>
+      m.role && String(m.role).toLowerCase().includes("responsibility")
+    );
+
+    if (targetMembers.length === 0) {
+      container.innerHTML = `<div class="col-span-full text-[10px] text-slate-400">ไม่มีรายชื่อผู้รับผิดชอบ</div>`;
+      return;
+    }
+
+    const acknowledged = item.acknowledged || {};
+
+    container.innerHTML = targetMembers.map(member => {
+      const fullName = (member.name || "").trim();
       const shortName = fullName.split(' ')[0];
-      const ackTime = item.acknowledged && item.acknowledged[fullName] ? item.acknowledged[fullName] : null;
+
+      // Robust matching: find key that matches trimmed fullName
+      let ackTime = null;
+      const matchingKey = Object.keys(acknowledged).find(k => k.trim() === fullName);
+      if (matchingKey) ackTime = acknowledged[matchingKey];
+
       return ackTime ? `
         <button onclick="ackHandover('${item.id}', '${fullName}', this)" class="btn btn-sm h-auto py-2 px-3 flex items-center justify-start gap-2 w-full bg-emerald-50/50 border-emerald-100 hover:bg-red-50 hover:border-red-100 group text-left rounded-lg transition-colors shadow-none font-sans">
-          <i class="fas fa-check-circle text-emerald-500 group-hover:hidden"></i>
-          <i class="fas fa-times-circle text-red-400 hidden group-hover:inline"></i>
+          <span class="group-hover:hidden flex items-center justify-center shrink-0 w-4 h-4"><i class="fas fa-check-circle text-emerald-500 text-sm"></i></span>
+          <span class="hidden group-hover:flex items-center justify-center shrink-0 w-4 h-4"><i class="fas fa-times-circle text-red-400 text-sm"></i></span>
           <div class="flex flex-col leading-tight">
             <span class="text-xs font-semibold text-emerald-700 group-hover:text-red-600">${shortName}</span>
             <span class="text-[10px] text-emerald-600/70 font-medium">${ackTime}</span>
@@ -463,10 +660,54 @@
     google.script.run
       .withSuccessHandler(function (res) {
         isAcknowledging = false;
-        Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 1500 }).fire({ icon: 'success', title: res.message });
-        _isHandoverDataLoaded = false;
-        showRightSkeleton();
-        loadHandovers(true);
+        try {
+          const response = typeof res === 'string' ? JSON.parse(res) : res;
+          const data = response.data || {};
+          const success = response.success;
+
+          if (success) {
+            const msg = data.message || "ดำเนินการเรียบร้อย";
+            Swal.mixin({
+              toast: true,
+              position: 'bottom-end',
+              showConfirmButton: false,
+              timer: 2000
+            }).fire({ icon: 'success', title: msg });
+
+            // อัปเดตข้อมูลในฝั่ง Client ทันทีโดยไม่ต้องโหลดใหม่ทั้งหมด
+            const itemIdx = handoverItems.findIndex(i => i.id === id);
+            if (itemIdx !== -1) {
+              handoverItems[itemIdx].acknowledged = data.acknowledged;
+              handoverItems[itemIdx].status = data.status;
+
+              // อัปเดตข้อมูลใน filteredItems ด้วย (เนื่องจากเป็น reference หรืออาศัย id เดียวกัน)
+              const filteredItem = filteredItems.find(i => i.id === id);
+              if (filteredItem) {
+                filteredItem.acknowledged = data.acknowledged;
+                filteredItem.status = data.status;
+              }
+
+              // สั่ง Render ใหม่เฉพาะจุด
+              renderHandoverCurrentPage();
+              renderDetailData(handoverItems[itemIdx]);
+            }
+
+            // เนื่องจาก render จะสร้างปุ่มใหม่ทั้งหมด จึงไม่ต้องปลดล็อกปุ่มเดิมด้วยตนเอง
+          } else {
+            Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: response.error || "ไม่สามารถบันทึกได้" });
+            if (btnObj) btnObj.innerHTML = originalHtml;
+            if (container) {
+              container.querySelectorAll('button').forEach(b => {
+                b.disabled = false;
+                b.classList.remove('opacity-50', 'cursor-not-allowed');
+              });
+            }
+          }
+        } catch (e) {
+          console.error("Parse error:", e);
+          Swal.fire({ icon: 'error', title: 'Error', text: 'เกิดข้อผิดพลาดในการรับข้อมูลจากเซิร์ฟเวอร์' });
+          if (btnObj) btnObj.innerHTML = originalHtml;
+        }
       })
       .withFailureHandler(function (err) {
         isAcknowledging = false;
@@ -477,7 +718,9 @@
       .apiHandler({ func: "acknowledgeHandover", data: { id: id, name: name } });
   }
 
-  function openCreateModal() {
+  function openCreateDrawer() {
+    selectedHandoverId = null;
+    renderHandoverCurrentPage();
     document.getElementById('ho_edit_id').value = '';
     document.getElementById('ho_topic').value = '';
     document.getElementById('ho_type_select').value = '';
@@ -504,11 +747,30 @@
     document.getElementById('ho_modal_time_controls').classList.add('hidden');
     document.getElementById('ho_auto_time_display').classList.remove('hidden');
 
-    document.getElementById('ho_modal_title').innerHTML = '<i class="fas fa-plus-circle text-primary"></i> <span class="text-base text-gray-800">สร้างรายการส่งกะ</span>';
-    document.getElementById('ho_modal').showModal();
+    document.getElementById('ho_form_content').classList.remove('hidden');
+    document.getElementById('ho_form_content').classList.add('flex');
+    document.getElementById('ho_form_actions').classList.remove('hidden');
+    document.getElementById('ho_form_actions').classList.add('flex');
+
+    document.getElementById('ho_detail_content').classList.add('hidden');
+    document.getElementById('ho_detail_content').classList.remove('flex');
+    document.getElementById('ho_detail_actions').classList.add('hidden');
+    document.getElementById('ho_detail_actions').classList.remove('flex');
+
+    document.getElementById('ho_drawer_icon_container').className = "w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold";
+    document.getElementById('ho_drawer_icon').className = "fas fa-plus-circle text-sm";
+    document.getElementById('ho_drawer_title').innerText = "สร้างรายการส่งกะ";
+    document.getElementById('ho_drawer_subtitle').innerText = "กรอกรายละเอียด";
+
+    // Open Drawer
+    document.getElementById('drawer-handover-toggle').checked = true;
   }
 
-  function openEditModal() {
+  function openEditDrawer(id) {
+    if (id) {
+      selectedHandoverId = id;
+      renderHandoverCurrentPage();
+    }
     if (!selectedHandoverId) return;
     const item = handoverItems.find(i => i.id === selectedHandoverId);
     if (!item) return;
@@ -516,6 +778,13 @@
     document.getElementById('ho_topic').value = item.topic;
     document.getElementById('ho_type_select').value = item.type || "";
     selectedFormTags = Array.isArray(item.tags) ? [...item.tags] : [];
+
+    // Check if the Drawer has a custom Drawer edit modal toggler
+    const detailWrap = document.getElementById('ho_detail_wrapper');
+    if (detailWrap && !detailWrap.classList.contains('hidden')) {
+      // It's open from drawer, it will continue normally overriding UI components inside general modal
+    }
+
     renderFormTagsUI();
     renderDynamicValues('dynamic_detail_container', item.detail, 'ระบุรายละเอียดหรือสิ่งที่ต้องทำ...', 'textarea');
     renderDynamicContactValues('dynamic_contact_container', item.contact, 'ชื่อ - เบอร์โทร');
@@ -535,8 +804,47 @@
     document.getElementById('ho_modal_time_controls').classList.remove('hidden');
     document.getElementById('ho_auto_time_display').classList.add('hidden');
 
-    document.getElementById('ho_modal_title').innerHTML = '<i class="fas fa-edit text-amber-500"></i> <span class="text-base text-gray-800">แก้ไขรายการ</span>';
-    document.getElementById('ho_modal').showModal();
+    document.getElementById('ho_form_content').classList.remove('hidden');
+    document.getElementById('ho_form_content').classList.add('flex');
+    document.getElementById('ho_form_actions').classList.remove('hidden');
+    document.getElementById('ho_form_actions').classList.add('flex');
+
+    document.getElementById('ho_detail_content').classList.add('hidden');
+    document.getElementById('ho_detail_content').classList.remove('flex');
+    document.getElementById('ho_detail_actions').classList.add('hidden');
+    document.getElementById('ho_detail_actions').classList.remove('flex');
+
+    document.getElementById('ho_drawer_icon_container').className = "w-8 h-8 rounded-lg bg-amber-50 text-amber-500 flex items-center justify-center font-bold";
+    document.getElementById('ho_drawer_icon').className = "fas fa-edit text-sm";
+    document.getElementById('ho_drawer_title').innerText = "แก้ไขรายการ";
+    document.getElementById('ho_drawer_subtitle').innerText = "ID: " + item.id;
+
+    // Open Drawer
+    document.getElementById('drawer-handover-toggle').checked = true;
+  }
+
+  function closeFormDrawer() {
+    document.getElementById('ho_form_content').classList.add('hidden');
+    document.getElementById('ho_form_actions').classList.add('hidden');
+    document.getElementById('ho_form_actions').classList.remove('flex');
+    document.getElementById('ho_detail_content').classList.remove('hidden');
+    document.getElementById('ho_detail_actions').classList.remove('hidden');
+    document.getElementById('ho_detail_actions').classList.add('flex');
+
+    // Restore header details
+    document.getElementById('ho_drawer_icon_container').className = "w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold";
+    document.getElementById('ho_drawer_icon').className = "fas fa-eye text-sm";
+    document.getElementById('ho_drawer_title').innerText = "Handover Details";
+
+    if (selectedHandoverId) {
+      document.getElementById('ho_drawer_subtitle').innerText = "ID: " + selectedHandoverId;
+    } else {
+      closeDrawer();
+    }
+  }
+
+  function closeDrawer() {
+    document.getElementById('drawer-handover-toggle').checked = false;
   }
 
   function deleteHandover() {
@@ -601,7 +909,7 @@
         Swal.fire({ icon: 'error', title: 'ไม่สามารถบันทึกได้', text: resp.message });
         return;
       }
-      document.getElementById('ho_modal').close();
+      closeFormDrawer();
       Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', timer: 1500, showConfirmButton: false });
       _isHandoverDataLoaded = false;
       showRightSkeleton();

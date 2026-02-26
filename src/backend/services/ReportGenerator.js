@@ -4,21 +4,31 @@ const ReportGenerator = {
     console.time("ProcessImages"); // ⏱️ จับเวลาประมวลผลรูป
     try {
       const imgFolderId =
-        typeof CONFIG !== "undefined" ? CONFIG.IMG_FOLDER : "";
+        (typeof CONFIG !== "undefined" && CONFIG.IMG_FOLDER) ? CONFIG.IMG_FOLDER : "";
       const imgFolder = imgFolderId
         ? DriveApp.getFolderById(imgFolderId)
         : null;
 
+      if (!imgFolder && !formData.isDraft) {
+        console.warn("[processImages] No valid imgFolder found, but not in draft mode. Images will not be saved to Drive.");
+      }
+
       let uploadedUrls = [];
       let blobs = { startMono: [], stopMono: [], startAis: [], stopAis: [] };
-      let pdfImages = []; // เก็บ Base64 ไว้ส่งเข้า PDF
-
+      let pdfImages = [];
+      const processedUrls = new Set();
       const handleUpload = (imgArray, prefix, targetBlobArr) => {
         if (!imgArray || !Array.isArray(imgArray)) return;
         imgArray.forEach((imgItem, idx) => {
           try {
             let blob = null;
             let fileUrl = null;
+
+            // Deduplicate if it's a URL
+            if (typeof imgItem === "string" && imgItem.startsWith("http")) {
+              if (processedUrls.has(imgItem)) return;
+              processedUrls.add(imgItem);
+            }
 
             // Case A: Object { data: "base64" } (จาก Frontend Upload)
             if (imgItem && typeof imgItem === "object" && imgItem.data) {
@@ -30,7 +40,8 @@ const ReportGenerator = {
               if (imgFolder && !formData.isDraft) {
                 const file = imgFolder.createFile(blob);
                 fileUrl = file.getUrl();
-                uploadedUrls.push(fileUrl);
+                console.log(`[handleUpload] Created file for ${prefix}: ${fileUrl}`);
+                if (fileUrl) processedUrls.add(fileUrl);
               }
             }
             // Case B: Raw Base64 String
@@ -46,7 +57,8 @@ const ReportGenerator = {
               if (imgFolder && !formData.isDraft) {
                 const file = imgFolder.createFile(blob);
                 fileUrl = file.getUrl();
-                uploadedUrls.push(fileUrl);
+                console.log(`[handleUpload] Created file for ${prefix}: ${fileUrl}`);
+                if (fileUrl) processedUrls.add(fileUrl);
               }
             }
             // Case C: Existing URL (Drive Link)
@@ -61,20 +73,32 @@ const ReportGenerator = {
                 id = imgItem.match(/id=([^&]+)/)[1];
 
               if (id) {
-                const file = DriveApp.getFileById(id);
-                blob = file.getBlob();
+                try {
+                  // Optimization: use thumbnail for PDF to avoid massive memory usage
+                  const thumbUrl = `https://drive.google.com/thumbnail?id=${id}&sz=s800`;
+                  blob = UrlFetchApp.fetch(thumbUrl, {
+                    headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+                    muteHttpExceptions: true
+                  }).getBlob();
+                } catch (err) {
+                  const file = DriveApp.getFileById(id);
+                  blob = file.getBlob();
+                }
                 fileUrl = imgItem;
-                uploadedUrls.push(imgItem);
               }
             }
 
             if (blob) {
               targetBlobArr.push(blob);
-              // 🔥 แปลงเป็น Base64 เก็บไว้สำหรับ PDF
+              // 🔥 แปลงเป็น Base64 เก็บไว้สำหรับ PDF (Limit size)
               pdfImages.push({
-                label: prefix, // ใช้ prefix เช่น "Start", "Mono" ในการค้นหาทีหลัง
+                label: prefix,
                 base64: Utilities.base64Encode(blob.getBytes()),
               });
+
+              if (fileUrl) {
+                uploadedUrls.push(fileUrl);
+              }
             }
           } catch (e) {
             console.warn("Img Process Error", e);
@@ -157,7 +181,7 @@ const ReportGenerator = {
                   },
                   {
                     textParagraph: {
-                      text: `<b>2. สถานะระบบออกสื่อ</b><br>> Start Mono: ${formData.statusStartMono || '-'}<br>> Stop Mono: ${formData.statusStopMono || '-'}<br>> Start AIS: ${formData.statusStartAis || '-'}<br>> Stop AIS: ${formData.statusStopAis || '-'}`,
+                      text: `<b>2. สถานะช่อง</b><br>> Start Mono: ${formData.statusStartMono || '-'}<br>> Stop Mono: ${formData.statusStopMono || '-'}<br>> Start AIS: ${formData.statusStartAis || '-'}<br>> Stop AIS: ${formData.statusStopAis || '-'}`,
                     },
                   },
                   {

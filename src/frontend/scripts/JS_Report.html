@@ -98,13 +98,33 @@
         }
       },
 
+      onShow: function () {
+        console.log('📄 ReportManager: onShow');
+        try {
+          if (!_isDataLoaded) {
+            this.autoFetchAll(true);
+            _isDataLoaded = true;
+          }
+        } catch (e) {
+          console.error('❌ ReportManager: onShow error', e);
+        }
+      },
+
       openDatePicker: function () {
         if (!_picker) this.onPageShow();
         if (_picker) _picker.show();
       },
 
       onShow: function () {
-        this.onPageShow();
+        console.log('📄 ReportManager: onShow');
+        try {
+          this.onPageShow();
+        } catch (e) {
+          console.error('❌ ReportManager: onShow error', e);
+          if (typeof UIManager !== 'undefined') {
+            UIManager.showToast('เกิดข้อผิดพลาดในการโหลดหน้ารายงาน: ' + e.message, 'error');
+          }
+        }
       },
 
       onPageShow: function () {
@@ -191,7 +211,7 @@
 
       _setLoading: function (loading) {
         _isLoading = loading;
-        var btn = el("btn-load-data");
+        var btn = el("btn-refresh-report");
         var input = el("inputDate");
         if (input) input.disabled = loading;
         if (btn) {
@@ -414,8 +434,16 @@
                 var html = "";
                 var currentGroup = "";
 
+                // Helper for time within the loop
+                var fmtTime = function (t) {
+                  if (!t) return "-";
+                  var str = String(t);
+                  if (str.indexOf("T") !== -1) return str.split("T")[1].substring(0, 5);
+                  return str.substring(0, 5);
+                };
+
                 list.forEach((item) => {
-                  var db = item.dashboard;
+                  var db = item.dashboard || {};
                   var isToday = db.date === dateVal;
                   var groupKey = isToday ? "today" : "yesterday";
 
@@ -424,27 +452,47 @@
                     var label = isToday
                       ? `<span class="text-blue-600 flex items-center gap-1"><i class="fas fa-sun text-yellow-500"></i> หลังเที่ยงคืน (วันนี้)</span>`
                       : `<span class="text-gray-500 flex items-center gap-1"><i class="fas fa-moon text-indigo-400"></i> ก่อนเที่ยงคืน (เมื่อวาน)</span>`;
-                    html += `<tr class="bg-gray-50/80 border-b border-gray-200"><td colspan="5" class="px-3 py-1.5 font-bold text-[10px] uppercase">${label}</td></tr>`;
+                    html += `<tr class="bg-gray-50/80 border-b border-gray-200"><td colspan="9" class="px-3 py-1.5 font-bold text-[10px] uppercase">${label}</td></tr>`;
                   }
 
-                  var hasEvidence = !!(db.startImg || db.stopImg);
-                  var badge = hasEvidence
-                    ? '<div class="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center mx-auto"><i class="fas fa-check text-success text-[10px]"></i></div>'
-                    : '<div class="w-5 h-5 rounded-full bg-base-200 flex items-center justify-center mx-auto"><i class="fas fa-times text-base-content/30 text-[10px]"></i></div>';
-                  var imgBtn = (url, icon, color) =>
-                    url
-                      ? `<a href="${formatDriveUrl(url)}" target="_blank" class="btn btn-xs btn-square btn-ghost text-${color}"><i class="fas ${icon}"></i></a>`
-                      : `<span class="text-gray-300 text-[10px]">-</span>`;
+                  // 📊 Calculate Plan Start (-2 hrs)
+                  var matchTime = fmtTime(db.time);
+                  var planTime = "-";
+                  if (matchTime && matchTime !== "-") {
+                    var parts = matchTime.split(":");
+                    var h = parseInt(parts[0], 10) - 2;
+                    if (h < 0) h += 24;
+                    planTime = String(h).padStart(2, "0") + ":" + parts[1];
+                  }
 
-                  html += `<tr class="border-b border-gray-100 hover:bg-white transition-colors">
-                            <td class="text-center font-mono text-[9px] text-gray-400 border-r border-gray-50 px-0">${db.time}</td>
+                  // NOC OPEN Status logic
+                  var isMatched = item.status === "MATCHED";
+                  var statusWidget = isMatched
+                    ? '<div class="flex justify-center"><i class="fas fa-check-circle text-emerald-500 text-[14px]"></i></div>'
+                    : '<div class="flex justify-center"><span class="text-[8px] font-bold text-slate-300 uppercase tracking-tight">NOC OPEN</span></div>';
+
+                  var imgBtn = (url, color) => {
+                    var firstUrl = Array.isArray(url) ? (url.length > 0 ? url[0] : null) : url;
+                    return firstUrl
+                      ? `<a href="${formatDriveUrl(firstUrl)}" target="_blank" class="flex items-center justify-center w-6 h-6 rounded-md bg-${color}/10 hover:bg-${color}/20 text-${color} transition-colors mx-auto"><i class="fas fa-image text-[10px]"></i></a>`
+                      : `<span class="text-gray-200 text-[10px]">-</span>`;
+                  };
+
+                  html += `<tr class="border-b border-gray-100 hover:bg-white transition-colors h-[48px]">
+                            <td class="text-center font-mono text-[10px] text-slate-800 font-bold border-r border-gray-50">${matchTime}</td>
+                            <td class="text-center font-mono text-[10px] text-red-500 font-bold border-r border-gray-50 bg-red-50/20">${planTime}</td>
                             <td class="p-1 border-r border-gray-50 overflow-hidden">
-                                <div class="font-bold text-slate-700 text-[10px] truncate" title="${db.home} v ${db.away}">${db.home} v ${db.away}</div>
-                                <div class="text-[9px] text-slate-400 truncate">${db.league}</div>
+                                <div class="text-[10px] text-gray-500 leading-none mb-0.5 truncate">${db.league || "-"}</div>
+                                <div class="font-bold text-slate-700 text-[11px] truncate" title="${db.home} v ${db.away}">${db.home} v ${db.away}</div>
                             </td>
-                            <td class="text-center p-0 border-r border-gray-50">${imgBtn(db.startImg, "fa-play-circle", "success")}</td>
-                            <td class="text-center p-0 border-r border-gray-50">${imgBtn(db.stopImg, "fa-stop-circle", "error")}</td>
-                            <td class="text-center p-0">${badge}</td>
+                            <td class="text-center border-r border-gray-50 px-1">
+                                <div class="badge badge-ghost badge-xs font-mono text-[8px] w-full truncate border-none bg-gray-100" title="${db.channel || "-"}">${db.channel || "-"}</div>
+                            </td>
+                            <td class="text-center p-0 border-r border-gray-50">${imgBtn(db.start_mono, "primary")}</td>
+                            <td class="text-center p-0 border-r border-gray-50">${imgBtn(db.start_ais, "success")}</td>
+                            <td class="text-center p-0 border-r border-gray-50">${imgBtn(db.stop_mono, "error")}</td>
+                            <td class="text-center p-0 border-r border-gray-50">${imgBtn(db.stop_ais, "warning")}</td>
+                            <td class="text-center bg-slate-50/30">${statusWidget}</td>
                           </tr>`;
                 });
                 el("verification-tbody").innerHTML = html;
@@ -495,9 +543,16 @@
               var images = res.data[m.key] || [];
               if (images.length > 0) {
                 show(m.container, true);
-                images.forEach((img) => ReportManager._renderAutoImage(img, el(m.list), m.urls));
+                images.forEach((img) => {
+                  // Auto-select if not already in array
+                  if (m.urls.indexOf(img.url) === -1) {
+                    m.urls.push(img.url);
+                  }
+                  ReportManager._renderAutoImage(img, el(m.list), m.urls);
+                });
               }
             });
+            ReportManager.updateImageCounts();
             ReportManager._updateStartStatus();
           }
         });
@@ -563,16 +618,19 @@
       },
 
       _renderAutoImage: function (img, container, urlArray) {
+        var isSelected = urlArray.indexOf(img.url) !== -1;
         var div = document.createElement("div");
         div.className =
-          "relative flex-shrink-0 w-24 h-16 border border-slate-200 rounded overflow-hidden cursor-pointer group transition-all hover:border-primary hover:shadow-sm";
-        div.innerHTML = `<img src="${formatDriveUrl(img.url)}" class="object-cover w-full h-full opacity-70 transition-opacity">
-                         <div class="auto-check absolute top-0 right-0 w-4 h-4 bg-green-500 rounded-bl-sm flex items-center justify-center hidden z-10"><i class="fas fa-check text-white text-[8px]"></i></div>
+          "relative flex-shrink-0 w-24 h-16 border rounded overflow-hidden cursor-pointer group transition-all hover:border-primary hover:shadow-sm " +
+          (isSelected ? "ring-2 ring-green-500 border-green-400" : "border-slate-200");
+        div.innerHTML = `<img src="${formatDriveUrl(img.url)}" class="object-cover w-full h-full ${isSelected ? '' : 'opacity-70'} transition-opacity">
+                         <div class="auto-check absolute top-0 right-0 w-4 h-4 bg-green-500 rounded-bl-sm flex items-center justify-center ${isSelected ? '' : 'hidden'} z-10"><i class="fas fa-check text-white text-[8px]"></i></div>
                          <div class="auto-hover absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 group-hover:opacity-100 text-white text-[10px] transition-opacity"><i class="fas fa-plus shadow-sm"></i></div>
                          <div class="absolute bottom-0 left-0 right-0 bg-black/40 text-[7px] text-white truncate px-1 py-0.5 leading-none font-mono text-center">${img.label}</div>`;
 
         div.onclick = () => {
           var checkEl = div.querySelector(".auto-check");
+          var imgEl = div.querySelector("img");
           if (div.classList.contains("ring-2")) {
             div.classList.remove(
               "ring-2",
@@ -581,12 +639,14 @@
             );
             div.classList.add("border-slate-200");
             checkEl.classList.add("hidden");
+            if (imgEl) imgEl.classList.add("opacity-70");
             var idx = urlArray.indexOf(img.url);
             if (idx > -1) urlArray.splice(idx, 1);
           } else {
             div.classList.add("ring-2", "ring-green-500", "border-green-400");
             div.classList.remove("border-slate-200");
             checkEl.classList.remove("hidden");
+            if (imgEl) imgEl.classList.remove("opacity-70");
             urlArray.push(img.url);
           }
           ReportManager.updateImageCounts();
@@ -1057,14 +1117,16 @@
       },
 
       handlePasteEvent: function (e, type) {
-        var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        var clipboardData = (e.clipboardData || (e.originalEvent && e.originalEvent.clipboardData));
+        if (!clipboardData) return;
+        var items = clipboardData.items;
         for (var i = 0; i < items.length; i++) {
           if (items[i].type.indexOf("image") !== -1) {
             var blob = items[i].getAsFile();
             if (!_files[type]) _files[type] = [];
             _files[type].push(blob);
-            ReportManager.renderFileList(type);
-            ReportManager._updateStartStatus();
+            this.renderFileList(type);
+            this._updateStartStatus();
             if (typeof UIManager !== "undefined")
               UIManager.showToast("วางรูปเรียบร้อย ✅", "success");
             e.preventDefault();
@@ -1076,10 +1138,14 @@
       // Legacy handler but keeping for safety if needed internally
       setupPasteHandlers: function () {
         ["startMono", "stopMono", "startAis", "stopAis"].forEach((type) => {
-          var dz = el("dropzone-" + type.replace(/([A-Z])/g, '-$1').toLowerCase());
+          var camelType = type.charAt(0).toUpperCase() + type.slice(1);
+          var dashType = type.replace(/([A-Z])/g, '-$1').toLowerCase();
+          var dz = el("dropzone-" + dashType);
           if (dz && !dz.hasAttribute("data-listening")) {
             dz.setAttribute("tabindex", "0");
+            // Add Paste Listener
             dz.addEventListener("paste", (e) => this.handlePasteEvent(e, type));
+            // Removed redundant click listener as it is now in HTML
             dz.setAttribute("data-listening", "true");
           }
         });

@@ -1,4 +1,4 @@
-<style>
+<style type="text/tailwindcss">
   /* CSS_Custom.html - DaisyUI Version */
 
   /* Scrollbar */
@@ -41,12 +41,29 @@
 
   /* Utils */
   .page-section {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
     height: 100%;
     min-height: 0;
-    /* Important for flex/grid children */
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
+    z-index: 1;
+  }
+
+  .page-section.hidden {
+    display: none !important;
+    z-index: 0;
+  }
+
+  /* Smooth fade-in animation */
+  .page-section.fade-in {
+    animation: fadeIn 0.3s ease-in-out forwards;
+    z-index: 2;
   }
 
   /* Ensure grid container takes full height */
@@ -61,7 +78,7 @@
   /* DaisyUI Modal Fix - Modals stay inside x-data for Alpine scope */
   /* Key: use isolation to create new stacking context at page level */
   .page-section {
-    isolation: isolate;
+    /* Removed isolation: isolate to allow internal drawers to float above main sidebar */
   }
 
   /* Force modal to break out of parent stacking context */
@@ -80,7 +97,117 @@
     opacity: 1 !important;
   }
 
-  /* Backdrop styling */
+  /* Backdrop styling - เฉพาะเมื่อเปิด Drawer เท่านั้น */
+  .drawer-toggle:checked ~ .drawer-side > .drawer-overlay {
+    background-color: rgba(0, 0, 0, 0.4) !important;
+    backdrop-filter: blur(2px);
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  /* Reset default overlay เพื่อไม่ให้ขวางหน้าจอขณะปิด */
+  .drawer-overlay {
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transition: all 0.3s ease;
+  }
+
+  /* SIDEBAR FIX & PREVENTION */
+  /* 1. Main App Sidebar (Left) */
+  #main-app > .drawer-side {
+    z-index: 100 !important;
+  }
+  
+  /* Hide overlay on large screens for the main drawer to prevent "black screen" */
+  @media (min-width: 1024px) {
+    #main-app.lg\:drawer-open > .drawer-side > .drawer-overlay {
+      display: none !important;
+    }
+  }
+
+  /* 2. Internal Page Drawers (Right side details) */
+  /* บังคับให้ drawer-side ซ่อนตัวจริงๆ เมื่อไม่ได้ติ๊ก checkbox */
+  .page-section > .drawer > .drawer-toggle:not(:checked) ~ .drawer-side {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .page-section > .drawer > .drawer-side {
+    z-index: 1100 !important;
+  }
+
+  /* SIDEBAR COLLAPSE SYSTEM */
+  #main-app.sidebar-collapsed aside {
+    width: 80px !important;
+  }
+
+  #main-app.sidebar-collapsed .drawer-side {
+    width: 80px !important;
+  }
+
+  /* Hide text when collapsed */
+  #main-app.sidebar-collapsed aside span,
+  #main-app.sidebar-collapsed aside h1,
+  #main-app.sidebar-collapsed aside p,
+  #main-app.sidebar-collapsed aside .divider::after,
+  #main-app.sidebar-collapsed aside .divider::before {
+    display: none !important;
+  }
+
+  /* Center icons when collapsed */
+  #main-app.sidebar-collapsed aside li a {
+    justify-content: center !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  #main-app.sidebar-collapsed aside li a i {
+    margin-right: 0 !important;
+    font-size: 1.25rem !important;
+  }
+
+  /* Adjust Logo Section when collapsed */
+  #main-app.sidebar-collapsed aside .flex.items-center.gap-3.px-6.py-5 {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    justify-content: center !important;
+  }
+
+  /* Hide details summary text when collapsed */
+  #main-app.sidebar-collapsed aside summary span {
+    display: none !important;
+  }
+
+  /* Adjust sub-menus when collapsed (they might need to be hidden or shown as tooltips) */
+  #main-app.sidebar-collapsed aside details ul {
+    display: none !important;
+  }
+
+  /* Transition for smooth collapse */
+  aside, .drawer-side {
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
+  /* 3. Ensure Sidebar content is visible and has background */
+  .drawer-side > aside, 
+  .drawer-side > .menu {
+    background-color: white;
+  }
+
+  /* 4. Fix for Large Screens (lg:drawer-open) */
+  @media (min-width: 1024px) {
+    .drawer.lg\:drawer-open > .drawer-side {
+      display: flex !important; /* Changed from block to flex to support DaisyUI layout */
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+  }
+
   .modal::backdrop,
   .modal-backdrop {
     position: fixed !important;
@@ -400,46 +527,24 @@
   }
 
   /* ============================================
-     BUTTON LOADING OVERLAY
+     DAISY UI NATIVE LOADING BUTTON INTEGRATION
      ============================================ */
-  .btn-loading-overlay {
-    position: relative !important;
-    overflow: hidden !important;
+  /* Ensure the spinner is hidden by default and icon is shown */
+  .btn:not(.is-loading) .loading {
+    display: none !important;
   }
 
-  .btn-loading-overlay .default-content {
-    opacity: 1;
-    transition: opacity 0.2s ease;
-    visibility: visible;
+  .btn:not(.is-loading) i {
+    display: inline-block !important;
   }
 
-  .btn-loading-overlay.is-loading .default-content {
-    opacity: 0;
+  /* When is-loading is added, show the spinner and hide only the icon */
+  .btn.is-loading .loading {
+    display: inline-block !important;
   }
 
-  .btn-loading-overlay .loading-content {
-    position: absolute !important;
-    inset: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-  }
-
-  .btn-loading-overlay.is-loading .loading-content {
-    opacity: 1;
-  }
-
-  /* Custom Ring Loader */
-  .custom-loader {
-    width: 20px;
-    height: 20px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top-color: #fff;
-    animation: spin 0.8s ease-in-out infinite;
+  .btn.is-loading i {
+    display: none !important;
   }
 
   /* ============================================

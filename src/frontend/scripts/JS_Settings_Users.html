@@ -33,9 +33,21 @@
           Router.register("page-settings-users", this);
         }
       },
-      onShow() { if (!_loaded) this.loadData(); },
+      onShow() { 
+        console.log('📄 UsrSettings: onShow');
+        try {
+          if (!_loaded) this.loadData();
+        } catch (e) {
+          console.error('❌ UsrSettings: onShow error', e);
+          if (typeof UIManager !== 'undefined') {
+            UIManager.showToast('เกิดข้อผิดพลาดในการโหลดการตั้งค่าผู้ใช้: ' + e.message, 'error');
+          }
+        }
+      },
 
       loadData(force) {
+        let btnRefresh = el('btn-refresh-settings-users');
+        if (btnRefresh) btnRefresh.classList.add('is-loading');
         ['staff', 'assignees'].forEach(n => {
           const t = el('usr-tbody-' + n);
           const e = el('usr-empty-' + n);
@@ -63,6 +75,8 @@
           })
           .catch(() => UIManager.showToast("Load Error", "error"))
           .finally(() => {
+            let btnRefresh = el('btn-refresh-settings-users');
+            if (btnRefresh) btnRefresh.classList.remove('is-loading');
             ['staff', 'assignees'].forEach(n => { const l = el('usr-loader-' + n); if (l) l.classList.add('hidden'); });
           });
       },

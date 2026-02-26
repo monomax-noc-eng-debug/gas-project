@@ -8,6 +8,9 @@
   const TicketManager = (() => {
     // --- State Variables ---
     let _tickets = [];
+    let _filteredTickets = []; // for pagination
+    let _currentPage = 1;
+    let _itemsPerPage = 15;
     let _config = {};
     let _profiles = { email: [], site: [], drafts: [] };
     let _currentAssignees = [];
@@ -47,7 +50,15 @@
       },
 
       onShow: () => {
-        TicketManager.loadData(false);
+        console.log('📄 TicketManager: onShow');
+        try {
+          TicketManager.loadData(false);
+        } catch (e) {
+          console.error('❌ TicketManager: onShow error', e);
+          if (typeof UIManager !== 'undefined') {
+            UIManager.showToast('เกิดข้อผิดพลาดในการโหลดหน้า Ticket: ' + e.message, 'error');
+          }
+        }
       },
 
       // ============================================================
@@ -119,6 +130,11 @@
               TicketView.populateSelect("sel-ticket-severity", _config.severities || []);
               TicketView.populateSelect("sel-ticket-category", Object.keys(_config.categories || {}));
 
+              // Sync Filter Selects
+              TicketView.populateSelect("filter-status", _config.statuses || [], "ทุกสถานะ");
+              TicketView.populateSelect("filter-type", _config.types || [], "ทุกประเภท");
+              TicketView.populateSelect("filter-severity", _config.severities || [], "ทุกระดับ");
+
               if (_config.staff && _config.staff.length > 0) {
                 TicketView.populateSelect("sel-ticket-resp", _config.staff, "เลือกหัวหน้าทีม...");
               } else {
@@ -158,7 +174,9 @@
             // 2.3 Tickets Table
             if (resTickets.success) {
               _tickets = TicketManager.sortTickets(resTickets.data || []);
-              TicketView.renderTable(_tickets);
+              _filteredTickets = [..._tickets];
+              _currentPage = 1;
+              TicketManager.renderCurrentPage();
               TicketView.updateStats(_tickets);
               _isLoaded = true; // Mark as loaded
             } else {
@@ -694,15 +712,44 @@
 
       filterData: () => {
         const term = getEl("ticket-search").value.toLowerCase();
-        const filtered = _tickets.filter((t) => {
+        const fStatus = getEl("filter-status").value;
+        const fType = getEl("filter-type").value;
+        const fSeverity = getEl("filter-severity").value;
+
+        _filteredTickets = _tickets.filter((t) => {
           const id = String(t.ticketNumber || "").toLowerCase();
           const subj = String(t.subject || "").toLowerCase();
-          const status = String(t.status || "").toLowerCase();
-          return (
-            id.includes(term) || subj.includes(term) || status.includes(term)
-          );
+          const status = String(t.status || "");
+          const type = String(t.type || "");
+          const severity = String(t.severity || "");
+
+          // 1. Text Search (ID or Subject)
+          const matchText = id.includes(term) || subj.includes(term);
+
+          // 2. Dropdown Filters
+          const matchStatus = !fStatus || status === fStatus;
+          const matchType = !fType || type === fType;
+          const matchSeverity = !fSeverity || severity === fSeverity;
+
+          return matchText && matchStatus && matchType && matchSeverity;
         });
-        TicketView.renderTable(filtered);
+        _currentPage = 1;
+        TicketManager.renderCurrentPage();
+      },
+
+      changePage: (page) => {
+        _currentPage = page;
+        TicketManager.renderCurrentPage();
+      },
+
+      renderCurrentPage: () => {
+        const start = (_currentPage - 1) * _itemsPerPage;
+        const end = start + _itemsPerPage;
+        const pageData = _filteredTickets.slice(start, end);
+        TicketView.renderTable(pageData);
+        if (typeof TicketView.renderPagination === "function") {
+          TicketView.renderPagination(_filteredTickets.length, _itemsPerPage, _currentPage);
+        }
       },
 
       // ============================================================

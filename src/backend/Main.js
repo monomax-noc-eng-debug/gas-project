@@ -2,7 +2,7 @@ function doGet(e) {
   try {
     return HtmlService.createTemplateFromFile('frontend/index')
       .evaluate()
-      .setTitle('NOC APP')
+      .setTitle('NOC Management')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   } catch (error) {
@@ -24,7 +24,7 @@ function getCurrentUser() {
     // พยายามดึงชื่อจาก People API (ต้องเปิด Service 'People API' ก่อน)
     try {
       const profile = People.People.get('people/me', { personFields: 'names,photos' });
-      
+
       if (profile.names && profile.names.length > 0) {
         name = profile.names[0].displayName;
       }
@@ -58,12 +58,12 @@ function autoSyncGmail() {
   try {
     // ✅ แก้ไข: ดึงข้อมูลและเซฟแบบอัตโนมัติ ตาม Flow ของ GmailService ใหม่
     const res = GmailService.getUnsyncedEmails();
-    
+
     if (res && res.success && res.items && res.items.length > 0) {
       // คัดกรองเอาเฉพาะรายการที่พร้อมจะสร้างใหม่ (READY) หรืออัปเดต ID (UPDATE_SVR)
       const validItems = res.items.filter(item => item.status === 'READY' || item.status === 'UPDATE_SVR');
       const payloadsToSave = validItems.map(item => item.payload);
-      
+
       if (payloadsToSave.length > 0) {
         const saveRes = GmailService.saveBatchTickets(payloadsToSave);
         console.log(`Auto-Sync Success: Saved ${saveRes.count} tickets.`);

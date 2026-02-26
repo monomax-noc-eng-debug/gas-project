@@ -4,18 +4,14 @@
     <div class="flex items-center gap-2">
       <div class="bg-primary/10 p-1.5 rounded-lg text-primary"><i class="fas fa-history text-sm"></i></div>
       <div class="hidden sm:block">
-        <h2 class="text-xs font-bold text-gray-800">History</h2>
+        <h2 class="text-xs font-bold text-gray-800">ประวัติการส่งกะ</h2>
       </div>
     </div>
     <button id="btn-refresh-history" onclick="HistoryManager.loadHistory(true)"
-      class="btn btn-xs btn-neutral text-white shadow-sm ml-auto btn-loading-overlay h-7">
-      <span class="default-content flex items-center gap-1.5">
-        <i class="fas fa-sync-alt text-[10px]"></i>
-        <span class="text-[10px]">โหลดข้อมูล</span>
-      </span>
-      <span class="loading-content">
-        <span class="custom-loader"></span>
-      </span>
+      class="btn btn-xs btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-400 gap-1.5 px-3 ml-auto">
+      <span class="loading loading-spinner loading-xs text-slate-500"></span>
+      <i class="fas fa-sync-alt text-[10px]"></i>
+      <span class="hidden sm:inline text-[11px] font-semibold">โหลดใหม่</span>
     </button>
   </div>
 

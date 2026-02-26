@@ -137,6 +137,14 @@ const MatchController = (() => {
     return str;
   }
 
+  // ✅ Helper: Resolve actual header name from fuzzy keywords
+  function _resolveHeader(headers, keywords) {
+    if (!headers || !Array.isArray(headers)) return null;
+    return headers.find(h =>
+      keywords.some(k => String(h).toLowerCase().includes(k.toLowerCase()))
+    );
+  }
+
   return {
     // =================================================================
     // ⚡ LIGHTWEIGHT POLLING (No Quota Waste)
@@ -180,30 +188,37 @@ const MatchController = (() => {
         if (!rawData || rawData.length < 2) return Response.success([]);
 
         const headers = rawData[0];
-        const getIdx = (keywords) =>
+        const getIdx = (keywords, exact = false) =>
           headers.findIndex((h) =>
-            keywords.some((k) =>
-              String(h).toLowerCase().includes(k.toLowerCase()),
-            ),
+            keywords.some((k) => {
+              const head = String(h).toLowerCase().trim();
+              const target = k.toLowerCase().trim();
+              return exact ? head === target : head.includes(target);
+            }),
           );
 
         const idx = {
-          id: getIdx(["Match ID", "ID"]),
-          date: getIdx(["Date", "วันที่"]),
-          time: getIdx(["Time", "Kickoff", "เวลา"]),
-          league: getIdx(["League", "Program", "รายการ"]),
-          home: getIdx(["Home", "Team 1", "เจ้าบ้าน"]),
-          away: getIdx(["Away", "Team 2", "ทีมเยือน"]),
-          channel: getIdx(["Channel", "ช่อง"]),
-          status: getIdx(["Status", "สถานะ"]),
-          startMono: getIdx(["Start Mono"]),
-          stopMono: getIdx(["Stop Mono"]),
-          startAis: getIdx(["Start AIS"]),
-          stopAis: getIdx(["Stop AIS"]),
-          // Legacy fallback
-          startImg: getIdx(["Start Image", "Start", "Image In"]),
-          stopImg: getIdx(["Stop Image", "Stop", "Image Out"]),
+          id: getIdx(["Match ID", "ID"], true),
+          date: getIdx(["Date", "วันที่"], true),
+          time: getIdx(["Time", "Kickoff", "เวลา"], true),
+          league: getIdx(["League", "Program", "รายการ"], true),
+          home: getIdx(["Home", "Team 1", "เจ้าบ้าน"], true),
+          away: getIdx(["Away", "Team 2", "ทีมเยือน"], true),
+          channel: getIdx(["Channel", "ช่อง"], true),
+          status: getIdx(["Status", "สถานะ"], true),
+          startMono: getIdx(["Start Mono"], true),
+          stopMono: getIdx(["Stop Mono"], true),
+          startAis: getIdx(["Start AIS"], true),
+          stopAis: getIdx(["Stop AIS"], true),
+          // Legacy fallback - exact match only for "Start" or "Stop" to avoid matching "Start Mono"
+          startImg: getIdx(["Start Image", "Start"], true),
+          stopImg: getIdx(["Stop Image", "Stop"], true),
         };
+
+        // Second pass: if some critical headers not found, try fuzzy
+        if (idx.date === -1) idx.date = getIdx(["Date", "วันที่"]);
+        if (idx.time === -1) idx.time = getIdx(["Time", "เวลา"]);
+        if (idx.status === -1) idx.status = getIdx(["Status", "สถานะ"]);
 
         const matches = rawData.slice(1).map((row, i) => {
           const dateStr = _parseDate(row[idx.date]);
@@ -212,15 +227,30 @@ const MatchController = (() => {
             rowId = `AUTO_${dateStr.replace(/-/g, "")}_${i}`;
           }
 
-          // New 4-column structure
-          let startMono = idx.startMono > -1 ? _parseImageCell(row[idx.startMono]) : "";
-          let stopMono = idx.stopMono > -1 ? _parseImageCell(row[idx.stopMono]) : "";
-          let startAis = idx.startAis > -1 ? _parseImageCell(row[idx.startAis]) : "";
-          let stopAis = idx.stopAis > -1 ? _parseImageCell(row[idx.stopAis]) : "";
+          // Helper to get image data safely
+          const getImgs = (colIdx) => colIdx > -1 ? _parseImageCell(row[colIdx]) : "";
+          const toArr = (val) => {
+            if (!val) return [];
+            const arr = Array.isArray(val) ? val : [val];
+            return arr.filter(u => u && String(u).trim().startsWith("http"));
+          };
 
-          // Legacy fallback: if new columns are empty, use old columns
-          if (!startMono && idx.startImg > -1) startMono = _parseImageCell(row[idx.startImg]);
-          if (!stopMono && idx.stopImg > -1) stopMono = _parseImageCell(row[idx.stopImg]);
+          const sMono = getImgs(idx.startMono);
+          const sAis = getImgs(idx.startAis);
+          const eMono = getImgs(idx.stopMono);
+          const eAis = getImgs(idx.stopAis);
+
+          // AGGREGATE ALL IMAGES for combined view (Thumbnail + N)
+          const startAll = [...toArr(sMono), ...toArr(sAis)];
+          // Fallback to legacy if both new columns are empty
+          if (startAll.length === 0 && idx.startImg > -1) {
+            startAll.push(...toArr(getImgs(idx.startImg)));
+          }
+
+          const stopAll = [...toArr(eMono), ...toArr(eAis)];
+          if (stopAll.length === 0 && idx.stopImg > -1) {
+            stopAll.push(...toArr(getImgs(idx.stopImg)));
+          }
 
           return {
             id: rowId,
@@ -231,13 +261,12 @@ const MatchController = (() => {
             away: idx.away > -1 ? row[idx.away] || "?" : "?",
             channel: idx.channel > -1 ? row[idx.channel] || "-" : "-",
             status: idx.status > -1 ? row[idx.status] || "WAIT" : "WAIT",
-            start_mono: startMono,
-            stop_mono: stopMono,
-            start_ais: startAis,
-            stop_ais: stopAis,
-            // Legacy compat
-            start_img: startMono,
-            stop_img: stopMono,
+            start_mono: sMono,
+            stop_mono: eMono,
+            start_ais: sAis,
+            stop_ais: eAis,
+            start_img: startAll, // UI uses this for thumbnail + count
+            stop_img: stopAll    // UI uses this for thumbnail + count
           };
         });
 
@@ -267,7 +296,7 @@ const MatchController = (() => {
         const dateStr = Utilities.formatDate(matchDate, tz, "yyyy-MM-dd");
 
         // Process 4 image types
-        const imgTypes = ['startMono', 'startAis'];
+        const imgTypes = ['startMono', 'startAis', 'stopMono', 'stopAis'];
         const processed = {};
         imgTypes.forEach(type => {
           if (data[type] && Array.isArray(data[type]) && data[type].length > 0) {
@@ -277,7 +306,7 @@ const MatchController = (() => {
           }
         });
 
-        // Legacy fallback: if old startImages provided, treat as startMono
+        // Legacy fallback
         if (processed.startMono.length === 0 && data.startImages && Array.isArray(data.startImages) && data.startImages.length > 0) {
           processed.startMono = _processImageArray(data.startImages, newId, "START_MONO", matchDate);
         }
@@ -317,7 +346,9 @@ const MatchController = (() => {
           }
         };
         saveImgCol(["Start Mono"], processed.startMono);
+        saveImgCol(["Stop Mono"], processed.stopMono);
         saveImgCol(["Start AIS"], processed.startAis);
+        saveImgCol(["Stop AIS"], processed.stopAis);
 
         const tsIdx = headers.findIndex((h) =>
           h.toLowerCase().includes("timestamp"),
@@ -342,41 +373,55 @@ const MatchController = (() => {
       try {
         if (!data.id) return Response.error("Missing ID");
         const today = new Date();
+        const sheetName = getSheetName();
+        const dbId = getDbId();
 
-        const updateMap = { Status: "DONE" };
+        // Resolve headers once
+        const headers = SheetService.getAll(sheetName, 0, dbId)[0];
+        const resolve = (keys) => _resolveHeader(headers, keys);
+
+        const idCol = resolve(["Match ID", "ID"]);
+        const statusCol = resolve(["Status", "สถานะ"]);
+        const stopMonoCol = resolve(["Stop Mono"]);
+        const stopAisCol = resolve(["Stop AIS"]);
+
+        if (!statusCol) return Response.error("Status column not found");
+
+        const updateMap = {};
+        updateMap[statusCol] = "DONE";
 
         if (!data.isSkipImage) {
-          // Process stop images for Mono and AIS separately
-          const stopTypes = ['stopMono', 'stopAis'];
-          stopTypes.forEach(type => {
-            if (data[type] && Array.isArray(data[type]) && data[type].length > 0) {
-              const urls = _processImageArray(data[type], data.id, type.toUpperCase(), today);
+          const stopTypes = [
+            { key: 'stopMono', col: stopMonoCol, suffix: 'STOP_MONO' },
+            { key: 'stopAis', col: stopAisCol, suffix: 'STOP_AIS' }
+          ];
+
+          stopTypes.forEach(({ key, col, suffix }) => {
+            if (col && data[key] && Array.isArray(data[key]) && data[key].length > 0) {
+              const urls = _processImageArray(data[key], data.id, suffix, today);
               if (urls.length > 0) {
-                const val = urls.length > 1 ? JSON.stringify(urls) : urls[0];
-                const colName = type === 'stopMono' ? "Stop Mono" : "Stop AIS";
-                updateMap[colName] = val;
+                updateMap[col] = urls.length > 1 ? JSON.stringify(urls) : urls[0];
               }
             }
           });
 
-          // Legacy fallback: if old stopImages provided, treat as stopMono
-          if (!data.stopMono && data.stopImages && Array.isArray(data.stopImages) && data.stopImages.length > 0) {
+          // Legacy fallback
+          if (!data.stopMono && data.stopImages && Array.isArray(data.stopImages) && data.stopImages.length > 0 && stopMonoCol) {
             const urls = _processImageArray(data.stopImages, data.id, "STOP_MONO", today);
             if (urls.length > 0) {
-              const val = urls.length > 1 ? JSON.stringify(urls) : urls[0];
-              updateMap["Stop Mono"] = val;
+              updateMap[stopMonoCol] = urls.length > 1 ? JSON.stringify(urls) : urls[0];
             }
           }
         }
 
         const success = SheetService.update(
-          getSheetName(),
+          sheetName,
           data.id,
           updateMap,
-          "Match ID",
-          getDbId(),
+          idCol || "Match ID",
+          dbId
         );
-        if (success) this._triggerMatchUpdate(); // ✨ Trigger Polling Update
+        if (success) this._triggerMatchUpdate();
 
         return success
           ? Response.success({ message: "Stopped" })
@@ -392,58 +437,66 @@ const MatchController = (() => {
     apiUpdateWorkItem: function (data) {
       try {
         if (!data.id) return Response.error("Missing ID");
-        const updateMap = {
-          Time: data.time,
-          Kickoff: data.time,
-          League: data.league,
-          Program: data.league,
-          Home: data.home,
-          Away: data.away,
-          Channel: data.channel,
-          Date: data.date,
-        };
+        const sheetName = getSheetName();
+        const dbId = getDbId();
+        const headers = SheetService.getAll(sheetName, 0, dbId)[0];
+        const resolve = (keys) => _resolveHeader(headers, keys);
+
+        const idCol = resolve(["Match ID", "ID"]);
+        const updateMap = {};
+
+        const mappings = [
+          { keys: ["Time", "Kickoff", "เวลา"], val: data.time },
+          { keys: ["League", "Program", "รายการ"], val: data.league },
+          { keys: ["Home", "เจ้าบ้าน"], val: data.home },
+          { keys: ["Away", "ทีมเยือน"], val: data.away },
+          { keys: ["Channel", "ช่อง"], val: data.channel },
+          { keys: ["Date", "วันที่"], val: data.date }
+        ];
+
+        mappings.forEach(m => {
+          const col = resolve(m.keys);
+          if (col) updateMap[col] = m.val;
+        });
 
         const targetDate = data.date ? new Date(data.date) : new Date();
 
-        // Process 4 image types for edit
         const editImgTypes = [
-          { key: 'startMono', col: 'Start Mono', suffix: 'START_MONO_Edit' },
-          { key: 'startAis', col: 'Start AIS', suffix: 'START_AIS_Edit' },
-          { key: 'stopMono', col: 'Stop Mono', suffix: 'STOP_MONO_Edit' },
-          { key: 'stopAis', col: 'Stop AIS', suffix: 'STOP_AIS_Edit' },
+          { key: 'startMono', colKeys: ['Start Mono'], suffix: 'START_MONO_Edit' },
+          { key: 'startAis', colKeys: ['Start AIS'], suffix: 'START_AIS_Edit' },
+          { key: 'stopMono', colKeys: ['Stop Mono'], suffix: 'STOP_MONO_Edit' },
+          { key: 'stopAis', colKeys: ['Stop AIS'], suffix: 'STOP_AIS_Edit' },
         ];
 
-        editImgTypes.forEach(({ key, col, suffix }) => {
-          if (data[key] && Array.isArray(data[key])) {
+        editImgTypes.forEach(({ key, colKeys, suffix }) => {
+          const col = resolve(colKeys);
+          if (col && data[key] && Array.isArray(data[key])) {
             const processed = _processImageArray(data[key], data.id, suffix, targetDate);
+            // Only update if images are provided (don't clear if undefined)
+            // But if array is empty, it means user removed all images
             updateMap[col] = processed.length > 0
               ? (processed.length > 1 ? JSON.stringify(processed) : processed[0])
               : "";
           }
         });
 
-        // Legacy fallback for old startImages/stopImages
+        // Legacy fallback
         if (!data.startMono && data.startImages && Array.isArray(data.startImages)) {
-          const processed = _processImageArray(data.startImages, data.id, "START_MONO_Edit", targetDate);
-          updateMap["Start Mono"] = processed.length > 0
-            ? (processed.length > 1 ? JSON.stringify(processed) : processed[0])
-            : "";
-        }
-        if (!data.stopMono && data.stopImages && Array.isArray(data.stopImages)) {
-          const processed = _processImageArray(data.stopImages, data.id, "STOP_MONO_Edit", targetDate);
-          updateMap["Stop Mono"] = processed.length > 0
-            ? (processed.length > 1 ? JSON.stringify(processed) : processed[0])
-            : "";
+          const col = resolve(["Start Mono"]);
+          if (col) {
+            const processed = _processImageArray(data.startImages, data.id, "START_MONO_Edit", targetDate);
+            updateMap[col] = processed.length > 0 ? (processed.length > 1 ? JSON.stringify(processed) : processed[0]) : "";
+          }
         }
 
         const success = SheetService.update(
-          getSheetName(),
+          sheetName,
           data.id,
           updateMap,
-          "Match ID",
-          getDbId(),
+          idCol || "Match ID",
+          dbId
         );
-        if (success) this._triggerMatchUpdate(); // ✨ Trigger Polling Update
+        if (success) this._triggerMatchUpdate();
 
         return success
           ? Response.success({ message: "Updated" })
@@ -459,13 +512,18 @@ const MatchController = (() => {
     apiDeleteWorkItem: function (id) {
       try {
         if (!id) return Response.error("Missing ID");
+        const sheetName = getSheetName();
+        const dbId = getDbId();
+        const headers = SheetService.getAll(sheetName, 0, dbId)[0];
+        const idCol = _resolveHeader(headers, ["Match ID", "ID"]);
+
         const success = SheetService.delete(
-          getSheetName(),
+          sheetName,
           id,
-          "Match ID",
-          getDbId(),
+          idCol || "Match ID",
+          dbId
         );
-        if (success) this._triggerMatchUpdate(); // ✨ Trigger Polling Update
+        if (success) this._triggerMatchUpdate();
 
         return success
           ? Response.success({ message: "Deleted" })

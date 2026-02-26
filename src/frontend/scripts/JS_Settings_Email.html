@@ -61,9 +61,21 @@
           Router.register("page-settings-email", this);
         }
       },
-      onShow() { if (!_loaded) this.loadData(); },
+      onShow() { 
+        console.log('📄 EmailSettings: onShow');
+        try {
+          if (!_loaded) this.loadData();
+        } catch (e) {
+          console.error('❌ EmailSettings: onShow error', e);
+          if (typeof UIManager !== 'undefined') {
+            UIManager.showToast('เกิดข้อผิดพลาดในการโหลดการตั้งค่าอีเมล: ' + e.message, 'error');
+          }
+        }
+      },
 
       loadData(force) {
+        let btnRefresh = el('btn-refresh-settings-email');
+        if (btnRefresh) btnRefresh.classList.add('is-loading');
         const tbody = el('em-table-body');
         const empty = el('em-empty');
         const loader = el('em-loader');
@@ -97,6 +109,8 @@
           })
           .catch(() => UIManager.showToast("Load Error", "error"))
           .finally(() => {
+            let btnRefresh = el('btn-refresh-settings-email');
+            if (btnRefresh) btnRefresh.classList.remove('is-loading');
             if (loader) loader.classList.add('hidden');
           });
       },

@@ -236,6 +236,55 @@
                     <i class="fas fa-times cursor-pointer hover:text-red-500 transition-colors" onclick="TicketManager.removeAssignee(${i})"></i>
                 </div>
             `).join('');
+            },
+
+            renderPagination: (totalItems, itemsPerPage, currentPage) => {
+                const infoMsg = document.getElementById('ticket-pagination-info');
+                const controls = document.getElementById('ticket-pagination-controls');
+                if (!infoMsg || !controls) return;
+
+                const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+                const start = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+                const end = Math.min(currentPage * itemsPerPage, totalItems);
+
+                infoMsg.innerText = `แสดง ${start}-${end} จาก ${totalItems} รายการ`;
+
+                let buttonsHTML = '';
+
+                // Prev button
+                buttonsHTML += `
+                <button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 ${currentPage === 1 ? 'btn-disabled bg-slate-50 text-slate-300' : ''}" 
+                        onclick="TicketManager.changePage(${currentPage - 1})">
+                    <i class="fas fa-chevron-left text-[9px]"></i>
+                </button>`;
+
+                // Generate page numbers
+                let startPage = Math.max(1, currentPage - 2);
+                let endPage = Math.min(totalPages, currentPage + 2);
+
+                if (startPage > 1) {
+                    buttonsHTML += `<button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50" onclick="TicketManager.changePage(1)">1</button>`;
+                    if (startPage > 2) buttonsHTML += `<button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-400 btn-disabled">...</button>`;
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                    const activeClass = i === currentPage ? 'btn-primary text-white border-primary' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50';
+                    buttonsHTML += `<button class="join-item btn btn-xs ${activeClass}" onclick="TicketManager.changePage(${i})">${i}</button>`;
+                }
+
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) buttonsHTML += `<button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-400 btn-disabled">...</button>`;
+                    buttonsHTML += `<button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50" onclick="TicketManager.changePage(${totalPages})">${totalPages}</button>`;
+                }
+
+                // Next button
+                buttonsHTML += `
+                <button class="join-item btn btn-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 ${currentPage === totalPages ? 'btn-disabled bg-slate-50 text-slate-300' : ''}" 
+                        onclick="TicketManager.changePage(${currentPage + 1})">
+                    <i class="fas fa-chevron-right text-[9px]"></i>
+                </button>`;
+
+                controls.innerHTML = buttonsHTML;
             }
         };
     })();

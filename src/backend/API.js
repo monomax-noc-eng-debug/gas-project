@@ -135,14 +135,16 @@ function apiHandler(request) {
     getMasterTeamList: () => API_UTILS.createRes(true, []),
 
     // User Settings (ดึงข้อมูล Profile กลับไปให้ Frontend)
-    getUserSettings: () =>
-      JSON.stringify({
+    getUserSettings: () => {
+      const email = Session.getActiveUser().getEmail();
+      return JSON.stringify({
         theme: "light",
         profile: {
-          email: auth.email || Session.getActiveUser().getEmail(),
-          role: auth.role || auth.userName || "Guest",
+          email: email,
+          role: "Guest", // Default role
         },
-      }),
+      });
+    },
   };
 
   if (apiMap[func]) {

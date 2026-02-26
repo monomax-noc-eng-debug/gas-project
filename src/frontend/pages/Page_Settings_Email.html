@@ -6,16 +6,26 @@
     <div class="flex items-center gap-2">
       <div class="bg-purple-50 p-1.5 rounded-lg text-purple-500"><i class="fas fa-envelope-open-text text-sm"></i></div>
       <div class="hidden sm:block">
-        <h2 class="text-xs font-bold text-gray-800">Email Settings</h2>
+        <h2 class="text-xs font-bold text-gray-800">ตั้งค่าอีเมล</h2>
       </div>
     </div>
-    <div class="flex items-center gap-1 ml-auto">
-      <button onclick="EmailSettings.loadData(true)" class="btn btn-xs btn-ghost btn-circle" title="รีเฟรช"><i
-          class="fas fa-sync-alt text-gray-400 text-[10px]"></i></button>
-      <button onclick="EmailSettings.openAdd()" class="btn btn-xs btn-accent text-white shadow-sm gap-1 px-3 h-7"><i
-          class="fas fa-plus text-[10px]"></i> เพิ่ม</button>
-      <button onclick="EmailSettings.saveAll()" class="btn btn-xs btn-primary shadow-sm gap-1 px-3 h-7"><i
-          class="fas fa-save text-[10px]"></i> บันทึก</button>
+    <div class="flex items-center gap-1.5 ml-auto">
+      <button id="btn-refresh-settings-email" onclick="EmailSettings.loadData(true)"
+        class="btn btn-xs btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-400 gap-1.5 px-3">
+        <span class="loading loading-spinner loading-xs text-slate-500"></span>
+        <i class="fas fa-sync-alt text-[10px]"></i>
+        <span class="hidden sm:inline text-[11px] font-semibold">โหลดใหม่</span>
+      </button>
+      <button onclick="EmailSettings.openAdd()"
+        class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
+        <i class="fas fa-plus text-[10px]"></i>
+        <span class="hidden sm:inline text-[11px] font-semibold">เพิ่ม</span>
+      </button>
+      <button onclick="EmailSettings.saveAll()"
+        class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
+        <i class="fas fa-save text-[10px]"></i>
+        <span class="hidden sm:inline text-[11px] font-semibold">บันทึก</span>
+      </button>
     </div>
   </div>
 

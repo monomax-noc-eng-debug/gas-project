@@ -9,7 +9,15 @@
       return {
          // ✅ Called automatically by Router when page-history is shown
          onShow: function () {
-            this.loadHistory();
+            console.log('📄 HistoryManager: onShow');
+            try {
+               this.loadHistory();
+            } catch (e) {
+               console.error('❌ HistoryManager: onShow error', e);
+               if (typeof UIManager !== 'undefined') {
+                  UIManager.showToast('เกิดข้อผิดพลาดในการโหลดประวัติ: ' + e.message, 'error');
+               }
+            }
          },
 
          loadHistory: function (force) {

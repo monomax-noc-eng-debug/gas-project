@@ -1,7 +1,12 @@
 const ReportController = {
   processShiftReport: function (formData) {
     try {
-      const dbId = (typeof CONFIG !== 'undefined') ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty('CORE_SHEET_ID');
+      const dbId = (typeof CONFIG !== 'undefined' && CONFIG.DB_ID)
+        ? CONFIG.DB_ID
+        : PropertiesService.getScriptProperties().getProperty('CORE_SHEET_ID');
+
+      if (!dbId) throw new Error("❌ ไม่พบ CONFIG.DB_ID หรือ CORE_SHEET_ID ในระบบ");
+
       const ss = SpreadsheetApp.openById(dbId);
       let sheet = ss.getSheetByName("DB_Reports");
 
@@ -34,7 +39,7 @@ const ReportController = {
         chatBody += `> 🔵 ปิดได้วันนี้: ${(Number(ts.resolved) || 0) + (Number(ts.closed) || 0)}\n`;
         chatBody += `> 🔴 งานค้าง: ${ts.backlog || ts.open || 0}\n\n`;
 
-        chatBody += `2. สถานะระบบออกสื่อ\n`;
+        chatBody += `2. สถานะช่อง\n`;
         chatBody += `> Start Mono: ${formData.statusStartMono || '-'}\n`;
         chatBody += `> Stop Mono: ${formData.statusStopMono || '-'}\n`;
         chatBody += `> Start AIS: ${formData.statusStartAis || '-'}\n`;
@@ -53,11 +58,7 @@ const ReportController = {
         return JSON.stringify({ success: true, isPreview: true, chatPreview: chatBody });
       }
 
-      // 2. Generate PDF (Updated: Pass pdfImages)
-      // 🔥 ส่ง base64 images ไปให้ PDF Generator
-      const pdfUrl = ReportGenerator.generateShiftReportPDF(formData, imgData.pdfImages);
-
-      // 3. Save to Sheet
+      // 2. Save to Sheet FIRST (To ensure data is recorded even if PDF fails)
       const imgString = imgData.urls.join(",\n");
       const rowData = [
         new Date(),
@@ -73,15 +74,27 @@ const ReportController = {
         formData.matchSummary,
         formData.matchTotal || 0,
         formData.transferReport,
-        formData.statusStopMono,
-        formData.statusStopAis,
-        formData.statusStartMono,
+        formData.statusStopMono, // Status Mono
+        formData.statusStopAis,  // Status AIS
+        formData.statusStartMono, // Status Start
         imgString,
-        pdfUrl, // Link PDF ใหม่
+        "", // Placeholder for PDF Report Link
         formData.chatTarget
       ];
 
       sheet.appendRow(rowData);
+      const lastRow = sheet.getLastRow();
+
+      // 3. Generate PDF (Safely)
+      let pdfUrl = "";
+      try {
+        pdfUrl = ReportGenerator.generateShiftReportPDF(formData, imgData.pdfImages);
+        if (pdfUrl) {
+          sheet.getRange(lastRow, 18).setValue(pdfUrl); // Update PDF column
+        }
+      } catch (err) {
+        console.error("PDF Generation Error (Non-blocking):", err);
+      }
 
       // 4. Send Chat (Webhook)
       if (formData.chatTarget && typeof CONFIG !== 'undefined' && CONFIG.WEBHOOKS && CONFIG.WEBHOOKS[formData.chatTarget]) {
@@ -139,18 +152,18 @@ const ReportController = {
         return keys.find(k => headerMap && headerMap.hasOwnProperty(k.toLowerCase()));
       };
 
-      const colDate = findCol(["date"]);
-      const colTime = findCol(["time", "kickoff"]);
-      const colHome = findCol(["home"]);
-      const colAway = findCol(["away"]);
+      const colDate = findCol(["date", "วันที่"]);
+      const colTime = findCol(["time", "kickoff", "เวลา"]);
+      const colHome = findCol(["home", "team 1", "เจ้าบ้าน"]);
+      const colAway = findCol(["away", "team 2", "ทีมเยือน"]);
       // New 4-column structure
       const colStartMono = findCol(["start mono"]);
       const colStopMono = findCol(["stop mono"]);
       const colStartAis = findCol(["start ais"]);
       const colStopAis = findCol(["stop ais"]);
       // Legacy fallback
-      const colStart = findCol(["start image", "start", "image in"]);
-      const colStop = findCol(["stop image", "stop", "image out"]);
+      const colStart = findCol(["start image", "start", "image in", "start mon"]);
+      const colStop = findCol(["stop image", "stop", "image out", "stop mon"]);
 
       const extractImages = (cellValue, labelPrefix) => {
         if (!cellValue) return [];

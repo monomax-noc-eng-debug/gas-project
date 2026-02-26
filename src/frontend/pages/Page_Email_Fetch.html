@@ -6,14 +6,15 @@
       <i class="fas fa-inbox text-[10px]"></i>
     </div>
     <div class="hidden sm:block">
-      <h2 class="text-xs font-bold text-slate-800">Sync Emails</h2>
+      <h2 class="text-xs font-bold text-slate-800">ซิงค์อีเมล</h2>
     </div>
 
     <div class="flex items-center gap-2 ml-auto">
       <button onclick="EmailFetchManager.scanEmails()"
-        class="btn btn-xs btn-ghost text-slate-600 hover:bg-slate-100 gap-1.5 px-2 transition-colors">
-        <i class="fas fa-sync-alt text-[9px]"></i>
-        <span class="text-[10px] font-semibold hidden md:inline">สแกนหาอีเมล</span>
+        class="btn btn-xs btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-400 gap-1.5 px-3">
+        <span class="loading loading-spinner loading-xs text-slate-500"></span>
+        <i class="fas fa-sync-alt text-[10px]"></i>
+        <span class="hidden sm:inline text-[11px] font-semibold">โหลดใหม่</span>
       </button>
 
       <button id="btn-import-emails" onclick="EmailFetchManager.importEmails()" disabled
