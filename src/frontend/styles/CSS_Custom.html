@@ -140,58 +140,6 @@
     z-index: 1100 !important;
   }
 
-  /* SIDEBAR COLLAPSE SYSTEM */
-  #main-app.sidebar-collapsed aside {
-    width: 80px !important;
-  }
-
-  #main-app.sidebar-collapsed .drawer-side {
-    width: 80px !important;
-  }
-
-  /* Hide text when collapsed */
-  #main-app.sidebar-collapsed aside span,
-  #main-app.sidebar-collapsed aside h1,
-  #main-app.sidebar-collapsed aside p,
-  #main-app.sidebar-collapsed aside .divider::after,
-  #main-app.sidebar-collapsed aside .divider::before {
-    display: none !important;
-  }
-
-  /* Center icons when collapsed */
-  #main-app.sidebar-collapsed aside li a {
-    justify-content: center !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  #main-app.sidebar-collapsed aside li a i {
-    margin-right: 0 !important;
-    font-size: 1.25rem !important;
-  }
-
-  /* Adjust Logo Section when collapsed */
-  #main-app.sidebar-collapsed aside .flex.items-center.gap-3.px-6.py-5 {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    justify-content: center !important;
-  }
-
-  /* Hide details summary text when collapsed */
-  #main-app.sidebar-collapsed aside summary span {
-    display: none !important;
-  }
-
-  /* Adjust sub-menus when collapsed (they might need to be hidden or shown as tooltips) */
-  #main-app.sidebar-collapsed aside details ul {
-    display: none !important;
-  }
-
-  /* Transition for smooth collapse */
-  aside, .drawer-side {
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  }
-
   /* 3. Ensure Sidebar content is visible and has background */
   .drawer-side > aside, 
   .drawer-side > .menu {

@@ -2,22 +2,15 @@
   class="flex flex-col w-64 h-full min-h-full bg-white text-base-content border-r border-base-200 shadow-md transition-all duration-300">
 
   <!-- Logo Section -->
-  <div class="flex items-center justify-between px-6 py-5 border-b border-base-200 shrink-0">
-    <div class="flex items-center gap-3 overflow-hidden">
-      <div
-        class="w-10 h-10 rounded-[10px] bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white shadow-[0_4px_10px_rgba(99,102,241,0.4)] shrink-0">
-        <i class="fas fa-bolt text-xl"></i>
-      </div>
-      <div class="overflow-hidden">
-        <h1 class="font-bold text-lg tracking-tight text-gray-800 truncate leading-tight">NOC Management</h1>
-        <p class="text-[9px] font-black text-indigo-600 uppercase tracking-widest truncate mt-0.5">V2.0 ENTERPRISE</p>
-      </div>
+  <div class="flex items-center gap-3 px-6 py-5 border-b border-base-200 shrink-0">
+    <div
+      class="w-10 h-10 rounded-[10px] bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white shadow-[0_4px_10px_rgba(99,102,241,0.4)] shrink-0">
+      <i class="fas fa-bolt text-xl"></i>
     </div>
-    <!-- Toggle Button (Visible on Desktop) -->
-    <button onclick="toggleSidebar()" 
-      class="hidden lg:flex btn btn-xs btn-ghost btn-square text-gray-400 hover:text-indigo-600">
-      <i class="fas fa-bars-staggered" id="sidebar-toggle-icon"></i>
-    </button>
+    <div class="overflow-hidden">
+      <h1 class="font-bold text-lg tracking-tight text-gray-800 truncate leading-tight">NOC Management</h1>
+      <p class="text-[9px] font-black text-indigo-600 uppercase tracking-widest truncate mt-0.5">V2.0 ENTERPRISE</p>
+    </div>
   </div>
 
   <!-- Navigation Menu -->
@@ -127,50 +120,13 @@
           </ul>
         </details>
       </li>
-
     </ul>
   </div>
 </aside>
 
 <script>
-  /**
-   * จัดการสถานะ Sidebar ย่อ/ขยาย
-   */
-  function toggleSidebar() {
-    const mainApp = document.getElementById("main-app");
-    const isCollapsed = mainApp.classList.toggle("sidebar-collapsed");
-    
-    // บันทึกสถานะลง LocalStorage
-    localStorage.setItem("sidebarCollapsed", isCollapsed);
-    
-    // อัปเดตไอคอน
-    updateSidebarIcon(isCollapsed);
-  }
-
-  function updateSidebarIcon(isCollapsed) {
-    const icon = document.getElementById("sidebar-toggle-icon");
-    if (!icon) return;
-    
-    if (isCollapsed) {
-      icon.classList.replace("fa-bars-staggered", "fa-chevron-right");
-    } else {
-      icon.classList.replace("fa-chevron-right", "fa-bars-staggered");
-    }
-  }
-
   function closeDrawerOnMobile() {
     const drawer = document.getElementById("my-drawer");
     if (drawer && window.innerWidth < 1024) drawer.checked = false;
   }
-
-  // โหลดสถานะเริ่มต้นเมื่อหน้าเว็บพร้อม
-  document.addEventListener("DOMContentLoaded", function() {
-    const mainApp = document.getElementById("main-app");
-    const savedState = localStorage.getItem("sidebarCollapsed") === "true";
-    
-    if (savedState) {
-      mainApp.classList.add("sidebar-collapsed");
-      updateSidebarIcon(true);
-    }
-  });
 </script>
