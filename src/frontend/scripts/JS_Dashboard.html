@@ -1104,8 +1104,31 @@
             '<div class="text-center text-xs text-base-content/40 py-6">ไม่พบรายการแข่งขัน</div>';
           return;
         }
+
+        // ✨ NEW: กรองข้อมูลที่ซ้ำกับที่มีอยู่แล้วใน _allWorkData ของวันที่เลือก
+        var curDateStr = getEl("import-date-picker").value || toInputDate(_currentDate);
+        var existingKeys = new Set();
+        _allWorkData
+          .filter(item => item.date === curDateStr)
+          .forEach(item => {
+            // สร้าง key สำหรับระบุความซ้ำ (Home vs Away)
+            var key = (item.home || "").trim().toLowerCase() + "|" + (item.away || "").trim().toLowerCase();
+            existingKeys.add(key);
+          });
+
         var html = "";
-        events.forEach(function (evt) {
+        var filteredEvents = events.filter(function(evt) {
+          var key = (evt.home || "").trim().toLowerCase() + "|" + (evt.away || "").trim().toLowerCase();
+          return !existingKeys.has(key);
+        });
+
+        if (filteredEvents.length === 0) {
+          list.innerHTML =
+            '<div class="text-center text-xs text-success/60 py-6 px-4 bg-success/5 rounded-xl border border-dashed border-success/20"><i class="fas fa-check-circle mb-1 text-lg block"></i>นำเข้าข้อมูลทั้งหมดที่มีแล้ว</div>';
+          return;
+        }
+
+        filteredEvents.forEach(function (evt) {
           var evtJson = encodeURIComponent(JSON.stringify(evt));
           var timeBadgeClass = evt.isPreviousDay
             ? "badge-error text-white border-none"

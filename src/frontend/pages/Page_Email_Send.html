@@ -1,291 +1,286 @@
 <div id="page-email-send"
   class="page-section hidden w-full h-full font-sans text-slate-600 bg-slate-50 flex flex-col p-4 gap-4 overflow-hidden">
-  <!-- HEADER (Compact Style) -->
-  <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200 shrink-0">
-    <div class="bg-purple-500/10 w-7 h-7 rounded-md flex items-center justify-center text-purple-600 shrink-0">
-      <i class="fas fa-paper-plane text-[10px]"></i>
+
+  <div class="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200 shrink-0">
+    <div class="bg-purple-500/10 w-8 h-8 rounded-lg flex items-center justify-center text-purple-600 shrink-0">
+      <i class="fas fa-paper-plane text-sm"></i>
     </div>
-    <div class="hidden sm:block">
-      <h2 class="text-xs font-bold text-slate-800">ส่งอีเมล</h2>
+    <div>
+      <h2 class="text-sm font-bold text-slate-800">ส่งอีเมลแจ้งเตือน</h2>
     </div>
 
     <div class="flex items-center gap-2 ml-auto">
-      <button onclick="EmailSendManager.resetForm()" class="btn btn-xs btn-ghost text-error gap-1 px-3">
-        <i class="fas fa-undo text-[10px]"></i> รีเซ็ต
-      </button>
-      <button onclick="EmailSendManager.createDraft()"
-        class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
-        <i class="fas fa-plus text-[10px]"></i>
-        <span class="hidden sm:inline text-[11px] font-semibold">สร้างรายการ</span>
+      <button onclick="EmailSendManager.resetForm()" class="btn btn-sm btn-ghost text-error gap-1">
+        <i class="fas fa-undo"></i> ล้างข้อมูล
       </button>
 
       <button onclick="EmailSendManager.saveAndDraft()" id="btn-create-email-draft"
-        class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md transition-shadow">
-        <i class="fas fa-location-arrow text-[9px]"></i>
-        <span class="text-[10px] font-semibold hidden md:inline">สร้าง Draft</span>
+        class="btn btn-sm btn-primary text-white shadow-sm gap-1.5 px-4 hover:shadow-md transition-shadow">
+        <i class="fas fa-location-arrow"></i>
+        <span class="font-semibold hidden sm:inline">สร้าง Draft ใน Gmail</span>
       </button>
     </div>
   </div>
 
   <div class="flex-1 overflow-hidden w-full flex flex-col lg:flex-row gap-4">
-    <div class="w-full lg:w-5/12 p-1 flex flex-col overflow-y-auto custom-scrollbar space-y-4">
 
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-        <h4 class="text-xs font-bold text-slate-400 mb-4 uppercase flex items-center gap-2">
-          <i class="fas fa-magic text-primary"></i> ข้อมูลผู้รับและเครื่องมือช่วยเติม (Templates & Recipients)
-        </h4>
+    <div class="w-full lg:w-5/12 p-1 flex flex-col overflow-y-auto custom-scrollbar space-y-4 pb-10">
 
-        <div class="grid grid-cols-1 gap-3 mb-4">
-          <div class="form-control">
-            <label class="label py-0 text-[10px] font-bold text-slate-500">โหลดผู้รับ (Profile)</label>
-            <select id="es-sel-profile" onchange="EmailSendManager.applyEmailProfile(this.value)"
-              class="select select-bordered select-sm w-full bg-slate-50"></select>
+      <div class="card bg-base-100 shadow-sm border border-base-200">
+        <div class="card-body p-4 md:p-5">
+          <h3 class="card-title text-sm text-primary mb-2 border-b border-base-200 pb-2">
+            <i class="fas fa-envelope"></i> 1. ข้อมูลอีเมลหลัก
+          </h3>
+
+          <div class="grid grid-cols-1 gap-3">
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-xs font-bold text-slate-500">โหลดผู้รับ (Profile)</span></label>
+              <select id="es-sel-profile" onchange="EmailSendManager.applyEmailProfile(this.value)" class="select select-bordered select-sm w-full bg-primary/5 text-primary"></select>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="form-control">
+                <label class="label py-0"><span class="label-text text-xs font-bold text-slate-600">ถึงใคร (To)</span></label>
+                <input type="text" id="es-to" class="input input-sm input-bordered w-full font-mono text-xs">
+              </div>
+              <div class="form-control">
+                <label class="label py-0"><span class="label-text text-xs font-bold text-slate-600">สำเนา (Cc)</span></label>
+                <input type="text" id="es-cc" class="input input-sm input-bordered w-full font-mono text-xs">
+              </div>
+            </div>
+
+            <div class="divider my-0"></div>
+
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold text-slate-500">โหลดคำพูด (Draft Template)</span></label>
+              <div class="flex gap-2">
+                <select id="es-sel-draft" onchange="EmailSendManager.applyDraft(this.value)" class="select select-bordered select-sm w-full flex-1 bg-slate-50"></select>
+                <button type="button" onclick="EmailSendManager.saveCurrentDraft()" class="btn btn-sm btn-square btn-outline tooltip" data-tip="บันทึกเป็น Template"><i class="fas fa-save"></i></button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mt-1">
+              <div class="form-control">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="label-text text-[10px] font-bold text-slate-600 flex items-center gap-2">
+                    คำขึ้นต้น (Greeting) 
+                    <button type="button" onclick="EmailSendManager.toggleBold('es-greeting')" class="btn btn-xs btn-circle btn-ghost" id="btn-bold-es-greeting"><i class="fas fa-bold"></i></button>
+                  </span>
+                  <input type="checkbox" id="es-chk-greeting" class="toggle toggle-primary toggle-xs" checked onchange="EmailSendManager.updatePreview()">
+                </div>
+                <input type="text" id="es-greeting" class="input input-sm input-bordered w-full text-xs font-bold" data-bold="true">
+              </div>
+
+              <div class="form-control">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="label-text text-[10px] font-bold text-slate-600 flex items-center gap-2">
+                    หมายเหตุ (Note) 
+                    <button type="button" onclick="EmailSendManager.toggleBold('es-note')" class="btn btn-xs btn-circle btn-ghost" id="btn-bold-es-note"><i class="fas fa-bold"></i></button>
+                  </span>
+                  <input type="checkbox" id="es-chk-note" class="toggle toggle-primary toggle-xs" checked onchange="EmailSendManager.updatePreview()">
+                </div>
+                <input type="text" id="es-note" class="input input-sm input-bordered w-full text-xs font-bold" data-bold="true">
+              </div>
+            </div>
           </div>
+        </div>
+      </div>
+
+      <div class="card bg-base-100 shadow-sm border border-base-200">
+        <div class="card-body p-4 md:p-5">
+          <h3 class="card-title text-sm text-secondary mb-2 border-b border-base-200 pb-2">
+            <i class="fas fa-building"></i> 2. ข้อมูลหน้างาน
+          </h3>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div class="form-control col-span-2">
+              <label class="label py-0"><span class="label-text text-xs font-bold text-slate-500">โหลดข้อมูลบริษัท (Site)</span></label>
+              <select id="es-sel-site" onchange="EmailSendManager.applySiteProfile(this.value)" class="select select-bordered select-sm w-full bg-secondary/10 text-secondary"></select>
+            </div>
+
+            <div class="form-control col-span-2 mt-1">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">Company Name</span></label>
+              <input type="text" id="es-company" class="input input-sm input-bordered text-xs">
+            </div>
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">Contact Name</span></label>
+              <select id="es-contact-name" class="select select-sm select-bordered text-xs"><option value="">เลือก...</option></select>
+            </div>
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">Contact Number</span></label>
+              <input type="text" id="es-contact-num" class="input input-sm input-bordered text-xs">
+            </div>
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">Site Contact Name</span></label>
+              <select id="es-site-name" class="select select-sm select-bordered text-xs"><option value="">เลือก...</option></select>
+            </div>
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">Site Contact Number</span></label>
+              <input type="text" id="es-site-num" class="input input-sm input-bordered text-xs">
+            </div>
+            <div class="form-control col-span-2">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">Site Email</span></label>
+              <input type="text" id="es-site-email" class="input input-sm input-bordered text-xs">
+            </div>
+            <div class="form-control col-span-2">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">Site Address</span></label>
+              <input type="text" id="es-site-addr" class="input input-sm input-bordered text-xs">
+            </div>
+
+            <div class="divider col-span-2 my-0"></div>
+
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold text-secondary">ผลกระทบ (Impact)</span></label>
+              <input type="text" id="es-impact" class="input input-sm input-bordered text-xs border-secondary/30">
+            </div>
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold text-secondary">กำหนดการ (Schedule)</span></label>
+              <input type="date" id="es-schedule" class="input input-sm input-bordered text-xs border-secondary/30">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card bg-base-100 shadow-sm border border-base-200">
+        <div class="card-body p-4 md:p-5">
+          <div
+            class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3 border-b border-base-200 pb-2">
+            <h3 class="card-title text-sm text-info m-0">
+              <i class="fas fa-exclamation-triangle"></i> 3. รายละเอียดปัญหา
+            </h3>
+            <button type="button" onclick="EmailSendManager.openAutoTicketModal()" class="btn btn-xs btn-info text-white shadow-sm w-full sm:w-auto">
+              <i class="fas fa-download"></i> ดึงจากตั๋ว (Ticket)
+            </button>
+          </div>
+
           <div class="grid grid-cols-2 gap-3">
             <div class="form-control">
-              <label class="label py-0 text-[10px] font-bold text-slate-500">โหลดรายชื่อบริษัท (Site)</label>
-              <select id="es-sel-site" onchange="EmailSendManager.applySiteProfile(this.value)"
-                class="select select-bordered select-sm w-full bg-slate-50"></select>
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">Ticket ID (SVR)</span></label>
+              <input type="text" id="es-ticket-id" class="input input-sm input-bordered font-mono text-xs text-info font-bold bg-info/5">
             </div>
             <div class="form-control">
-              <label class="label py-0 text-[10px] font-bold text-slate-500">โหลดเนื้อหา (Draft)</label>
-              <div class="flex gap-1">
-                <select id="es-sel-draft" onchange="EmailSendManager.applyDraft(this.value)"
-                  class="select select-bordered select-sm w-full flex-1 bg-slate-50"></select>
-                <button type="button" onclick="EmailSendManager.saveCurrentDraft()"
-                  class="btn btn-sm btn-square btn-outline tooltip" data-tip="บันทึก Draft"><i
-                    class="fas fa-save"></i></button>
-              </div>
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">วันที่ (Date)</span></label>
+              <input type="date" id="es-ticket-date" class="input input-sm input-bordered text-xs">
+            </div>
+            <div class="form-control col-span-2">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">หัวข้อ (Subject)</span></label>
+              <input type="text" id="es-ticket-subject" class="input input-sm input-bordered text-xs">
+            </div>
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">ประเภท</span></label>
+              <select id="es-ticket-type" class="select select-sm select-bordered text-[10px]"><option value=""></option></select>
+            </div>
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">ความรุนแรง</span></label>
+              <select id="es-ticket-severity" class="select select-sm select-bordered text-[10px]"></select>
+            </div>
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">สถานะ</span></label>
+              <select id="es-ticket-status" class="select select-sm select-bordered text-[10px]"></select>
+            </div>
+            <div class="form-control">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">หมวดหมู่</span></label>
+              <select id="es-ticket-category" class="select select-sm select-bordered text-[10px]" onchange="EmailSendManager.handleCategory()"></select>
+            </div>
+            <div class="form-control col-span-2">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold">หมวดหมู่ย่อย</span></label>
+              <select id="es-ticket-subcat" class="select select-sm select-bordered text-[10px]"><option value="">-</option></select>
+            </div>
+
+            <div class="divider col-span-2 my-0"></div>
+
+            <div class="form-control col-span-2">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold text-info">รายละเอียดปัญหา (Details)</span></label>
+              <textarea id="es-ticket-detail" class="textarea textarea-sm textarea-bordered h-16 text-xs resize-y"></textarea>
+            </div>
+            <div class="form-control col-span-2">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold text-info">สาเหตุ (Root Cause)</span></label>
+              <textarea id="es-root-cause" class="textarea textarea-sm textarea-bordered h-12 text-xs resize-y"></textarea>
+            </div>
+            <div class="form-control col-span-2">
+              <label class="label py-0"><span class="label-text text-[10px] font-bold text-info">สิ่งที่ทำไป (Action Taken)</span></label>
+              <textarea id="es-action" class="textarea textarea-sm textarea-bordered h-12 text-xs resize-y"></textarea>
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="divider my-2"></div>
-
-        <div class="grid grid-cols-1 gap-3">
+      <div class="card bg-base-100 shadow-sm border border-base-200">
+        <div class="card-body p-4 md:p-5">
           <div class="form-control">
-            <label class="label py-0 text-[10px] font-bold text-slate-600">ถึงใคร (To)</label>
-            <input type="text" id="es-to" class="input input-sm input-bordered w-full font-mono text-xs">
-          </div>
-          <div class="form-control">
-            <label class="label py-0 text-[10px] font-bold text-slate-600">สำเนา (Cc)</label>
-            <input type="text" id="es-cc" class="input input-sm input-bordered w-full font-mono text-xs">
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 flex flex-col gap-3">
-        <div class="form-control">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-xs font-bold text-indigo-800 flex items-center gap-2">
-              คำขึ้นต้น (Greeting)
-              <button type="button" onclick="EmailSendManager.toggleBold('es-greeting')"
-                class="btn btn-xs btn-square btn-ghost border-indigo-400 bg-indigo-100 text-indigo-800 hover:text-indigo-700"
-                id="btn-bold-es-greeting"><i class="fas fa-bold"></i></button>
-            </span>
-            <input type="checkbox" id="es-chk-greeting" class="toggle toggle-primary toggle-xs" checked
-              onchange="EmailSendManager.updatePreview()">
-          </div>
-          <input type="text" id="es-greeting" class="input input-sm input-bordered w-full text-xs font-bold"
-            data-bold="true">
-        </div>
-        <div class="form-control">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-xs font-bold text-indigo-800 flex items-center gap-2">
-              หมายเหตุเพิ่มเติม (Note)
-              <button type="button" onclick="EmailSendManager.toggleBold('es-note')"
-                class="btn btn-xs btn-square btn-ghost border-indigo-400 bg-indigo-100 text-indigo-800 hover:text-indigo-700"
-                id="btn-bold-es-note"><i class="fas fa-bold"></i></button>
-            </span>
-            <input type="checkbox" id="es-chk-note" class="toggle toggle-primary toggle-xs" checked
-              onchange="EmailSendManager.updatePreview()">
-          </div>
-          <input type="text" id="es-note" class="input input-sm input-bordered w-full text-xs font-bold"
-            data-bold="true">
-        </div>
-      </div>
-
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200">
-        <details class="group p-5">
-          <summary class="cursor-pointer flex items-center justify-between select-none">
-            <span class="text-xs font-bold text-slate-700 uppercase flex items-center gap-2">
-              <i class="fas fa-list-alt text-primary"></i> ข้อมูลกรอกฟอร์ม (Form Data)
-            </span>
-            <i
-              class="fas fa-chevron-down text-[10px] text-slate-400 group-open:rotate-180 transition-transform duration-200"></i>
-          </summary>
-          <div class="pt-4 space-y-4">
-
-            <div class="bg-blue-50/60 p-3 rounded-lg border border-blue-100 space-y-3">
-              <p class="text-[10px] font-bold text-blue-600 uppercase flex items-center gap-1.5">
-                <i class="fas fa-building text-[9px]"></i> 1. ข้อมูลผู้ติดต่อ / บริษัท (Site Info)
-              </p>
-              <div class="grid grid-cols-2 gap-3">
-                <div class="form-control col-span-2">
-                  <label class="label py-0 text-[10px] font-bold text-blue-700">Company Name</label>
-                  <input type="text" id="es-company" class="input input-sm input-bordered text-xs bg-white">
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold text-blue-700">Contact Name</label>
-                  <select id="es-contact-name" class="select select-sm select-bordered text-xs bg-white">
-                    <option value="">เลือกผู้ติดต่อ...</option>
-                  </select>
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold text-blue-700">Contact Number</label>
-                  <input type="text" id="es-contact-num" class="input input-sm input-bordered text-xs bg-white">
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold text-blue-700">Site Contact Name</label>
-                  <select id="es-site-name" class="select select-sm select-bordered text-xs bg-white">
-                    <option value="">เลือกผู้ติดต่อหน้างาน...</option>
-                  </select>
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold text-blue-700">Site Contact Number</label>
-                  <input type="text" id="es-site-num" class="input input-sm input-bordered text-xs bg-white">
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold text-blue-700">Site Email</label>
-                  <input type="text" id="es-site-email" class="input input-sm input-bordered text-xs bg-white">
-                </div>
-                <div class="form-control col-span-2">
-                  <label class="label py-0 text-[10px] font-bold text-blue-700">Site Address</label>
-                  <input type="text" id="es-site-addr" class="input input-sm input-bordered text-xs bg-white">
-                </div>
-              </div>
+            <div class="flex justify-between items-center mb-1">
+              <span class="label-text text-[10px] font-bold flex items-center gap-2">
+                  คำลงท้าย (Signature) 
+                  <button type="button" onclick="EmailSendManager.toggleBold('es-signature')" class="btn btn-xs btn-circle btn-ghost" id="btn-bold-es-signature"><i class="fas fa-bold"></i></button>
+                </span>
+              <input type="checkbox" id="es-chk-signature" class="toggle toggle-primary toggle-xs" checked onchange="EmailSendManager.updatePreview()">
             </div>
-
-            <div class="bg-gray-50/60 p-3 rounded-lg border border-gray-200 mt-2 space-y-3">
-              <p class="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5">
-                <i class="fas fa-file-alt text-[9px]"></i> 2. รายละเอียดการส่งอีเมล (Detail Information)
-              </p>
-
-              <div class="grid grid-cols-2 gap-3 mb-3 pb-3 border-b border-gray-200/60">
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold">Ticket ID (SVR)</label>
-                  <input type="text" id="es-ticket-id"
-                    class="input input-sm input-bordered font-mono text-xs text-primary font-bold">
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold">วันที่ (Date)</label>
-                  <input type="date" id="es-ticket-date" class="input input-sm input-bordered text-xs">
-                </div>
-                <div class="form-control col-span-2">
-                  <label class="label py-0 text-[10px] font-bold">หัวข้อ (Subject)</label>
-                  <input type="text" id="es-ticket-subject" class="input input-sm input-bordered text-xs">
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold">ประเภท</label>
-                  <select id="es-ticket-type" class="select select-sm select-bordered text-[10px]">
-                    <option value="">เลือก... (ประเภท)</option>
-                  </select>
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold">ความรุนแรง</label>
-                  <select id="es-ticket-severity" class="select select-sm select-bordered text-[10px]"></select>
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold">สถานะ</label>
-                  <select id="es-ticket-status" class="select select-sm select-bordered text-[10px]"></select>
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold">หมวดหมู่</label>
-                  <select id="es-ticket-category" class="select select-sm select-bordered text-[10px]"
-                    onchange="EmailSendManager.handleCategory()">
-                    <option value="">เลือก...</option>
-                  </select>
-                </div>
-                <div class="form-control col-span-2">
-                  <label class="label py-0 text-[10px] font-bold">หมวดหมู่ย่อย</label>
-                  <select id="es-ticket-subcat" class="select select-sm select-bordered text-[10px]">
-                    <option value="">-</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div class="form-control col-span-1 md:col-span-2">
-                  <label class="label py-0 text-[10px] font-bold">รายละเอียด (Problem Details)</label>
-                  <textarea id="es-ticket-detail"
-                    class="textarea textarea-sm textarea-bordered h-16 text-xs resize-y"></textarea>
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold">สาเหตุ (Root Cause)</label>
-                  <textarea id="es-root-cause"
-                    class="textarea textarea-sm textarea-bordered h-12 text-xs resize-y"></textarea>
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold">สิ่งที่ทำไป (Action Taken)</label>
-                  <textarea id="es-action"
-                    class="textarea textarea-sm textarea-bordered h-12 text-xs resize-y"></textarea>
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold">ผลกระทบ (Client Business Impact)</label>
-                  <input type="text" id="es-impact" class="input input-sm input-bordered text-xs">
-                </div>
-                <div class="form-control">
-                  <label class="label py-0 text-[10px] font-bold">กำหนดการ (Schedule Onsite)</label>
-                  <input type="date" id="es-schedule" class="input input-sm input-bordered text-xs">
-                </div>
-              </div>
-            </div>
-
+            <textarea id="es-signature" data-bold="true" class="textarea textarea-bordered textarea-sm w-full h-12 text-xs font-bold resize-y">MONO MAX Sport NOC</textarea>
           </div>
-        </details>
-      </div>
-
-      <div class="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 flex flex-col gap-3">
-        <div class="form-control">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-xs font-bold text-indigo-800 flex items-center gap-2">
-              คำลงท้าย (Signature)
-              <button type="button" onclick="EmailSendManager.toggleBold('es-signature')"
-                class="btn btn-xs btn-square btn-ghost border-indigo-400 bg-indigo-100 text-indigo-800 hover:text-indigo-700"
-                id="btn-bold-es-signature"><i class="fas fa-bold"></i></button>
-            </span>
-            <input type="checkbox" id="es-chk-signature" class="toggle toggle-primary toggle-xs" checked
-              onchange="EmailSendManager.updatePreview()">
-          </div>
-          <textarea id="es-signature" data-bold="true"
-            class="textarea textarea-bordered textarea-sm w-full h-16 text-xs font-bold resize-y">MONO MAX Sport NOC</textarea>
         </div>
       </div>
+
       <div id="es-auto-subject" class="hidden"></div>
-
     </div>
 
     <div
-      class="w-full lg:w-7/12 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col h-full overflow-hidden">
+      class="w-full lg:w-7/12 bg-white rounded-xl shadow-sm border border-slate-200 p-4 lg:p-6 flex flex-col h-full overflow-hidden">
+
       <div class="flex justify-between items-center pb-3 border-b border-slate-100 mb-4 shrink-0">
-        <span class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><i
-            class="fas fa-eye text-primary"></i> ตัวอย่างอีเมล (Preview Html)</span>
+        <span class="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+          <i class="fas fa-eye text-primary"></i> ตัวอย่างอีเมล (Preview HTML)
+        </span>
         <button onclick="EmailSendManager.updatePreview()" class="btn btn-xs btn-outline btn-primary">Refresh</button>
       </div>
 
       <div class="flex-1 bg-slate-50/50 rounded-xl border border-slate-100 p-4 lg:p-6 overflow-y-auto custom-scrollbar">
         <div class="space-y-2 pb-4 mb-4 border-b border-slate-200">
-          <div class="flex gap-2 text-sm"><span class="font-bold text-slate-400 w-16">Subject:</span> <span
-              id="es-preview-subject" class="font-bold text-slate-800 break-words">-</span></div>
-          <div class="flex gap-2 text-sm"><span class="font-bold text-slate-400 w-16">To:</span> <span
-              id="es-preview-to" class="font-mono text-slate-600 break-words">-</span></div>
+          <div class="flex gap-2 text-sm"><span class="font-bold text-slate-400 w-16 shrink-0">Subject:</span>
+            <span id="es-preview-subject" class="font-bold text-slate-800 break-words">-</span></div>
+          <div class="flex gap-2 text-sm"><span class="font-bold text-slate-400 w-16 shrink-0">To:</span>
+            <span id="es-preview-to" class="font-mono text-slate-600 break-words">-</span></div>
         </div>
+
         <div id="es-preview-body"
-          class="prose prose-sm max-w-none text-slate-700 bg-white p-6 shadow-sm border border-slate-200 min-h-[400px]">
+          class="prose prose-sm max-w-none text-slate-700 bg-white p-4 sm:p-6 shadow-sm border border-slate-200 min-h-[400px]">
         </div>
       </div>
+
     </div>
   </div>
 </div>
 
 <dialog id="modal-es-save-draft" class="modal">
   <div class="modal-box">
-    <h3 class="font-bold text-lg">บันทึกหน้าต่างรูปแบบ (Draft Template)</h3>
-    <input type="text" id="inp-es-draft-name" class="input input-bordered w-full mt-4"
-      placeholder="ตั้งชื่อ Template ใหม่...">
-    <div class="modal-action">
+    <h3 class="font-bold text-lg mb-4 text-slate-800"><i class="fas fa-save text-primary mr-2"></i> บันทึกหน้าต่างรูปแบบ
+      (Draft Template)</h3>
+    <div class="form-control">
+      <label class="label"><span class="label-text font-bold">ชื่อ Template</span></label>
+      <input type="text" id="inp-es-draft-name" class="input input-bordered w-full" placeholder="พิมพ์ชื่อที่จำง่าย...">
+    </div>
+    <div class="modal-action mt-6">
       <form method="dialog"><button class="btn btn-ghost">ยกเลิก</button></form>
-      <button onclick="EmailSendManager.confirmSaveDraft()" class="btn btn-primary">บันทึกข้อมูล</button>
+      <button onclick="EmailSendManager.confirmSaveDraft()" class="btn btn-primary text-white">บันทึกข้อมูล</button>
     </div>
   </div>
+  <form method="dialog" class="modal-backdrop bg-slate-900/40"><button>close</button></form>
+</dialog>
+
+<dialog id="modal-es-select-ticket" class="modal">
+  <div class="modal-box p-0 rounded-xl max-w-lg overflow-hidden shadow-2xl">
+    <div class="bg-primary px-5 py-3 flex justify-between items-center text-white">
+      <h3 class="font-bold text-sm flex items-center gap-2"><i class="fas fa-ticket-alt"></i> เลือกตั๋ว (Ticket)
+        เพื่อส่งข้อมูลขอ SVR</h3>
+      <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost text-white hover:bg-white/20">✕</button>
+      </form>
+    </div>
+    <div class="p-4 bg-slate-50">
+      <div class="relative mb-3">
+        <input type="text" id="es-search-ticket" onkeyup="EmailSendManager.filterTicketList()" placeholder="ค้นหาหัวข้อ หรือ รหัสตั๋ว..." class="input input-sm input-bordered w-full pl-8 focus:border-primary">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+      </div>
+      <div id="es-ticket-list-container" class="flex flex-col gap-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop bg-slate-900/40"><button>close</button></form>
 </dialog>

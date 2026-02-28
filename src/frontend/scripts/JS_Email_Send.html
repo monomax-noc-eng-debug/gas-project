@@ -21,6 +21,19 @@
 
     let _currentConfig = null;
     let _initialized = false;
+    let _autoGenTickets = []; // เก็บข้อมูลตั๋วชั่วคราวสำหรับ Modal
+
+    /** Helper: ตั้งค่ากำหนดการ (Schedule) เป็นวันปัจจุบันอัตโนมัติ */
+    function _setTodayToSchedule() {
+      const el = getEl('es-schedule');
+      if (el) {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        el.value = `${y}-${m}-${day}`;
+      }
+    }
 
     /** Helper: populate a <select> element with an array of strings */
     function _populateSelect(id, list, placeholder) {
@@ -91,7 +104,7 @@
           });
         }
 
-        // 5. Severity, Status, Type — use local _populateSelect helper
+        // 5. Severity, Status, Type
         if (config.severities && config.severities.length > 0) {
           _populateSelect('es-ticket-severity', config.severities, 'เลือก... (ความรุนแรง)');
         }
@@ -102,7 +115,7 @@
           _populateSelect('es-ticket-type', config.types, 'เลือก... (ประเภท)');
         }
 
-        // 6. Staff (Constructing options with EngName if available)
+        // 6. Staff
         const staffUsers = config.staffUsers || [];
         const staffList = staffUsers.length > 0
           ? staffUsers.filter(u => u.role === 'Responsibility' || String(u.role).toLowerCase().includes('leader'))
@@ -115,7 +128,6 @@
         if (getEl('es-contact-name')) getEl('es-contact-name').innerHTML = staffOpts;
         if (getEl('es-site-name')) getEl('es-site-name').innerHTML = staffOpts;
 
-        // ✅ Trigger preview after all data loaded
         EmailSendManager.updatePreview();
 
       }).catch(err => {
@@ -149,8 +161,6 @@
       }
 
       const sevDisplay = SEVERITY_MAP[sev.toLowerCase()] || sev || '-';
-
-      // การแก้ไขที่ 2: ใช้ Default Fallback ให้สวยงามหากช่องกรอกว่างเปล่า
       const safeType = type || '-';
       const safeCat = cat || '-';
       const safeSub = sub || '-';
@@ -169,13 +179,15 @@
           EmailSendManager.setupListeners();
           _initialized = true;
         }
-        // Render preview immediately with current values (even though empty)
+        
+        // ✨ โหลดค่าเริ่มต้น (วันที่) เมื่อเปิดหน้า
+        _setTodayToSchedule();
         EmailSendManager.updatePreview();
       },
 
+      // ✨ เพิ่มฟังก์ชันนี้เข้าไป! จะทำงานอัตโนมัติทุกครั้งที่กดเมนูเปิดหน้านี้
       onShow: function () {
-        console.log('📄 EmailSendManager: onShow');
-        // Refresh dropdowns or preview if needed
+        _setTodayToSchedule();
         EmailSendManager.updatePreview();
       },
 
@@ -192,6 +204,9 @@
       resetForm: () => {
         document.querySelectorAll('#page-email-send input[type="text"], #page-email-send textarea, #page-email-send input[type="date"]').forEach(el => el.value = '');
         document.querySelectorAll('#page-email-send select').forEach(el => el.selectedIndex = 0);
+        
+        // ✨ เซ็ตค่ากำหนดการกลับมาเป็นวันนี้ด้วย
+        _setTodayToSchedule();
         EmailSendManager.updatePreview();
       },
 
@@ -234,11 +249,9 @@
         const row = (label, val) => `<tr><td style="${st.th}">${label}</td><td style="${st.td}">${val || '-'}</td></tr>`;
         const sevDisp = SEVERITY_MAP[(getVal('es-ticket-severity') || '').toLowerCase()] || getVal('es-ticket-severity') || '-';
 
-        // Site email
         const siteMail = getVal('es-site-email');
         const siteMailHtml = siteMail ? `<a href="mailto:${siteMail}" style="${st.link}">${siteMail}</a>` : '-';
 
-        // Schedule date – display in full English format
         const scheduleVal = getVal('es-schedule');
         const scheduleDisplay = scheduleVal ? _formatDateFull(scheduleVal) : '-';
 
@@ -254,9 +267,8 @@
         const noteHtml = showNote ? `<p style="margin-bottom: 15px;">${isBoldText('es-note') ? `<b>${noVal}</b>` : noVal}</p>` : '';
 
         const sigVal = (getVal('es-signature') || '').replace(/\n/g, '<br>');
-        const sigHtml = showSignature ? `<div style="${st.footer}"><p>Best Regards,<br>${isBoldText('es-signature') ? `<b>${sigVal}</b>` : sigVal}</p></div>` : '';
-
-        // Contact Name/Site Name dropdown values are already English names (or Thai fallback)
+        // ✨ คำลงท้ายไม่มีคำว่า Best Regards, ตามที่ออกแบบไว้
+        const sigHtml = showSignature ? `<div style="${st.footer}"><p>${isBoldText('es-signature') ? `<b>${sigVal}</b>` : sigVal}</p></div>` : '';
 
         const html = `
              <div style="${st.container}">
@@ -325,8 +337,6 @@
         const setV = (id, v) => { if (getEl(id)) getEl(id).value = v || ''; }
 
         setV('es-greeting', d.greeting);
-
-        // การแก้ไขที่ 1: เพิ่มการโหลดข้อมูล Site กลับมาจาก Draft (ถ้ามี)
         setV('es-company', d.company);
         setV('es-contact-name', d.contactName);
         setV('es-contact-num', d.contactNum);
@@ -445,6 +455,145 @@
             UIManager.hideLoading();
             UIManager.showToast('Cannot connect to server', 'error');
           })
+      },
+
+      // ============================================================
+      // ✨ ฟีเจอร์: ดึงข้อมูลจาก Ticket (Auto Gen) มาลงฟอร์มอีเมล
+      // ============================================================
+      
+      openAutoTicketModal: () => {
+        UIManager.showLoading("กำลังโหลดรายการ Ticket...");
+        
+        Server.call({ func: "getTickets", silent: true }).then(res => {
+          UIManager.hideLoading();
+          
+          if (res.success && Array.isArray(res.data)) {
+            // กรองเอาเฉพาะ Ticket ที่ไม่มีคำว่า SVR
+            EmailSendManager._autoGenTickets = res.data.filter(t => {
+              const id = String(t.ticketNumber || "").toUpperCase();
+              return !id.includes("SVR");
+            });
+
+            EmailSendManager.renderTicketList(EmailSendManager._autoGenTickets);
+            
+            const modal = getEl("modal-es-select-ticket");
+            if (modal) {
+              modal.showModal();
+            } else {
+              console.error("❌ ไม่พบ HTML: ID 'modal-es-select-ticket' หายไป");
+              UIManager.showToast("ไม่พบหน้าต่าง Modal", "error");
+            }
+          } else {
+            UIManager.showToast("โหลดข้อมูลล้มเหลว", "error");
+          }
+        }).catch(err => {
+          UIManager.hideLoading();
+          console.error("🚨 Error in openAutoTicketModal:", err);
+          UIManager.showToast("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้", "error");
+        });
+      },
+
+      renderTicketList: (tickets) => {
+        const container = getEl("es-ticket-list-container");
+        if (!container) return;
+
+        if (tickets.length === 0) {
+          container.innerHTML = `<div class="text-center text-slate-400 text-xs py-8">ไม่พบ Ticket ที่เป็น Auto Gen</div>`;
+          return;
+        }
+
+        container.innerHTML = tickets.map(t => {
+          const safeSubj = t.subject ? String(t.subject).replace(/'/g, "\\'") : "ไม่มีหัวข้อ";
+          
+          let displayDate = t.date || '';
+          try {
+            if (t.date) {
+              const d = new Date(t.date);
+              if (!isNaN(d.getTime())) {
+                const day = String(d.getDate()).padStart(2, '0');
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const year = d.getFullYear();
+                displayDate = `${day}/${month}/${year}`;
+              } else if (typeof t.date === 'string' && t.date.includes('-')) {
+                const p = t.date.split('-');
+                if (p.length === 3 && p[0].length === 4) displayDate = `${p[2]}/${p[1]}/${p[0]}`;
+              }
+            }
+          } catch(e) {}
+
+          return `
+            <button type="button" onclick="EmailSendManager.selectTicket('${t.ticketNumber}')" 
+              class="flex flex-col text-left bg-white p-3 rounded-lg border border-slate-200 hover:border-primary hover:bg-blue-50 transition-all group shrink-0">
+              <div class="flex justify-between w-full items-center">
+                <span class="font-bold text-primary text-xs"><i class="fas fa-hashtag mr-1 opacity-50"></i>${t.ticketNumber}</span>
+                <span class="text-[9px] text-slate-400 bg-slate-100 px-1.5 rounded">${displayDate}</span>
+              </div>
+              <span class="text-xs text-slate-600 group-hover:text-slate-800 truncate w-full mt-1">${t.subject || '-'}</span>
+            </button>
+          `;
+        }).join("");
+      },
+
+      filterTicketList: () => {
+        const term = getEl("es-search-ticket").value.toLowerCase();
+        const filtered = EmailSendManager._autoGenTickets.filter(t => {
+          const id = String(t.ticketNumber || "").toLowerCase();
+          const subj = String(t.subject || "").toLowerCase();
+          return id.includes(term) || subj.includes(term);
+        });
+        EmailSendManager.renderTicketList(filtered);
+      },
+
+      selectTicket: (ticketId) => {
+        const t = EmailSendManager._autoGenTickets.find(x => x.ticketNumber === ticketId);
+        if (!t) return;
+
+        const setV = (id, val) => { if (getEl(id)) getEl(id).value = val || ""; };
+
+        // 1. หยอดข้อมูลทั่วไป
+        setV('es-ticket-id', t.ticketNumber);
+        setV('es-ticket-subject', t.subject);
+        setV('es-ticket-type', t.type);
+        setV('es-ticket-severity', t.severity);
+        setV('es-ticket-status', t.status);
+        setV('es-ticket-category', t.category);
+        setV('es-ticket-detail', t.detail);
+        setV('es-action', t.action);
+        setV('es-root-cause', t.resolvedDetail);
+        
+        // ✨ จัดการแปลงฟอร์แมตวันที่ให้อ่านออกและลงฟอร์มได้
+        if (t.date) {
+           try {
+              const d = new Date(t.date);
+              if (!isNaN(d.getTime())) {
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, '0');
+                  const day = String(d.getDate()).padStart(2, '0');
+                  setV('es-ticket-date', `${y}-${m}-${day}`);
+              } else {
+                  let dParts = t.date.split(/[-/]/);
+                  if (dParts.length === 3) {
+                     let year = dParts[0].length === 4 ? dParts[0] : (dParts[2].length === 4 ? dParts[2] : '20'+dParts[2]);
+                     let month = dParts[1].padStart(2, '0');
+                     let day = dParts[0].length === 4 ? dParts[2].padStart(2, '0') : dParts[0].padStart(2, '0');
+                     setV('es-ticket-date', `${year}-${month}-${day}`);
+                  }
+              }
+           } catch(e) {
+               console.warn("Date parse error:", e);
+           }
+        }
+
+        // 2. อัปเดต Sub-category ให้ตรงกับ Category ที่เลือก
+        EmailSendManager.handleCategory();
+        setTimeout(() => {
+          setV('es-ticket-subcat', t.subCategory);
+          EmailSendManager.updatePreview(); // อัปเดตพรีวิวอีเมล
+        }, 100);
+
+        // 3. ปิด Modal
+        getEl("modal-es-select-ticket").close();
+        UIManager.showToast(`ดึงข้อมูล ${t.ticketNumber} สำเร็จ`, "success");
       }
     };
   })();

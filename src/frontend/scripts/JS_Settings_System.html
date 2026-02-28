@@ -1,12 +1,18 @@
 <script>
   window.SysSettings = (() => {
     let _full = {}; // full settings from apiGetAllSettings
-    let _config = { types: [], statuses: [], severities: [], categories: {} };
+    let _config = { types: [], statuses: [], severities: [], categories: {}, routines: [] };
     let _tab = 'statuses';
     let _loaded = false;
     const el = id => document.getElementById(id);
 
     function _activeTabStyle() {
+      const isRoutine = _tab === 'routines';
+      const btnAdd = el('sys-btn-add');
+      const btnSave = el('sys-btn-save');
+      if (btnAdd) btnAdd.classList.remove('hidden'); // Always show add button
+      if (btnSave) btnSave.classList.toggle('hidden', isRoutine);
+
       document.querySelectorAll('.sys-tab-btn').forEach(b => {
         b.classList.remove('btn-primary', 'text-white');
         b.classList.add('bg-white', 'text-gray-500');
@@ -34,9 +40,30 @@
       el('sys-cnt-types').innerText = (_config.types || []).length;
       el('sys-cnt-severities').innerText = (_config.severities || []).length;
       el('sys-cnt-categories').innerText = Object.keys(_config.categories || {}).length;
+      el('sys-cnt-routines').innerText = (_config.routines || []).length;
 
       let rows = [];
-      if (_isSimple()) {
+      if (_tab === 'routines') {
+        const items = _config.routines || [];
+        rows = items.map((p, i) => {
+          return `<tr class="hover:bg-base-50 group">
+          <td class="text-center text-xs text-gray-400 font-mono">${i + 1}</td>
+          <td class="text-sm font-medium text-gray-700">
+            <div class="flex items-center gap-2 pl-2">
+              <div>
+                <div>${p.name}</div>
+                <div class="text-[9px] text-gray-400 font-normal">หัวข้อ: ${p.data.subject || '-'} | หมวด: ${p.data.category || '-'}</div>
+              </div>
+            </div>
+          </td>
+          <td class="text-center">
+            <div class="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onclick="SysSettings.openRoutineModal(${i})" class="btn btn-ghost btn-xs btn-square text-blue-400"><i class="fas fa-pencil-alt text-[10px]"></i></button>
+              <button onclick="SysSettings.removeRoutine('${p.name}', ${i})" class="btn btn-ghost btn-xs btn-square text-red-400"><i class="fas fa-trash text-[10px]"></i></button>
+            </div>
+          </td></tr>`;
+        });
+      } else if (_isSimple()) {
         const items = _config[_tab] || [];
         rows = items.map((v, i) => `<tr class="hover:bg-base-50 group">
         <td class="text-center text-xs text-gray-400 font-mono">${i + 1}</td>
@@ -84,7 +111,7 @@
           Router.register("page-settings-system", this);
         }
       },
-      onShow() { 
+      onShow() {
         console.log('📄 SysSettings: onShow');
         try {
           if (!_loaded) this.loadData();
@@ -113,10 +140,20 @@
               _config.statuses = r.data.statuses || [];
               _config.severities = r.data.severities || [];
               _config.categories = r.data.categories || {};
+              _config.staff = r.data.staff || [];
+              _config.assignees = r.data.assignees || [];
               _loaded = true;
-              this.switchTab(_tab);
-              if (force) UIManager.showToast("โหลดสำเร็จ", "success");
+
+              // Load Routine Profiles as well
+              return Server.call({ func: "getRoutineProfiles", silent: true });
             }
+          })
+          .then(r => {
+            if (r && r.success) {
+              _config.routines = r.data || [];
+            }
+            this.switchTab(_tab);
+            if (force) UIManager.showToast("โหลดสำเร็จ", "success");
           })
           .catch(() => UIManager.showToast("Load Error", "error"))
           .finally(() => {
@@ -129,6 +166,7 @@
       switchTab(t) { _tab = t; _activeTabStyle(); _renderTable(); },
 
       openAddModal() {
+        if (_tab === 'routines') return this.openRoutineModal(-1);
         el('sys-edit-index').value = '-1';
         el('sys-input-1').value = '';
         el('sys-input-2').value = '';
@@ -136,6 +174,139 @@
         el('sys-label-1').innerText = _isSimple() ? 'ชื่อ' : 'หมวดหมู่หลัก (Category)';
         el('sys-field-2-wrap').classList.toggle('hidden', _isSimple());
         el('modal-sys-item').showModal();
+      },
+
+      openRoutineModal(i) {
+        const isEdit = i >= 0;
+        const p = isEdit ? _config.routines[i] : { name: '', data: {} };
+        const d = p.data || {};
+
+        el('routine-edit-index').value = i;
+        el('routine-modal-title').innerText = isEdit ? 'แก้ไข Profile Routine' : 'เพิ่ม Profile Routine';
+
+        // Fill fields
+        el('inp-routine-name').value = p.name || '';
+        el('inp-routine-subject').value = d.subject || '';
+        el('sel-routine-type').value = d.type || '';
+        el('sel-routine-status').value = d.status || 'Open';
+        el('sel-routine-severity').value = d.severity || '';
+        el('txt-routine-detail').value = d.detail || '';
+        el('txt-routine-action').value = d.action || '';
+        el('sel-routine-resp').value = d.responsibility || '';
+        el('inp-routine-assignee').value = d.assignee || '';
+
+        // Populate selects first
+        this._populateRoutineSelects();
+
+        // Then set values again after population
+        el('sel-routine-type').value = d.type || '';
+        el('sel-routine-status').value = d.status || 'Open';
+        el('sel-routine-severity').value = d.severity || '';
+        el('sel-routine-category').value = d.category || '';
+        this.onRoutineCategoryChange(d.subCategory);
+        el('sel-routine-resp').value = d.responsibility || '';
+        this.updateRoutineAutoSubject();
+
+        el('modal-routine-edit').showModal();
+      },
+
+      updateRoutineAutoSubject() {
+        const getV = id => (el(id) || {}).value || '';
+        const type = getV('sel-routine-type');
+        const sev = getV('sel-routine-severity');
+        const cat = getV('sel-routine-category');
+        const sub = getV('sel-routine-subcategory');
+        let subj = getV('inp-routine-subject');
+
+        const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const now = new Date();
+        const dateDisplay = `${now.getDate()}-${MONTH_NAMES[now.getMonth()]}-${String(now.getFullYear()).slice(2)}`;
+
+        const SEVERITY_MAP = { 'low': 'P4 - Low', 'medium': 'P3 - Medium', 'high': 'P2 - High', 'critical': 'P1 - Critical', 'normal': 'P4 - Normal' };
+        const sevDisplay = SEVERITY_MAP[sev.toLowerCase()] || sev;
+
+        const res = `Mono Max | ${type || '-'} | ${sevDisplay || '-'} | ${cat || '-'} | ${sub || '-'} | ${subj || '-'} | ${dateDisplay}`;
+        const autoEl = el('routine-auto-subject');
+        if (autoEl) autoEl.innerText = res;
+      },
+
+      _populateRoutineSelects() {
+        const fill = (id, items, placeholder) => {
+          const s = el(id);
+          if (!s) return;
+          let html = placeholder ? `<option value="">${placeholder}</option>` : '';
+          (items || []).forEach(v => html += `<option value="${v}">${v}</option>`);
+          s.innerHTML = html;
+        };
+
+        fill('sel-routine-type', _config.types);
+        fill('sel-routine-status', _config.statuses);
+        fill('sel-routine-severity', _config.severities);
+        fill('sel-routine-category', Object.keys(_config.categories), '-- เลือกหมวดหมู่ --');
+        fill('sel-routine-resp', _config.staff, '-- เลือกหัวหน้าทีม --');
+
+        // Add listeners for auto-subject
+        ['sel-routine-type', 'sel-routine-status', 'sel-routine-severity', 'sel-routine-category', 'sel-routine-resp'].forEach(id => {
+          const s = el(id);
+          if (s && !s._hasListener) {
+            s.addEventListener('change', () => this.updateRoutineAutoSubject());
+            s._hasListener = true;
+          }
+        });
+      },
+
+      onRoutineCategoryChange(subVal) {
+        const cat = el('sel-routine-category').value;
+        const subSelect = el('sel-routine-subcategory');
+        const subs = _config.categories[cat] || [];
+        let html = '<option value="">-- เลือกหมวดย่อย --</option>';
+        subs.forEach(v => html += `<option value="${v}">${v}</option>`);
+        subSelect.innerHTML = html;
+        if (subVal) subSelect.value = subVal;
+
+        // Listen to subcategory change too
+        if (!subSelect._hasListener) {
+          subSelect.addEventListener('change', () => this.updateRoutineAutoSubject());
+          subSelect._hasListener = true;
+        }
+
+        this.updateRoutineAutoSubject();
+      },
+
+      saveRoutineModal() {
+        const name = el('inp-routine-name').value.trim();
+        if (!name) return UIManager.showToast("กรุณาระบุชื่อ Profile", "warning");
+
+        const data = {
+          subject: el('inp-routine-subject').value.trim(),
+          type: el('sel-routine-type').value,
+          status: el('sel-routine-status').value,
+          severity: el('sel-routine-severity').value,
+          category: el('sel-routine-category').value,
+          subCategory: el('sel-routine-subcategory').value,
+          detail: el('txt-routine-detail').value.trim(),
+          action: el('txt-routine-action').value.trim(),
+          responsibility: el('sel-routine-resp').value,
+          assignee: el('inp-routine-assignee').value.trim()
+        };
+
+        UIManager.showLoading("กำลังบันทึก Routine...");
+        Server.call({ func: "saveRoutineProfile" }, { profileName: name, formData: data })
+          .then(r => {
+            if (r.success) {
+              UIManager.showToast("บันทึก Profile สำเร็จ", "success");
+              el('modal-routine-edit').close();
+              this.loadData(); // Reload to get fresh list
+              // ✨ UPDATE TICKET DROPDOWN AUTOMATICALLY
+              if (window.TicketManager && typeof window.TicketManager.loadRoutineProfiles === 'function') {
+                window.TicketManager.loadRoutineProfiles();
+              }
+            } else {
+              UIManager.showToast(r.message || "Error", "error");
+            }
+          })
+          .catch(e => UIManager.showToast("Connection Error", "error"))
+          .finally(() => UIManager.hideLoading());
       },
 
       openEdit(i) {
@@ -181,6 +352,50 @@
       removeItem(i) { _config[_tab].splice(i, 1); _renderTable(); },
       removeCat(cat) { delete _config.categories[cat]; _renderTable(); },
       removeSubCat(cat, si) { _config.categories[cat].splice(si, 1); if (_config.categories[cat].length === 0) delete _config.categories[cat]; _renderTable(); },
+
+      removeRoutine(name, i) {
+        Swal.fire({
+          title: "ยืนยันการลบ?",
+          text: `ต้องการลบ Profile "${name}" ใช่หรือไม่?`,
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonText: "ลบ",
+          cancelButtonText: "ยกเลิก"
+        }).then(res => {
+          if (res.isConfirmed) {
+            UIManager.showLoading("กำลังลบ...");
+            Server.call({ func: "deleteRoutineProfile" }, { profileName: name })
+              .then(r => {
+                if (r.success) {
+                  _config.routines.splice(i, 1);
+                  _renderTable();
+                  UIManager.showToast("ลบสำเร็จ", "success");
+                } else {
+                  UIManager.showToast(r.message || "ลบไม่สำเร็จ", "error");
+                }
+              })
+              .finally(() => UIManager.hideLoading());
+          }
+        });
+      },
+
+      toggleAutoLoad(name, isEnabled) {
+        UIManager.showLoading("กำลังตั้งค่า...");
+        Server.call({ func: "setAutoLoadRoutineProfile" }, { profileName: name, isEnabled })
+          .then(r => {
+            if (r.success) {
+              _config.routines.forEach(p => {
+                if (isEnabled) p.isAutoLoad = (p.name === name);
+                else if (p.name === name) p.isAutoLoad = false;
+              });
+              _renderTable();
+              UIManager.showToast(isEnabled ? "เปิดใช้งาน Auto Load" : "ยกเลิก Auto Load", "success");
+            } else {
+              UIManager.showToast(r.message || "ตั้งค่าไม่สำเร็จ", "error");
+            }
+          })
+          .finally(() => UIManager.hideLoading());
+      },
 
       saveAll() {
         UIManager.showLoading("กำลังบันทึก...");

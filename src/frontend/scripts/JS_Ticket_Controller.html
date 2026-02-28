@@ -17,6 +17,8 @@
     let _tempEmails = []; // เก็บอีเมลที่ดึงมาพักไว้ก่อนบันทึก
     let _pickers = {}; // Store Flatpickr instances
     let _isLoaded = false; // Cache Flag
+    let _lastCreatedTicketId = null; // ✨ NEW: เก็บ ID ของ Ticket ที่เพิ่งสร้างล่าสุด
+    let _routineProfiles = []; // ✨ NEW: เก็บข้อมูล Routine Profiles
 
     // --- Helpers ---
     const getEl = (id) => document.getElementById(id);
@@ -32,6 +34,40 @@
     };
 
     return {
+      /**
+       * 11. Sorting logic
+       */
+      sortTickets: (data) => {
+        if (!data || !Array.isArray(data)) return [];
+        return [...data].sort((a, b) => {
+          // ✨ NEW: ให้ Ticket ที่เพิ่งสร้างล่าสุดอยู่บนสุดเสมอ
+          if (_lastCreatedTicketId) {
+            if (a.ticketNumber === _lastCreatedTicketId) return -1;
+            if (b.ticketNumber === _lastCreatedTicketId) return 1;
+          }
+
+          // ฟังก์ชันช่วยแปลงวันที่เป็น Timestamp เพื่อการเปรียบเทียบ
+          const getTs = (val) => {
+            if (!val) return 0;
+            const d = new Date(val);
+            return isNaN(d.getTime()) ? 0 : d.getTime();
+          };
+
+          const tsA = getTs(a.createdDate || a.date);
+          const tsB = getTs(b.createdDate || b.date);
+
+          if (tsB !== tsA) return tsB - tsA;
+
+          // ถ้าวันที่เท่ากัน ให้เรียงตาม Ticket ID (เลขมากสุดขึ้นก่อน)
+          const idA = String(a.ticketNumber || "");
+          const idB = String(b.ticketNumber || "");
+          return idB.localeCompare(idA, undefined, { numeric: true });
+        });
+      },
+
+      getIsLoaded: () => _isLoaded,
+      getLastCreatedId: () => _lastCreatedTicketId,
+
       /**
        * 1. Initialization
        */
@@ -53,6 +89,7 @@
         console.log('📄 TicketManager: onShow');
         try {
           TicketManager.loadData(false);
+          TicketManager.loadRoutineProfiles(); // โหลด Profile ทุกครั้งที่เปิดหน้า
         } catch (e) {
           console.error('❌ TicketManager: onShow error', e);
           if (typeof UIManager !== 'undefined') {
@@ -378,8 +415,13 @@
           if (btnSave) btnSave.classList.remove("hidden");
           if (btnDraft) btnDraft.classList.add("hidden");
 
+          // ✨ NEW: ตั้งค่าวันที่ปัจจุบัน (เวลาไทย)
           const now = new Date();
-          getEl("inp-ticket-date").value = now.toISOString().split("T")[0];
+          const tzOffset = 7 * 60 * 60 * 1000; // +7 Hours for Thailand
+          const localNow = new Date(now.getTime() + tzOffset);
+          const dateStr = localNow.toISOString().split("T")[0];
+
+          getEl("inp-ticket-date").value = dateStr;
 
           const hh = String(now.getHours()).padStart(2, "0");
           const mm = String(now.getMinutes()).padStart(2, "0");
@@ -388,6 +430,20 @@
           getEl("inp-ticket-time").value = timeStr;
           getEl("sel-ticket-status").value = "Open";
           TicketManager.handleCategoryChange();
+
+          // ✨ NEW: Auto-Load Routine Profile if exists
+          const autoProfile = _routineProfiles.find(p => p.isAutoLoad);
+          if (autoProfile) {
+            console.log("🪄 Auto-loading routine profile:", autoProfile.name);
+            TicketManager.applyRoutineProfile(_routineProfiles.indexOf(autoProfile), true);
+          }
+
+          // ✨ เพิ่มโค้ดนี้เพื่อซ่อนกล่องแสกนทุกครั้งที่เปิดฟอร์ม
+        const svrContainer = getEl("svr-scan-results");
+        if (svrContainer) {
+          svrContainer.classList.add("hidden");
+          svrContainer.classList.remove("flex");
+        }
 
           const btnEmailTab = getEl("tab-btn-email");
           if (btnEmailTab) btnEmailTab.classList.add("hidden");
@@ -540,6 +596,150 @@
           });
       },
 
+      // ============================================================
+      // ✨ ฟีเจอร์: Scan & Link SVR Manual (อัปเกรดระบบเช็คซ้ำ)
+      // ============================================================
+      scanSvrFromEmail: () => {
+        const container = getEl("svr-scan-results");
+        const listEl = getEl("svr-scan-list");
+        
+        if (!container || !listEl) return;
+        
+        UIManager.showLoading("กำลังค้นหาอีเมลล่าสุด...");
+        
+        TicketService.fetchEmailPreviews().then((res) => {
+          UIManager.hideLoading();
+          
+          if (!res.success || !res.items || res.items.length === 0) {
+             UIManager.showToast("ไม่พบอีเมลใหม่ใน Inbox", "warning");
+             return;
+          }
+          
+          // กรองเอาเฉพาะอีเมลที่มีรหัส SVR
+          const svrItems = res.items.filter(item => item.id);
+          
+          if (svrItems.length === 0) {
+             UIManager.showToast("ไม่พบรหัส SVR ในหัวข้ออีเมล", "warning");
+             return;
+          }
+          
+          // ดึง ID ที่กำลังใส่อยู่ในฟอร์มปัจจุบัน (เผื่อเปิดมาดูเฉยๆ จะได้รู้ว่าอันนี้คือใบนี้)
+          const currentInputId = getEl("inp-ticket-id").value;
+
+          // สร้างรายการให้คลิกเลือก โดยเช็คสถานะซ้ำซ้อน
+          listEl.innerHTML = svrItems.map(item => {
+            const safeSubject = TicketManager.escapeHTML(item.subject).replace(/'/g, "\\'");
+            
+            // 🔍 ลอจิกสำคัญ: ตรวจสอบว่า SVR นี้มีอยู่ใน _tickets (ฐานข้อมูล) หรือยัง
+            const isExists = _tickets.some(t => t.ticketNumber === item.id);
+            const isCurrent = currentInputId === item.id; // เช็คว่าเป็นอันที่กำลังใส่อยู่ในฟอร์มไหม
+
+            if (isCurrent) {
+              // 🔵 สถานะ: อันนี้คือใบที่เราเปิดฟอร์มอยู่
+              return `
+                <div class="flex flex-col text-left bg-indigo-50 p-2.5 rounded-lg border border-indigo-300 shrink-0">
+                  <div class="flex justify-between items-center w-full">
+                    <span class="font-bold text-indigo-700 text-xs"><i class="fas fa-check-circle mr-1"></i> ${item.id}</span>
+                    <span class="badge badge-indigo badge-xs">ฟอร์มนี้</span>
+                  </div>
+                  <span class="text-[10px] sm:text-xs text-indigo-500/80 truncate w-full mt-1">${TicketManager.escapeHTML(item.subject)}</span>
+                </div>
+              `;
+            } else if (isExists) {
+              // 🔴 สถานะ: มีในระบบแล้ว (ตีเป็นสีเทาและกดไม่ได้)
+              return `
+                <div class="flex flex-col text-left bg-gray-50 p-2.5 rounded-lg border border-gray-200 shrink-0 opacity-60">
+                  <div class="flex justify-between items-center w-full">
+                    <span class="font-bold text-gray-500 text-xs"><i class="fas fa-ticket-alt mr-1 opacity-50"></i> ${item.id}</span>
+                    <span class="badge badge-ghost badge-xs text-[9px]">ผูกแล้ว</span>
+                  </div>
+                  <span class="text-[10px] sm:text-xs text-gray-400 truncate w-full mt-1">${TicketManager.escapeHTML(item.subject)}</span>
+                </div>
+              `;
+            } else {
+              // 🟢 สถานะ: ว่าง! (เป็นปุ่มให้กดเลือกได้)
+              return `
+                <button type="button" onclick="TicketManager.selectSvrFromScan('${item.id}', '${safeSubject}')" 
+                  class="flex flex-col text-left bg-white p-2.5 rounded-lg border border-blue-200 hover:border-blue-400 hover:bg-blue-50 hover:shadow-sm transition-all group shrink-0">
+                  <div class="flex justify-between items-center w-full">
+                    <span class="font-bold text-blue-700 text-xs group-hover:text-blue-800">
+                      <i class="fas fa-plus-circle mr-1"></i> ${item.id}
+                    </span>
+                    <span class="badge badge-success badge-xs text-white">ใหม่</span>
+                  </div>
+                  <span class="text-[10px] sm:text-xs text-slate-500 group-hover:text-slate-700 truncate w-full mt-1">${TicketManager.escapeHTML(item.subject)}</span>
+                </button>
+              `;
+            }
+          }).join("");
+          
+          // แสดงกล่อง
+          container.classList.remove("hidden");
+          container.classList.add("flex");
+        }).catch(err => {
+          console.error(err);
+          UIManager.hideLoading();
+          UIManager.showToast("ค้นหาล้มเหลว", "error");
+        });
+      },
+
+      selectSvrFromScan: (svrId, subject) => {
+        if (!svrId) return;
+        
+        const mode = getEl("ticket-modal-title").innerText.includes("สร้าง") ? "CREATE" : "EDIT";
+        const container = getEl("svr-scan-results");
+        
+        if (mode === "CREATE") {
+          // โหมด CREATE: แค่แทนค่าลงไปในฟอร์ม ยังไม่ได้บันทึกลง Database
+          getEl("inp-ticket-id").value = svrId;
+          getEl("ticket-modal-id-display").innerText = svrId;
+          
+          // โบนัส: ถ้าช่อง Subject ว่าง ให้เอาหัวข้ออีเมลมาใส่ให้อัตโนมัติ
+          const subjEl = getEl("inp-ticket-subject");
+          if (subjEl && !subjEl.value) {
+            subjEl.value = subject;
+          }
+          
+          UIManager.showToast(`นำ ${svrId} ใส่ฟอร์มแล้ว (รอคุณกดบันทึก)`, "success");
+          if (container) {
+            container.classList.add("hidden");
+            container.classList.remove("flex");
+          }
+          
+        } else {
+          // โหมด EDIT: มี Ticket อยู่แล้ว ต้องยิง API ผูก ID เข้ากับ Database
+          const currentId = getEl("inp-ticket-id").value;
+          if (currentId === svrId) {
+             UIManager.showToast("ID นี้ผูกกับ Ticket ปัจจุบันอยู่แล้ว", "info");
+             return;
+          }
+          
+          UIManager.showLoading(`กำลังผูก ID เป็น ${svrId}...`);
+          Server.call({ func: "updateTicketIdOnly", retryable: false }, { oldId: currentId, newId: svrId })
+            .then(res => {
+              UIManager.hideLoading();
+              if (res.success) {
+                getEl("inp-ticket-id").value = svrId;
+                getEl("ticket-modal-id-display").innerText = svrId;
+                getEl("ticket-modal-title").innerText = "แก้ไข Ticket: " + svrId;
+                
+                UIManager.showToast("ผูก SVR เข้ากับระบบสำเร็จ!", "success");
+                TicketManager.loadData(true); // โหลดตารางหลักใหม่
+                
+                if (container) {
+                  container.classList.add("hidden");
+                  container.classList.remove("flex");
+                }
+              } else {
+                UIManager.showToast("ไม่สามารถผูก ID ได้: " + res.message, "error");
+              }
+            }).catch(err => {
+              UIManager.hideLoading();
+              UIManager.showToast("เกิดข้อผิดพลาดในการเชื่อมต่อ", "error");
+            });
+        }
+      },
+
       saveTicketOnly: () => {
         const form = getEl("form-ticket");
         if (!form.checkValidity()) {
@@ -567,6 +767,9 @@
           .then((res) => {
             UIManager.hideLoading();
             if (res.success) {
+              if (!isUpdate && res.data && res.data.id) {
+                _lastCreatedTicketId = res.data.id;
+              }
               UIManager.showToast("บันทึกข้อมูลสำเร็จ", "success");
               getEl("drawer-ticket-toggle").checked = false;
               TicketManager.loadData(true);
@@ -608,6 +811,9 @@
           .then((res) => {
             UIManager.hideLoading();
             if (res.success) {
+              if (res.ticketId) {
+                _lastCreatedTicketId = res.ticketId;
+              }
               getEl("drawer-ticket-toggle").checked = false;
               TicketManager.loadData(true);
 
@@ -628,6 +834,126 @@
             }
           })
           .catch((err) => {
+            UIManager.hideLoading();
+            UIManager.showToast("Connection Error", "error");
+          });
+      },
+
+      // ============================================================
+      //  5. ROUTINE PROFILES
+      // ============================================================
+
+      loadRoutineProfiles: (force = false) => {
+        Server.call({ func: "getRoutineProfiles", silent: !force })
+          .then(res => {
+            if (res.success) {
+              _routineProfiles = res.data;
+              TicketManager.renderRoutineList();
+            }
+          });
+      },
+
+      renderRoutineList: () => {
+        const container = getEl("routine-items-container");
+        if (!container) return;
+
+        if (!_routineProfiles || _routineProfiles.length === 0) {
+          container.innerHTML = `<li class="px-3 py-2 text-[10px] text-slate-400 italic text-center">ยังไม่มี Profile</li>`;
+          return;
+        }
+
+        container.innerHTML = _routineProfiles.map((p, idx) => `
+          <li>
+            <button type="button" onclick="TicketManager.applyRoutineProfile(${idx})" class="text-[11px] py-2 flex justify-between items-center group">
+              <div class="flex items-center gap-2">
+                <i class="fas fa-file-alt text-slate-300 group-hover:text-primary"></i>
+                <span class="font-medium text-slate-600 group-hover:text-primary">${p.name}</span>
+              </div>
+              <i class="fas fa-chevron-right text-[8px] opacity-0 group-hover:opacity-100 text-primary transition-all"></i>
+            </button>
+          </li>
+        `).join('');
+      },
+
+      applyRoutineProfile: (idx, isAuto = false) => {
+        const profile = _routineProfiles[idx];
+        if (!profile || !profile.data) return;
+
+        const data = profile.data;
+
+        // Map ข้อมูลลงฟอร์ม
+        const setVal = (id, val) => {
+          const el = getEl(id);
+          if (el) el.value = val || "";
+        };
+
+        setVal("inp-ticket-subject", data.subject);
+        setVal("txt-ticket-detail", data.detail);
+        setVal("sel-ticket-status", data.status);
+        setVal("sel-ticket-type", data.type);
+        setVal("sel-ticket-severity", data.severity);
+        setVal("sel-ticket-category", data.category);
+
+        // โหลด Sub-Category
+        TicketManager.handleCategoryChange();
+        setVal("sel-ticket-subcategory", data.subCategory);
+
+        setVal("sel-ticket-resp", data.responsibility);
+        setVal("txt-ticket-action", data.action);
+        setVal("txt-ticket-resolved-detail", data.resolvedDetail);
+        setVal("txt-ticket-remark", data.remark);
+
+        // จัดการ Assignees
+        if (data.assignee) {
+          _currentAssignees = data.assignee.split(", ").filter(n => n.trim() !== "");
+          TicketView.renderAssigneeTags(_currentAssignees);
+        }
+
+        if (!isAuto) {
+          UIManager.showToast(`โหลด Profile '${profile.name}' แล้ว`, "success");
+        }
+
+        // ✨ ปิด dropdown โดยการเอา Focus ออกจากธาตุที่กำลัง Active
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+
+        const dropdown = getEl("routine-profile-list");
+        if (dropdown) dropdown.blur();
+      },
+
+      openSaveRoutineModal: () => {
+        getEl("inp-routine-profile-name").value = "";
+        getEl("modal-save-routine").showModal();
+      },
+
+      confirmSaveRoutineProfile: () => {
+        const profileName = getEl("inp-routine-profile-name").value.trim();
+        if (!profileName) {
+          UIManager.showToast("กรุณาระบุชื่อ Profile", "warning");
+          return;
+        }
+
+        // รวบรวมข้อมูลจากฟอร์ม
+        const form = getEl("form-ticket");
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        data.assignee = _currentAssignees.join(", ");
+
+        UIManager.showLoading("กำลังบันทึก Profile...");
+
+        Server.call({ func: "saveRoutineProfile" }, { profileName, formData: data })
+          .then(res => {
+            UIManager.hideLoading();
+            if (res.success) {
+              getEl("modal-save-routine").close();
+              UIManager.showToast("บันทึก Profile สำเร็จ", "success");
+              TicketManager.loadRoutineProfiles(); // รีโหลดลิสต์
+            } else {
+              UIManager.showToast("เกิดข้อผิดพลาด: " + res.message, "error");
+            }
+          })
+          .catch(err => {
             UIManager.hideLoading();
             UIManager.showToast("Connection Error", "error");
           });

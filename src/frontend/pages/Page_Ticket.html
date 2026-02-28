@@ -7,7 +7,8 @@
     <div class="drawer-content flex flex-col w-full h-full overflow-hidden">
       <div class="flex flex-col w-full h-full p-4 gap-4 overflow-hidden transition-all">
         <!-- HEADER -->
-        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200 shrink-0">
+        <div
+          class="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200 shrink-0">
           <div class="flex items-center gap-2">
             <div class="bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center text-primary shrink-0">
               <i class="fas fa-ticket-alt text-xs"></i>
@@ -58,8 +59,10 @@
 
         <!-- STATS -->
         <div class="grid grid-cols-3 lg:grid-cols-6 gap-3 shrink-0">
-          <div class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
-            <div class="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
+          <div
+            class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
+            <div
+              class="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
               <i class="fas fa-layer-group text-lg"></i>
             </div>
             <div>
@@ -67,8 +70,10 @@
               <h3 class="text-lg font-extrabold text-slate-700 leading-none" id="stat-total">0</h3>
             </div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
-            <div class="w-10 h-10 rounded-lg bg-error/10 flex items-center justify-center text-error border border-error/10">
+          <div
+            class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
+            <div
+              class="w-10 h-10 rounded-lg bg-error/10 flex items-center justify-center text-error border border-error/10">
               <i class="fas fa-exclamation-circle text-lg"></i>
             </div>
             <div>
@@ -76,8 +81,10 @@
               <h3 class="text-lg font-extrabold text-error leading-none" id="stat-open">0</h3>
             </div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
-            <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center text-warning border border-warning/10">
+          <div
+            class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
+            <div
+              class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center text-warning border border-warning/10">
               <i class="fas fa-clock text-lg"></i>
             </div>
             <div>
@@ -85,8 +92,10 @@
               <h3 class="text-lg font-extrabold text-warning leading-none" id="stat-pending">0</h3>
             </div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
-            <div class="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center text-success border border-success/10">
+          <div
+            class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
+            <div
+              class="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center text-success border border-success/10">
               <i class="fas fa-check-circle text-lg"></i>
             </div>
             <div>
@@ -94,15 +103,19 @@
               <h3 class="text-lg font-extrabold text-success leading-none" id="stat-resolved">0</h3>
             </div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
-            <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-info"><i class="fas fa-fire-alt"></i></div>
+          <div
+            class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
+            <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-info">
+              <i class="fas fa-fire-alt"></i></div>
             <div>
               <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Incident</p>
               <h3 class="text-sm font-bold text-slate-700 leading-none mt-0.5" id="stat-incident">0</h3>
             </div>
           </div>
-          <div class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
-            <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-secondary"><i class="fas fa-clipboard-list"></i></div>
+          <div
+            class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 shadow-sm hover:shadow transition-shadow">
+            <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-secondary">
+              <i class="fas fa-clipboard-list"></i></div>
             <div>
               <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Request</p>
               <h3 class="text-sm font-bold text-slate-700 leading-none mt-0.5" id="stat-request">0</h3>
@@ -111,9 +124,12 @@
         </div>
 
         <!-- TABLE -->
-        <div class="flex-1 bg-white rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 flex flex-col relative overflow-hidden">
-          <div id="ticket-empty" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 hidden pointer-events-none z-0 bg-white">
-            <div class="w-16 h-16 bg-slate-50 flex items-center justify-center rounded-full mb-3 border border-slate-100">
+        <div
+          class="flex-1 bg-white rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 flex flex-col relative overflow-hidden">
+          <div id="ticket-empty"
+            class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 hidden pointer-events-none z-0 bg-white">
+            <div
+              class="w-16 h-16 bg-slate-50 flex items-center justify-center rounded-full mb-3 border border-slate-100">
               <i class="fas fa-inbox text-2xl text-slate-300"></i>
             </div>
             <p class="font-medium text-sm">ไม่พบข้อมูลรายการ Ticket</p>
@@ -140,7 +156,8 @@
               <tbody id="ticket-table-body" class="text-sm"></tbody>
             </table>
           </div>
-          <div class="border-t border-slate-200 bg-white p-2.5 flex items-center justify-between shrink-0 z-20 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.02)]">
+          <div
+            class="border-t border-slate-200 bg-white p-2.5 flex items-center justify-between shrink-0 z-20 shadow-[0_-2px_10px_-3px_rgba(0,0,0,0.02)]">
             <span class="text-xs text-slate-500 font-medium" id="ticket-pagination-info">แสดง 0-0 จาก 0 รายการ</span>
             <div class="join" id="ticket-pagination-controls"></div>
           </div>
@@ -153,15 +170,42 @@
       <label for="drawer-ticket-toggle" class="drawer-overlay"></label>
       <div class="w-full max-w-[800px] min-h-full bg-white flex flex-col shadow-2xl overflow-hidden">
         <!-- Drawer Header -->
-        <div class="flex items-center justify-between px-6 py-5 bg-white border-b border-slate-200 shrink-0">
+        <div class="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 shrink-0">
           <div class="flex items-center gap-4">
-            <div class="bg-primary/10 w-11 h-11 rounded-xl flex items-center justify-center text-primary border border-primary/20">
+            <div
+              class="bg-primary/10 w-11 h-11 rounded-xl flex items-center justify-center text-primary border border-primary/20">
               <i class="fas fa-edit text-lg"></i>
             </div>
             <div>
-              <h3 class="font-extrabold text-xl text-slate-800 tracking-tight leading-tight" id="ticket-modal-title">Ticket Form</h3>
+              <h3 class="font-extrabold text-xl text-slate-800 tracking-tight leading-tight" id="ticket-modal-title">
+                Ticket Form</h3>
             </div>
           </div>
+
+          <!-- Routine Profile UI -->
+          <div class="flex items-center gap-2 ml-auto mr-4">
+            <div class="dropdown dropdown-end">
+              <label tabindex="0" class="btn btn-xs h-8 btn-outline border-slate-300 text-slate-600 gap-2 px-3 rounded-lg">
+                <i class="fas fa-magic text-[10px]"></i>
+                <span class="text-[11px] font-bold">Routine Profiles</span>
+                <i class="fas fa-chevron-down text-[8px] opacity-50"></i>
+              </label>
+              <ul tabindex="0" id="routine-profile-list"
+                class="dropdown-content z-[100] menu p-2 shadow-xl bg-white border border-slate-100 rounded-xl w-64 mt-2">
+                <li class="menu-title text-[10px] uppercase tracking-widest text-slate-400 pb-1 px-3">เลือก Profile</li>
+                <div id="routine-items-container" class="max-h-48 overflow-y-auto custom-scrollbar">
+                  <!-- Items go here -->
+                </div>
+                <div class="divider my-1 opacity-50"></div>
+                <li>
+                  <button type="button" onclick="TicketManager.openSaveRoutineModal()" class="text-primary font-bold text-[11px] hover:bg-primary/5 py-2">
+                    <i class="fas fa-save mr-2"></i> บันทึกฟอร์มปัจจุบัน...
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+
           <button type="button" onclick="document.getElementById('drawer-ticket-toggle').checked = false"
             class="btn btn-sm btn-circle btn-ghost text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
             <i class="fas fa-times text-base"></i>
@@ -170,26 +214,52 @@
 
         <!-- Drawer Body -->
         <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/30">
-          <form id="form-ticket" class="flex flex-col gap-6" onsubmit="event.preventDefault(); TicketManager.saveTicketOnly();">
+          <form id="form-ticket" class="flex flex-col gap-6"
+            onsubmit="event.preventDefault(); TicketManager.saveTicketOnly();">
             <input type="hidden" name="id" id="inp-ticket-id">
-            
+
             <!-- FORM CONTENT (Same as before but cleaned up) -->
             <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h4 class="text-sm font-bold text-slate-700 flex items-center gap-2 mb-4 pb-2 border-b border-slate-100">
                 <i class="fas fa-info-circle text-primary"></i> General Info
               </h4>
-              <div class="flex items-center justify-between bg-indigo-50/50 p-3 rounded-xl border border-indigo-100 mb-4" id="ticket-id-display-container">
-                <div class="flex items-center gap-3">
-                  <div class="bg-indigo-100 p-2 rounded-lg text-indigo-500"><i class="fas fa-fingerprint text-[14px]"></i></div>
-                  <div>
-                    <span class="text-[9px] font-bold text-indigo-400 block uppercase tracking-wider mb-0.5">Ticket ID (SVR)</span>
-                    <span id="ticket-modal-id-display" class="font-bold text-indigo-700 text-sm tracking-wide">AUTO GENERATED</span>
+              <div
+                class="flex items-center justify-between bg-indigo-50/50 p-2 sm:p-3 rounded-lg sm:rounded-xl border border-indigo-100 mb-3 sm:mb-4"
+                id="ticket-id-display-container">
+                <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <div class="bg-indigo-100 p-1.5 sm:p-2 rounded-lg text-indigo-500 shrink-0">
+                    <i class="fas fa-fingerprint text-[12px] sm:text-[14px]"></i>
+                  </div>
+                  <div class="min-w-0">
+                    <span class="text-[8px] sm:text-[9px] font-bold text-indigo-400 block uppercase tracking-wider mb-0.5">Ticket ID (SVR)</span>
+                    <span id="ticket-modal-id-display" class="font-bold text-indigo-700 text-xs sm:text-sm tracking-wide truncate block">AUTO GENERATED</span>
                   </div>
                 </div>
-                <button type="button" onclick="TicketManager.showInlineEditId()" id="btn-edit-ticket-id-title" class="btn btn-sm btn-square btn-ghost text-indigo-400 hover:text-indigo-600 hidden bg-white border border-indigo-100 shadow-sm"><i class="fas fa-pencil-alt text-[11px]"></i></button>
+
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" onclick="TicketManager.scanSvrFromEmail()" id="btn-scan-svr"
+                    class="btn btn-xs sm:btn-sm btn-square btn-ghost text-blue-500 hover:text-blue-700 hover:bg-blue-100 bg-white border border-blue-100 shadow-sm shrink-0 tooltip tooltip-left" data-tip="ดึงเลข SVR จากอีเมล">
+                    <i class="fas fa-glasses text-[10px]"></i>
+                  </button>
+                  <button type="button" onclick="TicketManager.showInlineEditId()" id="btn-edit-ticket-id-title"
+                    class="btn btn-xs sm:btn-sm btn-square btn-ghost text-indigo-400 hover:text-indigo-600 hover:bg-indigo-100 hidden bg-white border border-indigo-100 shadow-sm shrink-0">
+                    <i class="fas fa-pencil-alt text-[10px]"></i>
+                  </button>
+                </div>
               </div>
-              
-              <div id="inline-edit-group" class="hidden items-center justify-between bg-white p-2 rounded-xl border-2 border-primary mb-4 shadow-lg ring-4 ring-primary/10">
+
+              <div id="svr-scan-results"
+                class="hidden flex-col gap-2 mb-3 sm:mb-4 bg-blue-50/40 border border-blue-100 rounded-lg sm:rounded-xl p-3 transition-all">
+                <div class="text-[10px] sm:text-xs font-bold text-blue-800 flex justify-between items-center mb-1">
+                  <span class="flex items-center gap-1.5"><i class="fas fa-envelope-open-text text-blue-500"></i> เลือก SVR จากอีเมลล่าสุด</span>
+                  <button type="button" onclick="document.getElementById('svr-scan-results').classList.add('hidden'); document.getElementById('svr-scan-results').classList.remove('flex');" class="text-blue-400 hover:text-blue-600 p-1"><i class="fas fa-times"></i></button>
+                </div>
+                <div id="svr-scan-list" class="flex flex-col gap-1.5 max-h-48 overflow-y-auto thin-scrollbar">
+                </div>
+              </div>
+
+              <div id="inline-edit-group"
+                class="hidden items-center justify-between bg-white p-2 rounded-xl border-2 border-primary mb-4 shadow-lg ring-4 ring-primary/10">
                 <div class="flex items-center gap-2 flex-1 pl-2">
                   <input type="text" id="inp-inline-ticket-id" class="input input-sm border-none bg-transparent focus:outline-none focus:ring-0 text-sm font-bold text-slate-700 w-full" placeholder="ระบุ SVR ID...">
                 </div>
@@ -202,13 +272,14 @@
               <div class="form-control mb-4">
                 <label class="label pb-1.5 pt-0"><span class="label-text font-bold text-xs text-slate-500 uppercase tracking-wide">Subject <span class="text-red-500">*</span></span></label>
                 <input type="text" name="subject" id="inp-ticket-subject" required class="input input-sm h-9 input-bordered w-full text-sm font-medium bg-slate-50 focus:bg-white" placeholder="ระบุหัวข้อ...">
-                <div class="mt-2 text-[11px] text-slate-400 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100 flex items-center gap-2">
+                <div
+                  class="mt-2 text-[11px] text-slate-400 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100 flex items-center gap-2">
                   <i class="fas fa-robot text-indigo-400"></i>
                   <span>Auto-Subject:</span>
                   <span id="auto-subject-text" class="text-indigo-600 font-bold truncate">...</span>
                 </div>
               </div>
-              
+
               <div class="form-control">
                 <label class="label pb-1.5 pt-0"><span class="label-text font-bold text-xs text-slate-500 uppercase tracking-wide">Detail</span></label>
                 <textarea name="detail" id="txt-ticket-detail" class="textarea textarea-sm textarea-bordered h-28 bg-slate-50 focus:bg-white text-sm" placeholder="อธิบายรายละเอียด..."></textarea>
@@ -271,7 +342,9 @@
                   </select>
                 </label>
                 <input type="hidden" name="assignee" id="inp-ticket-assign">
-                <div id="assignee-tags-container" class="flex flex-wrap gap-1.5 p-2 bg-slate-50/50 border border-slate-200 rounded-lg min-h-[44px] empty:hidden"></div>
+                <div id="assignee-tags-container"
+                  class="flex flex-wrap gap-1.5 p-2 bg-slate-50/50 border border-slate-200 rounded-lg min-h-[44px] empty:hidden">
+                </div>
               </div>
             </div>
 
@@ -347,5 +420,33 @@
         </button>
       </div>
     </div>
+  </dialog>
+
+  <dialog id="modal-save-routine" class="modal backdrop-blur-sm z-[1000]">
+    <div class="modal-box rounded-2xl shadow-2xl p-6 border border-slate-100 max-w-sm">
+      <div class="flex items-center gap-3 mb-4">
+        <div
+          class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary text-lg border border-primary/20">
+          <i class="fas fa-magic"></i>
+        </div>
+        <div>
+          <h3 class="font-extrabold text-lg text-slate-800 tracking-tight leading-tight">บันทึกเป็น Routine</h3>
+          <p class="text-[11px] font-medium text-slate-500 mt-0.5">ตั้งชื่อเพื่อให้จำง่ายและนำมาใช้ซ้ำได้</p>
+        </div>
+      </div>
+      <div class="form-control w-full">
+        <input type="text" id="inp-routine-profile-name"
+          class="input input-bordered w-full h-10 text-sm focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all bg-slate-50"
+          placeholder="เช่น แก้ไขระบบ, ลบข้อมูล...">
+      </div>
+      <div class="modal-action mt-6 gap-2">
+        <form method="dialog"><button class="btn btn-sm h-9 btn-ghost text-slate-500 font-bold px-5">ยกเลิก</button>
+        </form>
+        <button onclick="TicketManager.confirmSaveRoutineProfile()" class="btn btn-sm h-9 btn-primary text-white shadow-md font-bold px-8">
+          <i class="fas fa-save mr-1.5"></i> บันทึก
+        </button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
 </div>

@@ -46,7 +46,7 @@ const HandoverController = (() => {
     const dbId = typeof CONFIG !== "undefined" ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty("CORE_SHEET_ID");
     const ss = SpreadsheetApp.openById(dbId);
     let sheet = ss.getSheetByName(TABLE_NAME);
-    const headers = ["Handover_ID", "Timestamp", "Shift", "Creator", "Tags", "Topic", "Detail", "Contact", "Acknowledged", "Status", "Type"];
+    const headers = ["Handover_ID", "Timestamp", "Shift", "Creator", "Tags", "Topic", "Detail", "Contact", "Acknowledged", "Status", "Type", "Ticket_Summary"];
 
     if (!sheet) {
       sheet = ss.insertSheet(TABLE_NAME);
@@ -111,7 +111,8 @@ const HandoverController = (() => {
             contact: row[7],
             acknowledged: ackObj,
             status: row[9],
-            type: row[10] || ""
+            type: row[10] || "",
+            ticketSummary: row[11] || ""
           };
         }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
@@ -162,7 +163,8 @@ const HandoverController = (() => {
           data.contact || "",
           JSON.stringify({}),
           "Pending",
-          data.type || ""
+          data.type || "",
+          data.ticketSummary || ""
         ];
 
         sheet.appendRow(newRow);
@@ -290,6 +292,7 @@ const HandoverController = (() => {
         sheet.getRange(rowIdx, 7).setValue(data.detail);
         sheet.getRange(rowIdx, 8).setValue(data.contact);
         sheet.getRange(rowIdx, 11).setValue(data.type || "");
+        sheet.getRange(rowIdx, 12).setValue(data.ticketSummary || "");
 
         // Clear Cache
         const dbId = typeof CONFIG !== "undefined" ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty("CORE_SHEET_ID");

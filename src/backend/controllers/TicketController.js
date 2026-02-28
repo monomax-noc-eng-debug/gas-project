@@ -112,6 +112,16 @@ const TicketController = (() => {
           logUpdate: getIdx(["LOG UPDATE"]),
         };
 
+        const tz = typeof CONFIG !== "undefined" ? CONFIG.TIMEZONE : "Asia/Bangkok";
+        const fmtDate = (val) => {
+          if (!val || !(val instanceof Date)) return val;
+          return Utilities.formatDate(val, tz, "yyyy-MM-dd");
+        };
+        const fmtTime = (val) => {
+          if (!val || !(val instanceof Date)) return "";
+          return Utilities.formatDate(val, tz, "HH:mm");
+        };
+
         const cleanData = rawData
           .slice(1)
           .filter((row) => {
@@ -121,7 +131,8 @@ const TicketController = (() => {
           .map((row) => {
             return {
               no: idx.no > -1 ? row[idx.no] : "",
-              date: idx.date > -1 ? row[idx.date] : "",
+              date: idx.date > -1 ? fmtDate(row[idx.date]) : "",
+              time: idx.date > -1 ? fmtTime(row[idx.date]) : "",
               ticketNumber: idx.id > -1 ? String(row[idx.id]).trim() : "",
               type: idx.type > -1 ? row[idx.type] : "",
               status: idx.status > -1 ? row[idx.status] : "",
@@ -135,8 +146,8 @@ const TicketController = (() => {
               responsibility: idx.resp > -1 ? row[idx.resp] : "-",
               assign: idx.assign > -1 ? row[idx.assign] : "-",
               remark: idx.remark > -1 ? row[idx.remark] : "-",
-              createdDate: idx.createdDate > -1 ? row[idx.createdDate] : "",
-              resolvedDate: idx.resolvedDate > -1 ? row[idx.resolvedDate] : "",
+              createdDate: idx.createdDate > -1 ? fmtDate(row[idx.createdDate]) : "",
+              resolvedDate: idx.resolvedDate > -1 ? fmtDate(row[idx.resolvedDate]) : "",
               duration: idx.duration > -1 ? row[idx.duration] : "",
               logUpdate: idx.logUpdate > -1 ? row[idx.logUpdate] : "",
             };
@@ -295,7 +306,7 @@ const TicketController = (() => {
             `SHEET_DATA_${ticketIdConfig}_${tabName}`,
           );
 
-          return Response.success({ message: "Created " + newId });
+          return Response.success({ message: "Created " + newId, id: newId });
         } else {
           return Response.error("System busy, please try again.");
         }

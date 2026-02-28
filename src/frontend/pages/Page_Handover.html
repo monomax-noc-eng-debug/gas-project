@@ -38,8 +38,8 @@
             <!-- Status Filter -->
             <select id="ho_status_filter" onchange="filterHandovers()" class="select select-bordered select-xs h-8 text-[10px] bg-slate-50 border-slate-200 focus:border-primary min-w-[100px]">
               <option value="all">สถานะทั้งหมด</option>
-              <option value="pending">⏳ รอดำเนินการ</option>
-              <option value="succeed">✅ เสร็จสิ้น</option>
+              <option value="pending">รอดำเนินการ</option>
+              <option value="succeed">เสร็จสิ้น</option>
             </select>
 
             <div class="flex items-center gap-1.5 ml-auto">
@@ -166,6 +166,10 @@
               <h3 class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2"><i class="fas fa-align-left"></i> รายละเอียด / ขั้นตอนที่ทำไปแล้ว</h3>
               <div id="ho_detail_timeline" class="space-y-1 text-gray-700 leading-relaxed text-sm bg-white p-5 rounded-2xl border border-slate-100 shadow-sm"></div>
             </div>
+            <div id="ho_detail_ticket_wrap" class="hidden">
+              <h3 class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2"><i class="fas fa-ticket-alt"></i> รายการ Ticket ที่เกี่ยวข้อง</h3>
+              <div id="ho_detail_ticket_summary" class="text-gray-700 leading-relaxed text-sm bg-white p-5 rounded-2xl border border-slate-100 shadow-sm whitespace-pre-wrap"></div>
+            </div>
             <div id="ho_detail_contact_wrap" class="hidden">
               <h3 class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2"><i class="fas fa-address-book"></i> ข้อมูลผู้ติดต่อ</h3>
               <div id="ho_detail_contact_grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm"></div>
@@ -211,6 +215,46 @@
                     <option value="Day">Day Shift</option>
                     <option value="Night">Night Shift</option>
                   </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card bg-white shadow-sm border border-base-300 p-4 rounded-xl gap-3">
+            <div class="form-control w-full">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-bold uppercase text-gray-400 tracking-wider">สรุป Ticket ที่เกี่ยวข้อง</span>
+                </div>
+                <button type="button" id="btn-fetch-tickets" onclick="fetchTicketsForHandover()" class="btn btn-xs btn-ghost text-primary hover:bg-primary/10 h-7 min-h-0 text-[10px] px-2.5 rounded-lg border border-primary/20">
+                  <i class="fas fa-sync-alt mr-1.5"></i> ดึงข้อมูล
+                </button>
+              </div>
+
+              <!-- Ticket Selector (Modern Style) -->
+              <div id="ticket-selector-container" class="hidden mb-4 overflow-hidden border border-slate-200 rounded-xl bg-slate-50/30 transition-all duration-300">
+                <div class="bg-slate-100/50 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
+                  <span class="text-[10px] font-bold text-slate-500"><i class="fas fa-list-check mr-1.5"></i> เลือกรายการที่ต้องการ</span>
+                  <div class="flex gap-2">
+                    <button type="button" onclick="toggleSelectAllTickets(true)" class="text-[9px] text-primary hover:underline font-bold">เลือกทั้งหมด</button>
+                    <span class="text-slate-300">|</span>
+                    <button type="button" onclick="toggleSelectAllTickets(false)" class="text-[9px] text-slate-400 hover:underline font-bold">ยกเลิกทั้งหมด</button>
+                  </div>
+                </div>
+                <div id="ticket-selection-list" class="max-h-[250px] overflow-y-auto custom-scrollbar p-1.5 space-y-1">
+                  <!-- JS content here -->
+                </div>
+                <div class="p-2 bg-white border-t border-slate-100 flex justify-end gap-2">
+                  <button type="button" onclick="document.getElementById('ticket-selector-container').classList.add('hidden')" class="btn btn-xs btn-ghost h-7 min-h-0 text-[10px] px-3 rounded-lg">ยกเลิก</button>
+                  <button type="button" onclick="confirmTicketSelection()" class="btn btn-xs btn-primary h-7 min-h-0 text-[10px] px-4 rounded-lg text-white shadow-sm">เพิ่มรายการที่เลือก</button>
+                </div>
+              </div>
+
+              <div class="relative group">
+                <textarea id="ho_ticket_summary" 
+                  class="textarea textarea-sm textarea-bordered w-full h-32 text-xs bg-slate-50/50 leading-relaxed focus:bg-white transition-all border-slate-200 focus:border-primary rounded-xl pt-3" 
+                  placeholder="รายการ Ticket ที่เกี่ยวข้อง... (สามารถพิมพ์แก้ไขเพิ่มเติมได้)"></textarea>
+                <div class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                   <i class="fas fa-edit text-slate-300 text-[10px]"></i>
                 </div>
               </div>
             </div>

@@ -11,24 +11,30 @@
         // Helper: Universal Date Parser & Formatter (DD/MM/YY)
         const _formatDate = (val) => {
             if (!val) return '-';
+            const strVal = String(val);
 
-            // ลองแปลงเป็น Date Object ตรงๆ (รองรับ ISO และ String มาตรฐาน)
-            const d = new Date(val);
-
-            // ถ้า Date Invalid ให้ลอง parse แบบบ้านๆ
-            if (isNaN(d.getTime())) {
-                // Fallback: ถ้ามาเป็น 2024-02-15 split เอา
-                const parts = val.split(/[- :]/);
-                if (parts.length >= 3) {
-                    const y = parts[0].length === 4 ? parts[0].slice(2) : parts[0];
-                    return `${parts[2]}/${parts[1]}/${y}`;
-                }
-                return val; // จนปัญญา คืนค่าเดิม
+            // ถ้าเป็นรูปแบบ YYYY-MM-DD จาก Server
+            if (strVal.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                const parts = strVal.split('-');
+                return `${parts[2]}/${parts[1]}/${parts[0].slice(2)}`;
             }
 
-            // ถ้า Date Valid ใช้ toLocaleDateString
-            // en-GB จะได้ format DD/MM/YYYY
-            return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+            // ถ้าเป็นรูปแบบ ISO String (เช่น 2026-02-27T02:09:41.913Z)
+            if (strVal.includes('T') && strVal.includes('Z')) {
+                const datePart = strVal.split('T')[0];
+                const parts = datePart.split('-');
+                if (parts.length === 3) {
+                    return `${parts[2]}/${parts[1]}/${parts[0].slice(2)}`;
+                }
+            }
+
+            // ลองแปลงเป็น Date Object
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) {
+                return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+            }
+
+            return val;
         };
 
         // Helper: Badge สถานะ (เพิ่ม complete/success)
@@ -57,11 +63,17 @@
                 }
                 if (empty) empty.classList.add('hidden');
 
+                const lastCreatedId = TicketManager.getLastCreatedId();
+
                 tbody.innerHTML = data.map((row, i) => {
                     const id = row.ticketNumber;
                     const subject = row.subject || '(ไม่มีหัวข้อ)';
                     //const assign = row.assign || '-';
                     const resp = row.responsibility || '-';
+
+                    const isNew = lastCreatedId && id === lastCreatedId && String(row.status || '').toLowerCase().includes('open');
+                    const rowHighlight = isNew ? 'bg-primary/5 border-l-4 border-l-primary' : '';
+                    const newBadge = isNew ? '<span class="badge badge-primary badge-xs text-[8px] h-3.5 px-1.5 shadow-sm ml-1 rounded-sm border-none font-bold">NEW</span>' : '';
 
                     let severityDot = '';
                     const sev = String(row.severity || '').toUpperCase();
@@ -76,8 +88,8 @@
                     }
 
                     return `
-                <tr class="hover group cursor-pointer transition-colors border-b border-slate-100 last:border-none" onclick="TicketManager.openModal('EDIT', '${id}')">
-                    <td class="font-bold text-primary font-mono text-[11px] whitespace-nowrap">
+                <tr class="hover group cursor-pointer transition-colors border-b border-slate-100 last:border-none ${rowHighlight}" onclick="TicketManager.openModal('EDIT', '${id}')">
+                    <td class="font-bold text-primary font-mono text-[11px] whitespace-nowrap align-middle">
                         ${id}
                         ${severityDot}
                     </td>
@@ -88,6 +100,7 @@
                             <span class="bg-slate-100 px-1.5 py-0.5 rounded text-[9px]">${row.category || '-'}</span>
                             <span class="opacity-50">•</span>
                             <span class="truncate max-w-[120px]">${row.subCategory || '-'}</span>
+                            ${newBadge}
                         </div>
                     </td>
                     <td class="text-center align-middle">

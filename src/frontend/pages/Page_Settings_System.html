@@ -16,12 +16,12 @@
         <i class="fas fa-sync-alt text-[10px]"></i>
         <span class="hidden sm:inline text-[11px] font-semibold">โหลดใหม่</span>
       </button>
-      <button onclick="SysSettings.openAddModal()"
+      <button id="sys-btn-add" onclick="SysSettings.openAddModal()"
         class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
         <i class="fas fa-plus text-[10px]"></i>
         <span class="hidden sm:inline text-[11px] font-semibold">เพิ่ม</span>
       </button>
-      <button onclick="SysSettings.saveAll()"
+      <button id="sys-btn-save" onclick="SysSettings.saveAll()"
         class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
         <i class="fas fa-save text-[10px]"></i>
         <span class="hidden sm:inline text-[11px] font-semibold">บันทึก</span>
@@ -47,6 +47,10 @@
       class="sys-tab-btn btn btn-sm bg-white border-base-200 shadow-sm font-semibold text-gray-500 hover:text-primary gap-1.5"><i
         class="fas fa-folder-tree text-warning text-[10px]"></i> Categories <span
         class="badge badge-ghost badge-xs font-mono" id="sys-cnt-categories">0</span></button>
+    <button onclick="SysSettings.switchTab('routines')" data-systab="routines"
+      class="sys-tab-btn btn btn-sm bg-white border-base-200 shadow-sm font-semibold text-gray-500 hover:text-primary gap-1.5"><i
+        class="fas fa-magic text-primary text-[10px]"></i> Routines <span class="badge badge-ghost badge-xs font-mono"
+        id="sys-cnt-routines">0</span></button>
   </div>
 
   <!-- Table Card -->
@@ -58,7 +62,7 @@
             <th class="w-12 text-center">#</th>
             <th id="sys-th-col1">ชื่อ</th>
             <th id="sys-th-col2" class="hidden">หมวดย่อย</th>
-            <th class="w-28 text-center">จัดการ</th>
+            <th class="w-20 text-center">จัดการ</th>
           </tr>
         </thead>
         <tbody id="sys-table-body"></tbody>
@@ -94,6 +98,108 @@
       </div>
     </div>
   </div>
+
+  <!-- Routine Modal -->
+  <dialog id="modal-routine-edit" class="modal">
+    <div class="modal-box max-w-2xl">
+      <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+        <i class="fas fa-magic text-primary"></i>
+        <span id="routine-modal-title">เพิ่ม Profile Routine</span>
+      </h3>
+
+      <input type="hidden" id="routine-edit-index" value="-1">
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Profile Name -->
+        <div class="form-control md:col-span-2">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">ชื่อ Profile (Profile Name) <span
+                class="text-error">*</span></span></label>
+          <input type="text" id="inp-routine-name" class="input input-sm input-bordered w-full font-bold"
+            placeholder="เช่น Routine ประจำวัน, ล่มรายวัน...">
+        </div>
+
+        <div class="divider md:col-span-2 my-0">ข้อมูล Ticket เบื้องต้น</div>
+
+        <!-- Subject -->
+        <div class="form-control md:col-span-2">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">หัวข้อ (Subject)</span></label>
+          <input type="text" id="inp-routine-subject" oninput="SysSettings.updateRoutineAutoSubject()"
+            class="input input-sm input-bordered w-full" placeholder="หัวข้อ Ticket...">
+          <div
+            class="mt-2 text-[10px] text-slate-400 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100 flex items-center gap-2">
+            <i class="fas fa-robot text-indigo-400"></i>
+            <span>Auto-Subject:</span>
+            <span id="routine-auto-subject" class="text-indigo-600 font-bold truncate">...</span>
+          </div>
+        </div>
+
+        <!-- Type & Severity -->
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">ประเภท (Type)</span></label>
+          <select id="sel-routine-type" class="select select-sm select-bordered w-full"></select>
+        </div>
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">ความรุนแรง (Severity)</span></label>
+          <select id="sel-routine-severity" class="select select-sm select-bordered w-full"></select>
+        </div>
+
+        <!-- Status -->
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">สถานะ (Status)</span></label>
+          <select id="sel-routine-status" class="select select-sm select-bordered w-full"></select>
+        </div>
+
+        <!-- Category & SubCategory -->
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">หมวดหมู่หลัก (Category)</span></label>
+          <select id="sel-routine-category" onchange="SysSettings.onRoutineCategoryChange()"
+            class="select select-sm select-bordered w-full"></select>
+        </div>
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">หมวดย่อย (SubCategory)</span></label>
+          <select id="sel-routine-subcategory" class="select select-sm select-bordered w-full"></select>
+        </div>
+
+        <div class="divider md:col-span-2 my-0">รายละเอียดและผู้รับผิดชอบ</div>
+
+        <!-- Detail -->
+        <div class="form-control md:col-span-2">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">รายละเอียด (Detail)</span></label>
+          <textarea id="txt-routine-detail" class="textarea textarea-sm textarea-bordered h-20 w-full"
+            placeholder="รายละเอียดเหตุการณ์..."></textarea>
+        </div>
+
+        <!-- Action -->
+        <div class="form-control md:col-span-2">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">การดำเนินการ (Action)</span></label>
+          <textarea id="txt-routine-action" class="textarea textarea-sm textarea-bordered h-20 w-full"
+            placeholder="ขั้นตอนการแก้ไข..."></textarea>
+        </div>
+
+        <!-- Responsibility & Assignees -->
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">หัวหน้าทีม
+              (Responsibility)</span></label>
+          <select id="sel-routine-resp" class="select select-sm select-bordered w-full"></select>
+        </div>
+        <div class="form-control">
+          <label class="label pb-1"><span class="label-text text-xs font-bold">ผู้ปฏิบัติงาน (Assignees -
+              คั่นด้วยคอมม่า)</span></label>
+          <input type="text" id="inp-routine-assignee" class="input input-sm input-bordered w-full"
+            placeholder="ชื่อ1, ชื่อ2...">
+        </div>
+      </div>
+
+      <div class="modal-action mt-6">
+        <button class="btn btn-sm btn-ghost"
+          onclick="document.getElementById('modal-routine-edit').close()">ยกเลิก</button>
+        <button class="btn btn-sm btn-primary px-6" onclick="SysSettings.saveRoutineModal()">
+          <i class="fas fa-save"></i> บันทึก Profile
+        </button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
 
   <!-- Modal -->
   <dialog id="modal-sys-item" class="modal">

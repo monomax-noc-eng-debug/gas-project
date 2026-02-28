@@ -145,6 +145,12 @@ function apiHandler(request) {
         },
       });
     },
+
+    // Routine Profiles
+    saveRoutineProfile: (d) => RoutineProfileController.saveRoutineProfile(d.profileName, d.formData),
+    getRoutineProfiles: () => RoutineProfileController.getRoutineProfiles(),
+    deleteRoutineProfile: (d) => RoutineProfileController.deleteRoutineProfile(d.profileName),
+    setAutoLoadRoutineProfile: (d) => RoutineProfileController.setAutoLoad(d.profileName, d.isEnabled),
   };
 
   if (apiMap[func]) {

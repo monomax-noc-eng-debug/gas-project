@@ -17,6 +17,9 @@
     var _isDataLoaded = false;
     var _lastFetchedDate = null;
     var _isReportersLoaded = false;
+    
+    // ✨ [เพิ่มตัวแปร] จับเวลาป้องกันการ Paste รูปเบิ้ล
+    var _lastPasteTime = 0;
 
     // --- Helpers ---
     var el = function (id) {
@@ -92,39 +95,31 @@
       _autoStopAisUrls: _autoStopAisUrls,
 
       init: function () {
-        // Register this controller to Router for Lifecycle management
         if (typeof Router !== 'undefined') {
           Router.register('page-report', this);
         }
       },
 
+      // ✨ [แก้ไข] รวบ onShow 2 อันที่ซ้ำกันให้เหลืออันเดียว
       onShow: function () {
         console.log('📄 ReportManager: onShow');
         try {
+          this.onPageShow();
           if (!_isDataLoaded) {
             this.autoFetchAll(true);
             _isDataLoaded = true;
           }
         } catch (e) {
           console.error('❌ ReportManager: onShow error', e);
+          if (typeof UIManager !== 'undefined') {
+            UIManager.showToast('เกิดข้อผิดพลาดในการโหลดหน้ารายงาน: ' + e.message, 'error');
+          }
         }
       },
 
       openDatePicker: function () {
         if (!_picker) this.onPageShow();
         if (_picker) _picker.show();
-      },
-
-      onShow: function () {
-        console.log('📄 ReportManager: onShow');
-        try {
-          this.onPageShow();
-        } catch (e) {
-          console.error('❌ ReportManager: onShow error', e);
-          if (typeof UIManager !== 'undefined') {
-            UIManager.showToast('เกิดข้อผิดพลาดในการโหลดหน้ารายงาน: ' + e.message, 'error');
-          }
-        }
       },
 
       onPageShow: function () {
@@ -151,9 +146,7 @@
                 if (!_isLoading) ReportManager.autoFetchAll();
               },
             });
-            setTimeout(function () {
-              ReportManager.autoFetchAll();
-            }, 300);
+            // เอา setTimeout autoFetchAll ตรงนี้ออก เพราะใน onShow สั่งโหลดอยู่แล้ว (ลดโหลดเบิ้ล)
           }
         }
         this.fetchReporters();
@@ -179,13 +172,9 @@
         var self = this;
         self._setLoading(true);
 
-        // ✨ [เพิ่ม] เคลียร์ตารางเดิมทิ้งก่อน เพื่อให้เห็นความเปลี่ยนแปลงตอนโหลดใหม่
         if (el("verification-tbody")) el("verification-tbody").innerHTML = "";
         if (el("disp-ticket-tbody")) el("disp-ticket-tbody").innerHTML = "";
 
-        // ส่งค่า force (บังคับรีเฟรช) ไปยัง fetchMatches
-        // Note: fetchTickets กับ fetchStartImages มักจะโหลดข้อมูลสดอยู่แล้ว
-        // แต่เราจะส่ง force ไปที่ fetchMatches เพื่อล้าง Cache ฝั่ง Backend
         Promise.all([
           self.fetchTickets(),
           self.fetchMatches(force),
@@ -360,7 +349,7 @@
                       miniTag =
                         '<span class="text-[9px] text-gray-400 font-bold ml-1 tracking-tighter">งานค้าง</span>';
 
-                    return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    return `<tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors h-[48px]">
                                                 <td class="font-mono font-bold text-center text-[10px] text-gray-400 py-2 border-r border-gray-50 truncate max-w-[80px]" title="${t.id}">${t.id}</td>
                                                 <td class="text-center p-1 border-r border-gray-50">
                                                     <div class="flex flex-col items-center justify-center">
@@ -392,7 +381,6 @@
         show("verify-loader", true);
         el("verification-tbody").innerHTML = "";
 
-        // เรียกฟังก์ชันเดิม แต่จะได้ผลลัพธ์ควบ 2 งานมาเลย!
         return Server.call(
           { func: "getVerificationReport", silent: true },
           dateVal,
@@ -434,7 +422,6 @@
                 var html = "";
                 var currentGroup = "";
 
-                // Helper for time within the loop
                 var fmtTime = function (t) {
                   if (!t) return "-";
                   var str = String(t);
@@ -455,7 +442,6 @@
                     html += `<tr class="bg-gray-50/80 border-b border-gray-200"><td colspan="9" class="px-3 py-1.5 font-bold text-[10px] uppercase">${label}</td></tr>`;
                   }
 
-                  // 📊 Calculate Plan Start (-2 hrs)
                   var matchTime = fmtTime(db.time);
                   var planTime = "-";
                   if (matchTime && matchTime !== "-") {
@@ -465,7 +451,6 @@
                     planTime = String(h).padStart(2, "0") + ":" + parts[1];
                   }
 
-                  // NOC OPEN Status logic
                   var isMatched = item.status === "MATCHED";
                   var statusWidget = isMatched
                     ? '<div class="flex justify-center"><i class="fas fa-check-circle text-emerald-500 text-[14px]"></i></div>'
@@ -521,7 +506,6 @@
           show(`auto-${type.replace(/([A-Z])/g, '-$1').toLowerCase()}-images`, false);
         });
 
-        // Clear local variables (keeping the same array references)
         _autoStartMonoUrls.length = 0;
         _autoStopMonoUrls.length = 0;
         _autoStartAisUrls.length = 0;
@@ -544,7 +528,6 @@
               if (images.length > 0) {
                 show(m.container, true);
                 images.forEach((img) => {
-                  // Auto-select if not already in array
                   if (m.urls.indexOf(img.url) === -1) {
                     m.urls.push(img.url);
                   }
@@ -580,7 +563,6 @@
       },
 
       _updateStartStatus: function () {
-        // Mono Start
         var hasStartMono = _autoStartMonoUrls.length > 0 || (_files.startMono && _files.startMono.length > 0);
         var sStartMono = el("statusStartMono");
         if (sStartMono) {
@@ -589,7 +571,6 @@
           ReportManager.toggleStartMonoArea(sStartMono.value);
         }
 
-        // Mono Stop
         var hasStopMono = _autoStopMonoUrls.length > 0 || (_files.stopMono && _files.stopMono.length > 0);
         var sStopMono = el("statusStopMono");
         if (sStopMono) {
@@ -598,7 +579,6 @@
           ReportManager.toggleStopMonoArea(sStopMono.value);
         }
 
-        // AIS Start
         var hasStartAis = _autoStartAisUrls.length > 0 || (_files.startAis && _files.startAis.length > 0);
         var sStartAis = el("statusStartAis");
         if (sStartAis) {
@@ -607,7 +587,6 @@
           ReportManager.toggleStartAisArea(sStartAis.value);
         }
 
-        // AIS Stop
         var hasStopAis = _autoStopAisUrls.length > 0 || (_files.stopAis && _files.stopAis.length > 0);
         var sStopAis = el("statusStopAis");
         if (sStopAis) {
@@ -709,7 +688,6 @@
         if (!reporter)
           return UIManager.showToast("ระบุชื่อผู้รายงาน", "warning");
 
-        // Validate: Stop Mono evidence is MANDATORY
         var hasStopMono = _autoStopMonoUrls.length > 0 || (_files.stopMono && _files.stopMono.length > 0);
 
         if (!hasStopMono) {
@@ -736,7 +714,6 @@
           statusMono: el("statusStopMono") ? el("statusStopMono").value : "ไม่มี",
           statusAis: el("statusStopAis") ? el("statusStopAis").value : "ไม่มี",
           statusStart: el("statusStartMono") ? el("statusStartMono").value : "ไม่มี",
-          // New split status for detailed backend use
           statusStartMono: el("statusStartMono") ? el("statusStartMono").value : "ไม่มี",
           statusStopMono: el("statusStopMono") ? el("statusStopMono").value : "ไม่มี",
           statusStartAis: el("statusStartAis") ? el("statusStartAis").value : "ไม่มี",
@@ -758,10 +735,9 @@
           isDraft: mode === "preview",
         };
 
-        // 🌟 ป้องกันพัง: เช็คไฟล์และลดขนาด
         var compress = (file) =>
           new Promise((res) => {
-            if (!file.type.match(/image.*/)) return res(null); // ป้องกันพังถ้าไม่ใช่รูป
+            if (!file.type.match(/image.*/)) return res(null);
             var r = new FileReader();
             r.onload = (e) => {
               var i = new Image();
@@ -793,7 +769,6 @@
         (async () => {
           try {
             if (mode !== "preview") {
-              // ใช้ .filter(Boolean) เพื่อกรองไฟล์เสียออกไป ไม่ให้ส่งค่า null เข้า Server
               const types = ['startMono', 'stopMono', 'startAis', 'stopAis'];
               for (const t of types) {
                 const files = _files[t] || [];
@@ -867,7 +842,6 @@
         })();
       },
 
-      // แจ้งเตือน Help Dialogs
       showTicketInfo: function () {
         Swal.fire({
           title: "การสรุปข้อมูล Ticket",
@@ -942,7 +916,6 @@
         });
       },
 
-      // Helpers
       handleReporterChange: function (v) {
         var isO = v === "OTHER";
         _isCustomReporter = isO;
@@ -995,7 +968,6 @@
         });
       },
 
-      // ==================== Settings Panel Toggle ====================
       toggleSettingsPanel: function () {
         var body = el('settings-panel-body');
         var chevron = el('icon-settings-chevron');
@@ -1003,7 +975,6 @@
         if (chevron) chevron.classList.toggle('rotate-180');
       },
 
-      // ==================== Shift Transfer Mode ====================
       _transferMode: 'handover',
       _handoverChecked: [],
 
@@ -1116,9 +1087,19 @@
         return el("transferReport") ? el("transferReport").value : '';
       },
 
+      // ✨ [แก้ไข] เพิ่มระบบ Debounce ป้องกันรูปเบิ้ล
       handlePasteEvent: function (e, type) {
+        // ป้องกันการทำงานซ้ำซ้อนภายใน 300ms
+        var now = Date.now();
+        if (now - _lastPasteTime < 300) {
+          e.preventDefault();
+          return;
+        }
+        _lastPasteTime = now;
+
         var clipboardData = (e.clipboardData || (e.originalEvent && e.originalEvent.clipboardData));
         if (!clipboardData) return;
+        
         var items = clipboardData.items;
         for (var i = 0; i < items.length; i++) {
           if (items[i].type.indexOf("image") !== -1) {
@@ -1129,23 +1110,21 @@
             this._updateStartStatus();
             if (typeof UIManager !== "undefined")
               UIManager.showToast("วางรูปเรียบร้อย ✅", "success");
+              
             e.preventDefault();
+            e.stopImmediatePropagation(); // หยุดไม่ให้ Event กระจายไปทำงานตัวอื่นที่ซ้อนกัน
             return;
           }
         }
       },
 
-      // Legacy handler but keeping for safety if needed internally
       setupPasteHandlers: function () {
         ["startMono", "stopMono", "startAis", "stopAis"].forEach((type) => {
-          var camelType = type.charAt(0).toUpperCase() + type.slice(1);
           var dashType = type.replace(/([A-Z])/g, '-$1').toLowerCase();
           var dz = el("dropzone-" + dashType);
           if (dz && !dz.hasAttribute("data-listening")) {
             dz.setAttribute("tabindex", "0");
-            // Add Paste Listener
             dz.addEventListener("paste", (e) => this.handlePasteEvent(e, type));
-            // Removed redundant click listener as it is now in HTML
             dz.setAttribute("data-listening", "true");
           }
         });

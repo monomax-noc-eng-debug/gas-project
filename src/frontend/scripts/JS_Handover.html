@@ -1,4 +1,127 @@
 <script>
+  /**
+   * ✨ Ticket Summary Fetcher System
+   */
+  let _reportTickets = [];
+  let _ticketCache = null;
+  let _ticketCacheTime = 0;
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 นาที
+
+  function fetchTicketsForHandover(forceRefresh = false) {
+    const btn = document.getElementById('btn-fetch-tickets');
+    const container = document.getElementById('ticket-selector-container');
+    const list = document.getElementById('ticket-selection-list');
+    
+    container.classList.remove('hidden');
+
+    // 1. Check Cache
+    const now = Date.now();
+    if (!forceRefresh && _ticketCache && (now - _ticketCacheTime < CACHE_DURATION)) {
+      console.log("📂 Using Ticket Cache");
+      renderTicketSelectionList(_ticketCache);
+      return;
+    }
+
+    if (btn) btn.disabled = true;
+    list.innerHTML = '<div class="text-center py-4"><span class="loading loading-spinner loading-sm text-primary"></span><p class="text-[9px] text-slate-400 mt-1">กำลังดึงข้อมูล...</p></div>';
+
+    const today = new Date();
+    const dateStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+
+    google.script.run.withSuccessHandler(function(res) {
+      if (btn) btn.disabled = false;
+      const resp = typeof res === 'string' ? JSON.parse(res) : res;
+      
+      if (resp && resp.success) {
+        _ticketCache = resp;
+        _ticketCacheTime = Date.now();
+        renderTicketSelectionList(resp);
+      } else {
+        list.innerHTML = `<div class="text-center py-4 text-red-500 text-[9px]">ผิดพลาด: ${resp ? resp.error : 'Unknown'}</div>`;
+      }
+    }).apiHandler({ func: "getTicketDetails", data: dateStr });
+  }
+
+  function renderTicketSelectionList(resp) {
+    const list = document.getElementById('ticket-selection-list');
+
+    // กรองเฉพาะ PENDING หรือ BACKLOG เท่านั้น
+    _reportTickets = (resp.list || []).filter(t => 
+      t.tag === 'BACKLOG' || String(t.status || "").toUpperCase() === 'PENDING'
+    );
+
+    if (_reportTickets.length === 0) {
+      list.innerHTML = '<div class="text-center py-6 text-slate-400 text-[10px] bg-white rounded-lg border border-dashed border-slate-200"><i class="fas fa-inbox mb-2 text-lg block opacity-20"></i>ไม่มีรายการค้างในระบบ</div>';
+      return;
+    }
+
+    let html = '';
+    _reportTickets.forEach((t, idx) => {
+      const isBacklog = t.tag === 'BACKLOG';
+      const statusClass = isBacklog ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-amber-50 text-amber-600 border-amber-100';
+      
+      html += `
+        <label class="flex items-center gap-3 p-2 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 hover:shadow-sm transition-all cursor-pointer group">
+          <input type="checkbox" id="tk-ck-${idx}" class="checkbox checkbox-sm checkbox-primary rounded-md" data-idx="${idx}">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between mb-0.5">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-extrabold text-slate-700 group-hover:text-primary transition-colors">${t.id}</span>
+                <span class="text-[8px] px-1.5 py-0.5 ${statusClass} border rounded-md font-bold uppercase tracking-tighter">${t.status || t.tag}</span>
+              </div>
+              <span class="text-[8px] text-slate-400 font-medium">${t.timestamp ? new Date(t.timestamp).toLocaleDateString('th-TH') : ''}</span>
+            </div>
+            <p class="text-[10px] text-slate-500 leading-tight truncate group-hover:text-slate-700">${t.detail || '-'}</p>
+          </div>
+        </label>
+      `;
+    });
+    list.innerHTML = html;
+  }
+
+  function toggleSelectAllTickets(checked) {
+    const list = document.getElementById('ticket-selection-list');
+    const checkboxes = list.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(ck => ck.checked = checked);
+  }
+
+  function confirmTicketSelection() {
+    const list = document.getElementById('ticket-selection-list');
+    const checkboxes = list.querySelectorAll('input[type="checkbox"]:checked');
+    const summaryArea = document.getElementById('ho_ticket_summary');
+    
+    if (checkboxes.length === 0) {
+       document.getElementById('ticket-selector-container').classList.add('hidden');
+       return;
+    }
+
+    let selectedText = summaryArea.value.trim();
+    if (selectedText !== '') selectedText += '\n';
+
+    checkboxes.forEach(ck => {
+      const idx = ck.getAttribute('data-idx');
+      const t = _reportTickets[idx];
+      let icon = '•'; // ใช้ dot แทน icon สีเหลืองเพื่อให้ดูคลีนขึ้น
+      
+      const line = `${icon} [${t.id}] ${t.detail}`;
+      if (!selectedText.includes(t.id)) { // เช็คจาก ID เพื่อไม่ให้ซ้ำ
+        selectedText += line + '\n';
+      }
+    });
+
+    summaryArea.value = selectedText.trim();
+    document.getElementById('ticket-selector-container').classList.add('hidden');
+    
+    Swal.fire({
+      icon: 'success',
+      title: 'เพิ่มรายการแล้ว',
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 2000
+    });
+  }
+
   let currentTeamMembers = [];
   let handoverItems = [];
   let filteredItems = []; // for pagination
@@ -527,6 +650,45 @@
     if (subtitleEl) subtitleEl.innerText = 'ID: ' + item.id;
 
     document.getElementById('ho_detail_topic').innerText = item.topic || '-';
+    
+    // Ticket Summary Display
+    const ticketWrap = document.getElementById('ho_detail_ticket_wrap');
+    const ticketSum = document.getElementById('ho_detail_ticket_summary');
+    if (ticketWrap && ticketSum) {
+      const rawSummary = item.ticketSummary || '';
+      if (rawSummary.trim() !== '') {
+        ticketWrap.classList.remove('hidden');
+        
+        // แปลงข้อความสรุปให้เป็น List สวยๆ
+        const lines = rawSummary.split('\n');
+        const htmlLines = lines.map(line => {
+          const trimmed = line.trim();
+          if (!trimmed) return '';
+          
+          // ตรวจสอบว่าเป็นบรรทัดที่มี ID ทิคเก็ตหรือไม่ (เช่น • [ID] Detail)
+          const ticketMatch = trimmed.match(/^•\s*\[(.*?)\]\s*(.*)$/);
+          if (ticketMatch) {
+            const id = ticketMatch[1];
+            const detail = ticketMatch[2];
+            return `
+              <div class="flex items-start gap-3 py-2 border-b border-slate-50 last:border-0 group">
+                <div class="flex-1 min-w-0">
+                  <span class="text-[10px] font-bold text-primary bg-primary/5 px-1.5 py-0.5 rounded mr-2 uppercase tracking-tighter border border-primary/10">${id}</span>
+                  <span class="text-slate-600 leading-relaxed">${detail}</span>
+                </div>
+              </div>
+            `;
+          }
+          
+          // ถ้าไม่ใช่รูปแบบทิคเก็ต ให้แสดงเป็นข้อความปกติ
+          return `<div class="py-1 text-slate-500 italic flex items-center gap-2"><i class="fas fa-chevron-right text-[8px] opacity-30"></i> ${trimmed}</div>`;
+        }).join('');
+        
+        ticketSum.innerHTML = `<div class="space-y-1">${htmlLines}</div>`;
+      } else {
+        ticketWrap.classList.add('hidden');
+      }
+    }
     document.getElementById('ho_detail_time_text').innerText = new Date(item.timestamp).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
     document.getElementById('ho_detail_creator_text').innerText = item.creator || 'Unknown';
     const statusEl = document.getElementById('ho_detail_status');
@@ -610,7 +772,6 @@
       return;
     }
 
-    // Filter by role: 'Responsibility'
     const targetMembers = currentTeamMembers.filter(m =>
       m.role && String(m.role).toLowerCase().includes("responsibility")
     );
@@ -625,25 +786,42 @@
     container.innerHTML = targetMembers.map(member => {
       const fullName = (member.name || "").trim();
       const shortName = fullName.split(' ')[0];
+      const initial = shortName.charAt(0).toUpperCase();
 
-      // Robust matching: find key that matches trimmed fullName
       let ackTime = null;
       const matchingKey = Object.keys(acknowledged).find(k => k.trim() === fullName);
       if (matchingKey) ackTime = acknowledged[matchingKey];
 
-      return ackTime ? `
-        <button onclick="ackHandover('${item.id}', '${fullName}', this)" class="btn btn-sm h-auto py-2 px-3 flex items-center justify-start gap-2 w-full bg-emerald-50/50 border-emerald-100 hover:bg-red-50 hover:border-red-100 group text-left rounded-lg transition-colors shadow-none font-sans">
-          <span class="group-hover:hidden flex items-center justify-center shrink-0 w-4 h-4"><i class="fas fa-check-circle text-emerald-500 text-sm"></i></span>
-          <span class="hidden group-hover:flex items-center justify-center shrink-0 w-4 h-4"><i class="fas fa-times-circle text-red-400 text-sm"></i></span>
-          <div class="flex flex-col leading-tight">
-            <span class="text-xs font-semibold text-emerald-700 group-hover:text-red-600">${shortName}</span>
-            <span class="text-[10px] text-emerald-600/70 font-medium">${ackTime}</span>
-          </div>
-        </button>` : `
-        <button onclick="ackHandover('${item.id}', '${fullName}', this)" class="btn btn-sm h-auto py-2 px-3 flex items-center justify-start gap-2 w-full bg-white border-gray-200 hover:bg-gray-50 text-left rounded-lg transition-colors shadow-none font-sans">
-          <div class="w-4 h-4 rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0"><i class="fas fa-user text-gray-300 text-[8px]"></i></div>
-          <div class="flex flex-col leading-tight"><span class="text-xs font-semibold text-gray-600">${shortName}</span><span class="text-[10px] text-gray-400 font-medium">รอรับทราบ</span></div>
-        </button>`;
+      if (ackTime) {
+        return `
+          <div class="relative group">
+            <button onclick="ackHandover('${item.id}', '${fullName}', this)" 
+              class="w-full flex items-center gap-3 p-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl hover:bg-red-50 hover:border-red-100 transition-all duration-300 group/btn shadow-sm">
+              <div class="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm group-hover/btn:bg-red-500 transition-colors">
+                <i class="fas fa-check group-hover/btn:hidden"></i>
+                <i class="fas fa-times hidden group-hover/btn:block"></i>
+              </div>
+              <div class="flex flex-col min-w-0 text-left">
+                <span class="text-[11px] font-bold text-emerald-800 group-hover/btn:text-red-700 truncate">${fullName}</span>
+                <span class="text-[9px] text-emerald-600/70 font-medium">${ackTime}</span>
+              </div>
+            </button>
+          </div>`;
+      } else {
+        return `
+          <div class="relative group">
+            <button onclick="ackHandover('${item.id}', '${fullName}', this)" 
+              class="w-full flex items-center gap-3 p-2.5 bg-white border border-slate-200 rounded-2xl hover:border-primary hover:shadow-md transition-all duration-300 group/btn shadow-sm">
+              <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-sm shrink-0 group-hover/btn:bg-primary/10 group-hover/btn:text-primary transition-colors">
+                ${initial}
+              </div>
+              <div class="flex flex-col min-w-0 text-left">
+                <span class="text-[11px] font-bold text-slate-700 group-hover/btn:text-primary transition-colors truncate">${fullName}</span>
+                <span class="text-[9px] text-slate-400 font-medium">คลิกเพื่อรับทราบ</span>
+              </div>
+            </button>
+          </div>`;
+      }
     }).join('');
   }
 
@@ -651,69 +829,53 @@
   function ackHandover(id, name, btnObj) {
     if (isAcknowledging) return;
     isAcknowledging = true;
-    const container = document.getElementById('ho_ack_container');
-    if (container) {
-      container.querySelectorAll('button').forEach(b => { if (b !== btnObj) { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); } });
-    }
-    let originalHtml = btnObj ? btnObj.innerHTML : '';
-    if (btnObj) btnObj.innerHTML = '<div class="flex items-center justify-center w-full py-0.5"><span class="loading loading-spinner loading-sm text-primary"></span></div>';
+
+    // เก็บ HTML เดิมไว้กรณี Error
+    const originalHtml = btnObj.innerHTML;
+    
+    // แสดง Loading ในปุ่มแบบเนียนๆ
+    btnObj.classList.add('pointer-events-none', 'opacity-80');
+    btnObj.querySelector('div:first-child').innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
+    
     google.script.run
       .withSuccessHandler(function (res) {
         isAcknowledging = false;
+        btnObj.classList.remove('pointer-events-none', 'opacity-80');
+        
         try {
           const response = typeof res === 'string' ? JSON.parse(res) : res;
-          const data = response.data || {};
-          const success = response.success;
-
-          if (success) {
-            const msg = data.message || "ดำเนินการเรียบร้อย";
-            Swal.mixin({
-              toast: true,
-              position: 'bottom-end',
-              showConfirmButton: false,
-              timer: 2000
-            }).fire({ icon: 'success', title: msg });
-
-            // อัปเดตข้อมูลในฝั่ง Client ทันทีโดยไม่ต้องโหลดใหม่ทั้งหมด
+          if (response.success) {
+            UIManager.showToast(response.data.message || "บันทึกสำเร็จ", "success");
+            
+            // อัปเดตข้อมูล Local
             const itemIdx = handoverItems.findIndex(i => i.id === id);
             if (itemIdx !== -1) {
-              handoverItems[itemIdx].acknowledged = data.acknowledged;
-              handoverItems[itemIdx].status = data.status;
-
-              // อัปเดตข้อมูลใน filteredItems ด้วย (เนื่องจากเป็น reference หรืออาศัย id เดียวกัน)
+              handoverItems[itemIdx].acknowledged = response.data.acknowledged;
+              handoverItems[itemIdx].status = response.data.status;
+              
               const filteredItem = filteredItems.find(i => i.id === id);
               if (filteredItem) {
-                filteredItem.acknowledged = data.acknowledged;
-                filteredItem.status = data.status;
+                filteredItem.acknowledged = response.data.acknowledged;
+                filteredItem.status = response.data.status;
               }
-
-              // สั่ง Render ใหม่เฉพาะจุด
+              
               renderHandoverCurrentPage();
               renderDetailData(handoverItems[itemIdx]);
             }
-
-            // เนื่องจาก render จะสร้างปุ่มใหม่ทั้งหมด จึงไม่ต้องปลดล็อกปุ่มเดิมด้วยตนเอง
           } else {
-            Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: response.error || "ไม่สามารถบันทึกได้" });
-            if (btnObj) btnObj.innerHTML = originalHtml;
-            if (container) {
-              container.querySelectorAll('button').forEach(b => {
-                b.disabled = false;
-                b.classList.remove('opacity-50', 'cursor-not-allowed');
-              });
-            }
+            UIManager.showToast(response.error || "ไม่สามารถบันทึกได้", "error");
+            btnObj.innerHTML = originalHtml;
           }
         } catch (e) {
-          console.error("Parse error:", e);
-          Swal.fire({ icon: 'error', title: 'Error', text: 'เกิดข้อผิดพลาดในการรับข้อมูลจากเซิร์ฟเวอร์' });
-          if (btnObj) btnObj.innerHTML = originalHtml;
+          console.error(e);
+          btnObj.innerHTML = originalHtml;
         }
       })
       .withFailureHandler(function (err) {
         isAcknowledging = false;
-        Swal.mixin({ toast: true, position: 'bottom-end', showConfirmButton: false, timer: 1500 }).fire({ icon: 'error', title: 'เกิดข้อผิดพลาด' });
-        if (btnObj) btnObj.innerHTML = originalHtml;
-        if (container) { container.querySelectorAll('button').forEach(b => { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); }); }
+        btnObj.classList.remove('pointer-events-none', 'opacity-80');
+        btnObj.innerHTML = originalHtml;
+        UIManager.showToast("เกิดข้อผิดพลาดในการเชื่อมต่อ", "error");
       })
       .apiHandler({ func: "acknowledgeHandover", data: { id: id, name: name } });
   }
@@ -743,6 +905,14 @@
     document.getElementById('ho_date_input').value = `${yyyy}-${mm}-${dd}`;
     document.getElementById('ho_time_input').value = String(nowLocal.getHours()).padStart(2, '0') + ":" + String(nowLocal.getMinutes()).padStart(2, '0');
     document.getElementById('ho_modal_shift_select').value = "Auto";
+    
+    // Reset Ticket Summary
+    document.getElementById('ho_ticket_summary').value = '';
+    document.getElementById('ticket-selector-container').classList.add('hidden');
+    document.getElementById('ticket-selection-list').innerHTML = '';
+    
+    // ✨ Auto-load Ticket Summary (Auto-load)
+    fetchTicketsForHandover();
 
     document.getElementById('ho_modal_time_controls').classList.add('hidden');
     document.getElementById('ho_auto_time_display').classList.remove('hidden');
@@ -800,6 +970,10 @@
       document.getElementById('ho_time_input').value = String(itemDate.getHours()).padStart(2, '0') + ":" + String(itemDate.getMinutes()).padStart(2, '0');
     }
     document.getElementById('ho_modal_shift_select').value = item.shift || 'Auto';
+    
+    // Set Ticket Summary
+    document.getElementById('ho_ticket_summary').value = item.ticketSummary || '';
+    document.getElementById('ticket-selector-container').classList.add('hidden');
 
     document.getElementById('ho_modal_time_controls').classList.remove('hidden');
     document.getElementById('ho_auto_time_display').classList.add('hidden');
@@ -886,6 +1060,7 @@
       tags: selectedFormTags,
       topic: document.getElementById('ho_topic').value.trim(),
       type: document.getElementById('ho_type_select').value,
+      ticketSummary: document.getElementById('ho_ticket_summary').value,
       detail: detailJSON,
       contact: contactJSON,
       creator: creatorVal === "Unknown" ? "" : creatorVal,
@@ -911,10 +1086,33 @@
       }
       closeFormDrawer();
       Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', timer: 1500, showConfirmButton: false });
+      
+      // ✨ แก้ไขอาการค้าง: ล้าง Cache และโหลดข้อมูลใหม่ทันที
       _isHandoverDataLoaded = false;
       showRightSkeleton();
       loadHandovers(!!data.id);
     }).apiHandler({ func: data.id ? "updateHandover" : "createHandover", data: data });
+  }
+
+  function showRightSkeleton() {
+    const listContainer = document.getElementById('ho_list_container');
+    if (listContainer) {
+      let skeletonHtml = '';
+      for (let i = 0; i < 6; i++) {
+        skeletonHtml += `
+          <tr class="bg-white">
+            <td class="text-xs opacity-70 font-mono text-center py-4"><div class="skeleton h-3 w-16 mx-auto rounded bg-gray-200"></div></td>
+            <td class="font-bold text-[11px]"><div class="skeleton h-3 w-12 rounded bg-gray-200"></div></td>
+            <td><div class="skeleton h-3 w-full max-w-[200px] rounded bg-gray-200"></div></td>
+            <td><div class="skeleton h-3 w-16 rounded bg-gray-200"></div></td>
+            <td><div class="skeleton h-3 w-20 rounded bg-gray-200"></div></td>
+            <td class="font-medium text-[11px]"><div class="skeleton h-3 w-16 rounded bg-gray-200"></div></td>
+            <td class="text-center align-middle"><div class="skeleton h-4 w-16 mx-auto rounded bg-gray-200"></div></td>
+            <td class="text-center"><div class="skeleton h-6 w-6 mx-auto rounded bg-gray-200"></div></td>
+          </tr>`;
+      }
+      listContainer.innerHTML = skeletonHtml;
+    }
   }
 
   function quickResolveHandover() {
