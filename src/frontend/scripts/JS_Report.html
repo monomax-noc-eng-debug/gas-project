@@ -1,7 +1,7 @@
 <script>
   /**
    * JS_Report.html
-   * Version: Final Fix (Added Paste Fix, Safe Image Compression)
+   * Version: Final Fix (Added Paste Fix, Safe Image Compression) + NTT Status (Button Color Fix)
    */
   window.ReportManager = (function () {
     // --- State Variables ---
@@ -18,7 +18,6 @@
     var _lastFetchedDate = null;
     var _isReportersLoaded = false;
     
-    // ✨ [เพิ่มตัวแปร] จับเวลาป้องกันการ Paste รูปเบิ้ล
     var _lastPasteTime = 0;
 
     // --- Helpers ---
@@ -45,7 +44,7 @@
       }
     };
 
-    // 🧠 Smart Date Parser (Safe Version)
+    // 🧠 Smart Date Parser
     var smartParse = function (val) {
       if (!val) return { date: "", display: "" };
       let d = null;
@@ -100,7 +99,6 @@
         }
       },
 
-      // ✨ [แก้ไข] รวบ onShow 2 อันที่ซ้ำกันให้เหลืออันเดียว
       onShow: function () {
         console.log('📄 ReportManager: onShow');
         try {
@@ -146,7 +144,6 @@
                 if (!_isLoading) ReportManager.autoFetchAll();
               },
             });
-            // เอา setTimeout autoFetchAll ตรงนี้ออก เพราะใน onShow สั่งโหลดอยู่แล้ว (ลดโหลดเบิ้ล)
           }
         }
         this.fetchReporters();
@@ -387,7 +384,6 @@
         )
           .then((res) => {
             if (res && res.success) {
-              // --- จัดการข้อมูลสรุปลีก ---
               var summaryText = "";
               var breakdownHtml = "";
               if (res.data && res.data.summary) {
@@ -401,7 +397,6 @@
               if (el("league-breakdown"))
                 el("league-breakdown").innerHTML = breakdownHtml;
 
-              // --- จัดการข้อมูลตาราง ---
               if (el("matchTotalValue"))
                 el("matchTotalValue").value = res.data.stats.totalMatches;
               if (el("disp-match-total"))
@@ -697,6 +692,14 @@
           );
         }
 
+        // ตรวจสอบสถานะ NTT
+        var nttStatus = el("nttStatusSelect") ? el("nttStatusSelect").value : "รอตรวจสอบ";
+        if (nttStatus === "รอตรวจสอบ") {
+          var modal = document.getElementById('ntt_check_modal');
+          if(modal) modal.showModal();
+          return UIManager.showToast("กรุณากดตรวจสอบ NTT และเลือกสถานะก่อนส่งรายงาน", "warning");
+        }
+
         var btn = el("btn-submit-report");
         btn.disabled = true;
         el("spin-btn-send").classList.remove("hidden");
@@ -732,6 +735,7 @@
           autoStopMonoUrls: _autoStopMonoUrls,
           autoStartAisUrls: _autoStartAisUrls,
           autoStopAisUrls: _autoStopAisUrls,
+          nttStatus: nttStatus,
           isDraft: mode === "preview",
         };
 
@@ -801,13 +805,18 @@
                   var dd = String(today.getDate()).padStart(2, "0");
                   if (el("inputDate")) {
                     el("inputDate").value = `${yyyy}-${mm}-${dd}`;
-                    if (typeof _picker !== "undefined") _picker.setDate(today);
+                    if (typeof _picker !== "undefined" && _picker) _picker.setDate(today);
                   }
 
                   if (el("transferReport")) el("transferReport").value = "";
                   if (el("statusMono")) el("statusMono").value = "เรียบร้อย";
                   if (el("statusAis")) el("statusAis").value = "ไม่มี";
                   if (el("statusStart")) el("statusStart").value = "ไม่มี";
+
+                  // ✨ รีเซ็ตสถานะ NTT กลับเป็นรอตรวจสอบ
+                  if (typeof ReportManager.setNttStatus === 'function') {
+                      ReportManager.setNttStatus("รอตรวจสอบ"); 
+                  }
 
                   _files = { startMono: [], stopMono: [], startAis: [], stopAis: [] };
                   _autoStartMonoUrls = [];
@@ -834,6 +843,7 @@
             } else
               UIManager.showToast(res ? res.error : "Unknown Error", "error");
           } catch (e) {
+            console.error("Submit Error:", e);
             UIManager.showToast(e.message, "error");
           } finally {
             btn.disabled = false;
@@ -916,6 +926,55 @@
         });
       },
 
+      // ✨ ฟังก์ชันเปิดหน้าต่างเช็คระบบ NTT
+      openNTTStatus: function () {
+        var url = "https://portal.ntt.co.th/RealTimeStatus";
+        var popupWidth = 1200;
+        var popupHeight = 800;
+        var left = (window.screen.width - popupWidth) / 2;
+        var top = (window.screen.height - popupHeight) / 2;
+        var windowFeatures = 'width=' + popupWidth + ',height=' + popupHeight + 
+                             ',top=' + top + ',left=' + left + 
+                             ',resizable=yes,scrollbars=yes,status=no,menubar=no,toolbar=no,location=no';
+        window.open(url, "NTT_Status_Window", windowFeatures);
+      },
+
+      // ✨ ฟังก์ชันตั้งค่าสถานะ NTT และเปลี่ยนสีปุ่ม
+      setNttStatus: function(status) {
+         var input = document.getElementById("nttStatusSelect");
+         var btnMain = document.getElementById("btn-ntt-status-main");
+         var textSpan = document.getElementById("ntt-status-text");
+         
+         if (input) input.value = status;
+         
+         if (btnMain && textSpan) {
+            btnMain.classList.remove(
+               "bg-slate-100", "text-slate-500", "border-slate-300", "hover:bg-slate-200", 
+               "bg-emerald-500", "text-white", "border-emerald-600", "hover:bg-emerald-600", 
+               "bg-rose-500", "border-rose-600", "hover:bg-rose-600"
+            );
+
+            if (status === "เรียบร้อย" || status === "ปกติ") {
+               btnMain.classList.add("bg-emerald-500", "text-white", "border-emerald-600", "hover:bg-emerald-600");
+               textSpan.innerText = "ปกติ";
+               if(input) input.value = "เรียบร้อย";
+            } 
+            else if (status === "มีปัญหา") {
+               btnMain.classList.add("bg-rose-500", "text-white", "border-rose-600", "hover:bg-rose-600");
+               textSpan.innerText = "มีปัญหา";
+            } 
+            else {
+               btnMain.classList.add("bg-slate-100", "text-slate-500", "border-slate-300", "hover:bg-slate-200");
+               textSpan.innerText = "รอตรวจสอบ";
+            }
+         }
+         
+         var modal = document.getElementById('ntt_check_modal');
+         if(modal && typeof modal.close === 'function') {
+            modal.close();
+         }
+      },
+
       handleReporterChange: function (v) {
         var isO = v === "OTHER";
         _isCustomReporter = isO;
@@ -960,9 +1019,9 @@
           if (panel) panel.classList.toggle('hidden', t !== tab);
           if (btn) {
             if (t === tab) {
-              btn.className = 'flex-1 py-1.5 text-[10px] font-bold uppercase text-center border-b-2 border-primary text-primary transition-colors';
+              btn.className = 'flex-1 py-1.5 text-[10px] font-bold uppercase border-b-2 border-primary text-primary transition-colors';
             } else {
-              btn.className = 'flex-1 py-1.5 text-[10px] font-bold uppercase text-center border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors';
+              btn.className = 'flex-1 py-1.5 text-[10px] font-bold uppercase border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors';
             }
           }
         });
@@ -986,13 +1045,13 @@
         var modeHandover = el('transfer-mode-handover');
 
         if (mode === 'text') {
-          if (btnText) { btnText.className = 'btn btn-xs bg-primary text-white border-0 shadow-none gap-1 rounded-lg'; }
-          if (btnHandover) { btnHandover.className = 'btn btn-xs btn-ghost text-gray-400 border border-gray-200 gap-1 rounded-lg'; }
+          if (btnText) { btnText.className = 'btn btn-xs h-5 min-h-0 py-0 px-2 bg-primary text-white border-0 text-[10px] rounded-lg'; }
+          if (btnHandover) { btnHandover.className = 'btn btn-xs h-5 min-h-0 py-0 px-2 btn-ghost border border-gray-200 text-[10px] rounded-lg'; }
           if (modeText) modeText.classList.remove('hidden');
           if (modeHandover) modeHandover.classList.add('hidden');
         } else {
-          if (btnText) { btnText.className = 'btn btn-xs btn-ghost text-gray-400 border border-gray-200 gap-1 rounded-lg'; }
-          if (btnHandover) { btnHandover.className = 'btn btn-xs bg-primary text-white border-0 shadow-none gap-1 rounded-lg'; }
+          if (btnText) { btnText.className = 'btn btn-xs h-5 min-h-0 py-0 px-2 btn-ghost border border-gray-200 text-[10px] rounded-lg'; }
+          if (btnHandover) { btnHandover.className = 'btn btn-xs h-5 min-h-0 py-0 px-2 bg-primary text-white border-0 text-[10px] rounded-lg'; }
           if (modeText) modeText.classList.add('hidden');
           if (modeHandover) modeHandover.classList.remove('hidden');
           this.loadHandoverTopics();
@@ -1087,9 +1146,7 @@
         return el("transferReport") ? el("transferReport").value : '';
       },
 
-      // ✨ [แก้ไข] เพิ่มระบบ Debounce ป้องกันรูปเบิ้ล
       handlePasteEvent: function (e, type) {
-        // ป้องกันการทำงานซ้ำซ้อนภายใน 300ms
         var now = Date.now();
         if (now - _lastPasteTime < 300) {
           e.preventDefault();
@@ -1112,7 +1169,7 @@
               UIManager.showToast("วางรูปเรียบร้อย ✅", "success");
               
             e.preventDefault();
-            e.stopImmediatePropagation(); // หยุดไม่ให้ Event กระจายไปทำงานตัวอื่นที่ซ้อนกัน
+            e.stopImmediatePropagation();
             return;
           }
         }
@@ -1129,6 +1186,7 @@
           }
         });
       },
+      
     };
   })();
 

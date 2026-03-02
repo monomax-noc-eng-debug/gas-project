@@ -107,6 +107,13 @@ const SettingController = (() => {
             { TagName: "Routine" }
           ]);
 
+          ensureSheet(ss, "SYS_Playbook_Categories", ["CategoryName"], [
+            { CategoryName: "Network" },
+            { CategoryName: "System" },
+            { CategoryName: "Software" },
+            { CategoryName: "Hardware" }
+          ]);
+
           return Response.success({ message: "ล้างและตั้งค่าชีทใหม่ทั้งหมดเรียบร้อย" });
         }
       } catch (e) {
@@ -146,7 +153,8 @@ const SettingController = (() => {
 
         const config = {
           staff: [], assignees: [], types: [], statuses: [], severities: [],
-          categories: {}, handoverTags: [], emailProfiles: [], emailDrafts: [], mailDrafts: [], staffUsers: []
+          categories: {}, handoverTags: [], emailProfiles: [], emailDrafts: [], mailDrafts: [], staffUsers: [],
+          playbookCategories: []
         };
 
         const addUnique = (arr, val) => {
@@ -221,6 +229,11 @@ const SettingController = (() => {
           else config.emailDrafts.push(tmpl);
         });
 
+        const playbookCatsData = parseData(ss.getSheetByName("SYS_Playbook_Categories"));
+        playbookCatsData.forEach(c => {
+          addUnique(config.playbookCategories, c.CategoryName);
+        });
+
         // Deduplicate simple arrays
         config.staff = [...new Set(config.staff)];
         config.assignees = [...new Set(config.assignees)];
@@ -228,6 +241,7 @@ const SettingController = (() => {
         config.statuses = [...new Set(config.statuses)];
         config.severities = [...new Set(config.severities)];
         config.handoverTags = [...new Set(config.handoverTags)];
+        config.playbookCategories = [...new Set(config.playbookCategories)];
 
         try { cache.put(cacheKey, JSON.stringify(config), 21600); } catch (e) { } // Cache for 6 hours
 
@@ -288,6 +302,9 @@ const SettingController = (() => {
 
           const tagsRow = (config.handoverTags || []).map(t => ({ TagName: t }));
           saveData(ss, "SYS_Handover_Tags", ["TagName"], tagsRow);
+
+          const playbookCatsRow = (config.playbookCategories || []).map(c => ({ CategoryName: c }));
+          saveData(ss, "SYS_Playbook_Categories", ["CategoryName"], playbookCatsRow);
 
           try { CacheService.getScriptCache().remove("GLOBAL_APP_SETTINGS_V1"); } catch (e) { }
 

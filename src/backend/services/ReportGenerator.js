@@ -153,6 +153,9 @@ const ReportGenerator = {
         color: { red: 1, green: 0, blue: 0, alpha: 1 },
       };
 
+    // ✨ คำนวณ Icon ของ NTT
+    const nttIcon = formData.nttStatus === "เรียบร้อย" || formData.nttStatus === "ปกติ" ? "✅" : (formData.nttStatus === "มีปัญหา" ? "❌" : "⚠️");
+
     return {
       cardsV2: [
         {
@@ -179,14 +182,20 @@ const ReportGenerator = {
                       text: `<b>1. สรุปสถานะ Ticket</b><br>> 🟢 งานเข้าใหม่: <font color="#16a34a">${ts.new || 0}</font><br>> 🔵 ปิดได้วันนี้: <font color="#2563eb">${(Number(ts.resolved) || 0) + (Number(ts.closed) || 0)}</font><br>> 🔴 งานค้าง: <font color="#dc2626">${ts.backlog || ts.open || 0}</font>`,
                     },
                   },
+                  // ✨ Widget สำหรับ NTT Status
                   {
                     textParagraph: {
-                      text: `<b>2. สถานะช่อง</b><br>> Start Mono: ${formData.statusStartMono || '-'}<br>> Stop Mono: ${formData.statusStopMono || '-'}<br>> Start AIS: ${formData.statusStartAis || '-'}<br>> Stop AIS: ${formData.statusStopAis || '-'}`,
+                      text: `<b>2. สถานะระบบภายนอก (NTT)</b><br>> ${nttIcon} NTT Dashboard: <b>${formData.nttStatus || 'ไม่ได้ระบุ'}</b>`
+                    }
+                  },
+                  {
+                    textParagraph: {
+                      text: `<b>3. สถานะช่อง</b><br>> Start Mono: ${formData.statusStartMono || '-'}<br>> Stop Mono: ${formData.statusStopMono || '-'}<br>> Start AIS: ${formData.statusStartAis || '-'}<br>> Stop AIS: ${formData.statusStopAis || '-'}`,
                     },
                   },
                   {
                     textParagraph: {
-                      text: `<b>3. Shift Transfer</b><br>${formData.transferReport
+                      text: `<b>4. Shift Transfer</b><br>${formData.transferReport
                         ? formData.transferReport
                           .split("\n")
                           .map((l) => `> ${l}`)
@@ -198,7 +207,7 @@ const ReportGenerator = {
                   { divider: {} },
                   {
                     textParagraph: {
-                      text: `<b>4. สรุปจำนวน Match</b><br>(Match รวม ${formData.matchTotal || 0} คู่)<br><br>${matches}`,
+                      text: `<b>5. สรุปจำนวน Match</b><br>(Match รวม ${formData.matchTotal || 0} คู่)<br><br>${matches}`,
                     },
                   },
                 ],
@@ -281,6 +290,7 @@ const ReportGenerator = {
         stats: formData.ticketStats || {},
         ticketSummary: formData.ticketSummary,
         ticketList: ticketList,
+        nttStatus: formData.nttStatus || 'ไม่ได้ระบุ', // ✨ ส่งค่า NTT เข้าไปใน PDF Template
         topics: [
           {
             title: "Start Channel (Mono)",

@@ -1,29 +1,71 @@
 <script>
   window.TagSettings = (() => {
     let _full = {};
-    let _tags = [];
+    let _handoverTags = [];
+    let _pbCats = [];
     let _loaded = false;
+    let _activeTab = 'handover'; // 'handover' or 'playbook'
     const el = id => document.getElementById(id);
 
     function _render() {
+      const isHandover = _activeTab === 'handover';
+      const list = isHandover ? _handoverTags : _pbCats;
+
+      // Update Tab Badges
+      if (el('tag-cnt')) el('tag-cnt').innerText = _handoverTags.length;
+      if (el('pb-cat-cnt')) el('pb-cat-cnt').innerText = _pbCats.length;
+
+      // Update UI Header/Labels
+      if (el('tag-th-name')) el('tag-th-name').innerText = isHandover ? 'ชื่อแท็ก' : 'ชื่อหมวดหมู่';
+      if (el('tag-footer-hint')) el('tag-footer-hint').innerText = isHandover ? '* สำหรับหน้าลงบันทึก Handover' : '* สำหรับจัดกลุ่ม Playbook';
+
+      const btnAddFooter = el('btn-add-tag-footer');
+      if (btnAddFooter) {
+        btnAddFooter.className = isHandover ? 'btn btn-xs btn-primary gap-1 px-3' : 'btn btn-xs btn-success text-white gap-1 px-3';
+      }
+
+      // Render Table
       const tbody = el('tag-tbody');
       const empty = el('tag-empty');
-      const cnt = el('tag-cnt');
-      if (cnt) cnt.innerText = _tags.length;
-      if (!tbody) return;
 
-      tbody.innerHTML = _tags.length === 0 ? '' : _tags.map((tag, i) => `
-      <tr class="hover:bg-base-50 group">
-        <td class="text-center text-xs text-gray-400 font-mono">${i + 1}</td>
-        <td class="text-sm font-medium text-gray-700 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-warning/60 shrink-0"></span>${tag}</td>
-        <td class="text-center">
-          <div class="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onclick="TagSettings.openEdit(${i})" class="btn btn-ghost btn-xs btn-square text-blue-400"><i class="fas fa-pencil-alt text-[10px]"></i></button>
-            <button onclick="TagSettings.removeItem(${i})" class="btn btn-ghost btn-xs btn-square text-red-400"><i class="fas fa-trash text-[10px]"></i></button>
-          </div>
-        </td>
-      </tr>`).join('');
-      if (empty) empty.classList.toggle('hidden', _tags.length > 0);
+      if (tbody) {
+        if (list.length === 0) {
+          tbody.innerHTML = '';
+          if (empty) empty.classList.remove('hidden');
+        } else {
+          if (empty) empty.classList.add('hidden');
+          const dotColor = isHandover ? 'bg-sky-400' : 'bg-emerald-400';
+          tbody.innerHTML = list.map((item, i) => `
+          <tr class="hover:bg-base-50 group">
+            <td class="text-center text-[10px] text-gray-400 font-mono">${i + 1}</td>
+            <td class="text-[11px] font-medium text-gray-700 flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full ${dotColor} shrink-0"></span>${item}
+            </td>
+            <td class="text-center">
+              <div class="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onclick="TagSettings.openEdit('${_activeTab}', ${i})" class="btn btn-ghost btn-xs btn-square text-blue-400">
+                  <i class="fas fa-pencil-alt text-[9px]"></i>
+                </button>
+                <button onclick="TagSettings.removeItem('${_activeTab}', ${i})" class="btn btn-ghost btn-xs btn-square text-red-400">
+                  <i class="fas fa-trash text-[9px]"></i>
+                </button>
+              </div>
+            </td>
+          </tr>`).join('');
+        }
+      }
+
+      // Update Tab Buttons UI (Matching System Settings)
+      document.querySelectorAll('.tag-tab-btn').forEach(btn => {
+        const tab = btn.dataset.tagtab;
+        if (tab === _activeTab) {
+          btn.classList.add('btn-primary', 'text-white');
+          btn.classList.remove('bg-white', 'text-gray-500');
+        } else {
+          btn.classList.remove('btn-primary', 'text-white');
+          btn.classList.add('bg-white', 'text-gray-500');
+        }
+      });
     }
 
     return {
@@ -32,78 +74,111 @@
           Router.register("page-settings-tags", this);
         }
       },
-      onShow() { 
-        console.log('📄 TagSettings: onShow');
-        try {
-          if (!_loaded) this.loadData();
-        } catch (e) {
-          console.error('❌ TagSettings: onShow error', e);
-          if (typeof UIManager !== 'undefined') {
-            UIManager.showToast('เกิดข้อผิดพลาดในการโหลดการตั้งค่า Tag: ' + e.message, 'error');
-          }
-        }
+      onShow() {
+        if (!_loaded) this.loadData();
+      },
+
+      switchTab(tab) {
+        _activeTab = tab;
+        _render();
       },
 
       loadData(force) {
         let btnRefresh = el('btn-refresh-settings-tags');
         if (btnRefresh) btnRefresh.classList.add('is-loading');
+
         const tbody = el('tag-tbody');
         const empty = el('tag-empty');
         const loader = el('tag-loader');
+
         if (tbody) tbody.innerHTML = '';
-        if (loader) loader.classList.remove('hidden');
         if (empty) empty.classList.add('hidden');
+        if (loader) loader.classList.remove('hidden');
+
         Server.call({ func: "apiGetAllSettings", silent: true })
           .then(r => {
             if (r.success && r.data) {
               _full = r.data;
-              _tags = r.data.handoverTags || [];
+              _handoverTags = r.data.handoverTags || [];
+              _pbCats = r.data.playbookCategories || [];
               _loaded = true;
               _render();
-              if (force) UIManager.showToast("โหลดสำเร็จ", "success");
+              if (force) UIManager.showToast("โหลดข้อมูลสำเร็จ", "success");
             }
           })
-          .catch(() => UIManager.showToast("Load Error", "error"))
+          .catch(e => {
+            UIManager.showToast("Load Error: " + e.message, "error");
+            if (empty) empty.classList.remove('hidden');
+          })
           .finally(() => {
-            let btnRefresh = el('btn-refresh-settings-tags');
             if (btnRefresh) btnRefresh.classList.remove('is-loading');
             if (loader) loader.classList.add('hidden');
+            if (_handoverTags.length === 0 && _pbCats.length === 0) {
+              if (empty) empty.classList.remove('hidden');
+            }
           });
       },
 
-      openAdd() {
+      openAdd(type) {
+        type = type || _activeTab;
         el('tag-edit-idx').value = '-1';
+        el('tag-edit-type').value = type;
         el('tag-input-name').value = '';
-        el('tag-modal-title').innerText = 'เพิ่มแท็ก';
+        el('tag-modal-title').innerText = type === 'handover' ? 'เพิ่มแท็ก Handover' : 'เพิ่มหมวดหมู่ Playbook';
+        el('tag-label-name').innerText = type === 'handover' ? 'ชื่อแท็ก' : 'ชื่อหมวดหมู่';
         el('modal-tag-item').showModal();
       },
 
-      openEdit(i) {
+      openEdit(type, i) {
         el('tag-edit-idx').value = i;
-        el('tag-input-name').value = _tags[i] || '';
-        el('tag-modal-title').innerText = 'แก้ไขแท็ก';
+        el('tag-edit-type').value = type;
+        const val = type === 'handover' ? _handoverTags[i] : _pbCats[i];
+        el('tag-input-name').value = val || '';
+        el('tag-modal-title').innerText = type === 'handover' ? 'แก้ไขแท็ก Handover' : 'แก้ไขหมวดหมู่ Playbook';
+        el('tag-label-name').innerText = type === 'handover' ? 'ชื่อแท็ก' : 'ชื่อหมวดหมู่';
         el('modal-tag-item').showModal();
       },
 
       saveModal() {
         const val = el('tag-input-name').value.trim();
-        if (!val) return UIManager.showToast("กรุณากรอกชื่อแท็ก", "warning");
+        const type = el('tag-edit-type').value;
+        if (!val) return UIManager.showToast("กรุณากรอกข้อมูล", "warning");
+
+        const list = type === 'handover' ? _handoverTags : _pbCats;
         const idx = parseInt(el('tag-edit-idx').value);
-        if (idx >= 0) { _tags[idx] = val; }
-        else { if (_tags.includes(val)) return UIManager.showToast("มีแท็กนี้อยู่แล้ว", "warning"); _tags.push(val); }
+
+        if (idx >= 0) {
+          list[idx] = val;
+        } else {
+          if (list.includes(val)) return UIManager.showToast("มีข้อมูลนี้อยู่แล้ว", "warning");
+          list.push(val);
+        }
         el('modal-tag-item').close();
         _render();
       },
 
-      removeItem(i) { _tags.splice(i, 1); _render(); },
+      removeItem(type, i) {
+        const list = type === 'handover' ? _handoverTags : _pbCats;
+        list.splice(i, 1);
+        _render();
+      },
 
       saveAll() {
-        UIManager.showLoading("กำลังบันทึก...");
-        const payload = { ..._full, handoverTags: _tags };
+        if (typeof UIManager !== 'undefined') UIManager.showLoading("กำลังบันทึก...");
+        const payload = {
+          ..._full,
+          handoverTags: _handoverTags,
+          playbookCategories: _pbCats
+        };
         Server.call({ func: "apiSaveAllSettings", silent: true }, payload)
-          .then(r => { if (r.success) UIManager.showToast("บันทึกแท็กสำเร็จ", "success"); else UIManager.showToast(r.message || "Error", "error"); })
-          .catch(() => UIManager.showToast("Connection Error", "error"))
-          .finally(() => UIManager.hideLoading());
+          .then(r => {
+            if (r.success) UIManager.showToast("บันทึกการตั้งค่าสำเร็จ", "success");
+            else UIManager.showToast(r.message || "Error", "error");
+          })
+          .catch(e => UIManager.showToast("Connection Error", "error"))
+          .finally(() => {
+            if (typeof UIManager !== 'undefined') UIManager.hideLoading();
+          });
       }
     };
   })();

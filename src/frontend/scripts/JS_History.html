@@ -7,7 +7,7 @@
       const getEl = (id) => document.getElementById(id);
 
       return {
-         // ✅ Called automatically by Router when page-history is shown
+         // ✅ สั่งโหลดข้อมูลอัตโนมัติเมื่อเข้ามาหน้านี้
          onShow: function () {
             console.log('📄 HistoryManager: onShow');
             try {
@@ -30,7 +30,7 @@
             const loader = getEl('hist-loader');
             const tbody = getEl('hist-table-body');
 
-            // If already loaded and not force, skip unless empty?
+            // หากมีข้อมูลอยู่แล้วและไม่ได้กดปุ่มโหลดใหม่ (force) ให้ข้ามการโหลดไปเลย
             if (!force && tbody && tbody.children.length > 0) {
                if (btn) {
                   btn.classList.remove('is-loading');
@@ -83,13 +83,13 @@
                if (item.chatTarget === 'group_all') groupBadge = '<span class="badge badge-success badge-outline badge-xs gap-1"><i class="fas fa-users"></i> All</span>';
                if (item.chatTarget === 'group_dev') groupBadge = '<span class="badge badge-primary badge-outline badge-xs gap-1"><i class="fas fa-code"></i> Dev</span>';
 
-               return `<tr class="hover:bg-base-50 transition-colors">
+               return `<tr class="hover:bg-slate-100 transition-colors cursor-pointer group" onclick="HistoryManager.viewDetail('${itemJson}')">
                         <td class="text-center font-mono text-xs text-slate-500">${item.date}</td>
                         <td class="text-center text-xs"><span class="badge badge-ghost badge-sm text-[10px] whitespace-nowrap">${item.shift}</span></td>
                         <td class="text-xs font-bold text-slate-700">${item.reporter}</td>
                         <td class="text-center">${groupBadge}</td>
-                        <td class="text-center">
-                            <button onclick="HistoryManager.viewDetail('${itemJson}')" class="btn btn-xs btn-square btn-ghost text-primary hover:bg-primary/10 transition-colors"><i class="fas fa-search"></i></button>
+                        <td class="text-center text-slate-400 group-hover:text-primary transition-colors">
+                            <i class="fas fa-chevron-right text-[10px]"></i>
                         </td>
                     </tr>`;
             }).join('');
@@ -106,12 +106,10 @@
                const pdfArea = getEl('hist-pdf-area');
                if (!container) return;
 
-               // --- Subtitle ---
                if (subtitle) {
                   subtitle.textContent = item.date + ' • ' + (item.shift || '-');
                }
 
-               // --- Info Bar ---
                if (infoBar) {
                   let groupBadge = '<span class="badge badge-ghost badge-xs">-</span>';
                   if (item.chatTarget === 'group_all') groupBadge = '<span class="badge badge-success badge-sm gap-1 text-[10px]"><i class="fas fa-users"></i> All</span>';
@@ -142,8 +140,35 @@
                   `;
                }
 
-               // --- Body Content ---
                const sections = [];
+
+               // NTT Status Section
+               let nttStatus = item.nttStatus || 'รอตรวจสอบ';
+               let nttBadgeClass = 'bg-slate-100 text-slate-600 border-slate-200';
+               let nttIcon = 'fa-clock';
+
+               if (nttStatus === 'เรียบร้อย' || nttStatus === 'ปกติ') {
+                  nttBadgeClass = 'bg-emerald-50 text-emerald-600 border-emerald-200';
+                  nttIcon = 'fa-check-circle';
+                  nttStatus = 'ปกติ'; 
+               } else if (nttStatus === 'มีปัญหา') {
+                  nttBadgeClass = 'bg-rose-50 text-rose-600 border-rose-200';
+                  nttIcon = 'fa-exclamation-triangle';
+               }
+
+               sections.push(`
+                  <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+                     <div class="flex items-center gap-2">
+                        <span class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                           <i class="fas fa-server text-[10px] text-blue-500"></i>
+                        </span>
+                        <span class="text-[11px] font-bold text-slate-700">สถานะ NTT Dashboard</span>
+                     </div>
+                     <span class="badge badge-sm border ${nttBadgeClass} font-bold text-[10px] gap-1 px-2 py-2.5 shadow-sm">
+                        <i class="fas ${nttIcon}"></i> ${nttStatus}
+                     </span>
+                  </div>
+               `);
 
                // Ticket Section
                sections.push(`
@@ -172,7 +197,7 @@
                   </div>
                `);
 
-               // Transfer Section (conditional)
+               // Transfer Section
                if (item.transferReport) {
                   sections.push(`
                      <div class="bg-gradient-to-br from-gray-50 to-slate-50 p-3.5 rounded-xl border border-gray-200/80 shadow-sm">
@@ -189,7 +214,7 @@
 
                container.innerHTML = sections.join('');
 
-               // --- PDF Button ---
+               // PDF Button
                if (pdfArea) {
                   if (item.pdfUrl) {
                      pdfArea.innerHTML = `
@@ -216,6 +241,7 @@
                if (typeof UIManager !== 'undefined') UIManager.showToast("เกิดข้อผิดพลาดในการแสดงผล", "error");
             }
          },
+         
          init: function () {
             if (typeof Router !== 'undefined') {
                Router.register('page-history', this);
@@ -223,4 +249,9 @@
          }
       };
    })();
+
+   // ✨ [ส่วนที่เพิ่ม] เรียกใช้งาน HistoryManager
+   if (window.HistoryManager) {
+      window.HistoryManager.init();
+   }
 </script>

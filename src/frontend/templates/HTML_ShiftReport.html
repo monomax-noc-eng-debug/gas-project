@@ -43,7 +43,7 @@
     .header-section {
       border-bottom: 2px solid #000000;
       padding-bottom: 10px;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
@@ -183,6 +183,15 @@
       background: #fef2f2;
       color: #b91c1c;
     }
+    
+    /* สไตล์สำหรับกล่องแจ้งสถานะภายนอก (NTT) */
+    .external-status-box {
+      margin-bottom: 20px;
+      padding: 10px 15px;
+      background-color: #f0f9ff;
+      border-left: 4px solid #0ea5e9;
+      border-radius: 6px;
+    }
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
@@ -205,6 +214,22 @@
       </div>
       <div style="text-align: right; font-size:10px; color:#64748b; font-weight: bold;">
         Shift Report System
+      </div>
+    </div>
+
+    <div class="external-status-box">
+      <div style="font-size: 13px; font-weight: bold; color: #0369a1; margin-bottom: 4px;">
+        สถานะระบบภายนอก (NTT Dashboard)
+      </div>
+      <div style="font-size: 12px; color: #334155;">
+        ผลการตรวจสอบ: 
+        <? if (data.nttStatus === 'เรียบร้อย' || data.nttStatus === 'ปกติ') { ?>
+            <span style="color: #15803d; font-weight: bold;">✅ ปกติ (Normal)</span>
+        <? } else if (data.nttStatus === 'มีปัญหา') { ?>
+            <span style="color: #b91c1c; font-weight: bold;">❌ มีปัญหา (Issue)</span>
+        <? } else { ?>
+            <span style="color: #64748b; font-weight: bold;">⚠️ <?= data.nttStatus || 'รอตรวจสอบ' ?></span>
+        <? } ?>
       </div>
     </div>
 
@@ -305,7 +330,6 @@
       </div>
       <? } ?>
       <? } else if (data.topics[i].image) { ?>
-      <!-- Fallback for legacy single image -->
       <div class="image-container">
         <img src="data:image/jpeg;base64,<?= data.topics[i].image ?>" class="evidence-img">
         <? if (data.topics[i].caption) { ?>

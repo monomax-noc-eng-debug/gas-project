@@ -30,6 +30,10 @@
       if (typeof ReportManager !== 'undefined' && ReportManager.init) ReportManager.init();
       if (typeof HandoverManager !== 'undefined' && HandoverManager.init) HandoverManager.init();
       if (typeof TicketManager !== 'undefined' && TicketManager.init) TicketManager.init();
+      
+      // ✨ เพิ่มการ Initialze PlaybookManager สำหรับหน้า Service Playbook ✨
+      if (typeof PlaybookManager !== 'undefined' && PlaybookManager.init) PlaybookManager.init();
+
       if (typeof EmailFetchManager !== 'undefined' && EmailFetchManager.init) EmailFetchManager.init();
       if (typeof EmailSendManager !== 'undefined' && EmailSendManager.init) EmailSendManager.init();
       if (typeof HistoryManager !== 'undefined' && HistoryManager.init) HistoryManager.init();

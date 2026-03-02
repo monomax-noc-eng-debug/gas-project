@@ -122,6 +122,11 @@ function apiHandler(request) {
     resolveHandover: (id) => HandoverController.resolveHandover(id),
     acknowledgeHandover: (d) => HandoverController.acknowledgeHandover(d),
 
+    // ✨ Service Playbook
+    getPlaybooks: () => PlaybookController.getPlaybooks(),
+    savePlaybook: (d) => PlaybookController.savePlaybook(d),
+    deletePlaybook: (id) => PlaybookController.deletePlaybook(id),
+    uploadImage: (d) => PlaybookController.uploadImage(d.base64Data, d.fileName),
 
     // Report Page Logic
     getTicketDetails: (d) => TicketService.getTicketDetails(d),

@@ -10,11 +10,12 @@ const ReportController = {
       const ss = SpreadsheetApp.openById(dbId);
       let sheet = ss.getSheetByName("DB_Reports");
 
+      // ✨ เพิ่ม "NTT Status" เข้าไปใน Headers
       const HEADERS = [
         "Timestamp", "Report Date", "Shift", "Reporter",
         "Ticket Total", "Ticket Open", "Ticket Pending", "Ticket Resolved", "Ticket Closed",
         "Ticket Details", "Match Summary", "Match Total", "Transfer Report",
-        "Status Mono", "Status AIS", "Status Start", "Image URLs", "PDF Report Link", "Chat Target"
+        "Status Mono", "Status AIS", "Status Start", "NTT Status", "Image URLs", "PDF Report Link", "Chat Target"
       ];
 
       if (!sheet) {
@@ -24,7 +25,7 @@ const ReportController = {
 
       const ts = formData.ticketStats || {};
 
-      // 1. Process Images (Get Blobs & Base64 for PDF)
+      // 1. Process Images
       const imgData = ReportGenerator.processImages(formData);
 
       // 🟢 Preview Mode
@@ -39,26 +40,31 @@ const ReportController = {
         chatBody += `> 🔵 ปิดได้วันนี้: ${(Number(ts.resolved) || 0) + (Number(ts.closed) || 0)}\n`;
         chatBody += `> 🔴 งานค้าง: ${ts.backlog || ts.open || 0}\n\n`;
 
-        chatBody += `2. สถานะช่อง\n`;
+        // ✨ [เพิ่มใหม่] แสดงสถานะ NTT ใน Preview
+        const nttIcon = formData.nttStatus === "เรียบร้อย" ? "✅" : "❌";
+        chatBody += `2. สถานะระบบภายนอก (NTT)\n`;
+        chatBody += `> ${nttIcon} NTT Dashboard: ${formData.nttStatus || 'ไม่ได้ระบุ'}\n\n`;
+
+        chatBody += `3. สถานะช่อง\n`;
         chatBody += `> Start Mono: ${formData.statusStartMono || '-'}\n`;
         chatBody += `> Stop Mono: ${formData.statusStopMono || '-'}\n`;
         chatBody += `> Start AIS: ${formData.statusStartAis || '-'}\n`;
         chatBody += `> Stop AIS: ${formData.statusStopAis || '-'}\n\n`;
 
         if (formData.transferReport) {
-          chatBody += `3. Shift Transfer\n`;
+          chatBody += `4. Shift Transfer\n`;
           chatBody += formData.transferReport.split('\n').map(l => `> ${l}`).join('\n') + '\n\n';
         }
 
         chatBody += `─────────────────────────────\n`;
-        chatBody += `4. สรุปจำนวน Match\n`;
+        chatBody += `5. สรุปจำนวน Match\n`;
         chatBody += `(Match รวม ${formData.matchTotal || 0} คู่ / จบแล้ว ${formData.matchEnded || 0} คู่)\n`;
         chatBody += (formData.matchSummary || 'ไม่มีรายการแข่งขัน') + '\n';
 
         return JSON.stringify({ success: true, isPreview: true, chatPreview: chatBody });
       }
 
-      // 2. Save to Sheet FIRST (To ensure data is recorded even if PDF fails)
+      // 2. Save to Sheet
       const imgString = imgData.urls.join(",\n");
       const rowData = [
         new Date(),
@@ -74,33 +80,39 @@ const ReportController = {
         formData.matchSummary,
         formData.matchTotal || 0,
         formData.transferReport,
-        formData.statusStopMono, // Status Mono
-        formData.statusStopAis,  // Status AIS
-        formData.statusStartMono, // Status Start
+        formData.statusStopMono,
+        formData.statusStopAis,
+        formData.statusStartMono,
+        formData.nttStatus || "ไม่ได้ระบุ", // ✨ [เพิ่มใหม่] บันทึกสถานะ NTT ลง Column ที่ 17
         imgString,
-        "", // Placeholder for PDF Report Link
+        "",
         formData.chatTarget
       ];
 
       sheet.appendRow(rowData);
       const lastRow = sheet.getLastRow();
 
-      // 3. Generate PDF (Safely)
+      // 3. Generate PDF
       let pdfUrl = "";
       try {
         pdfUrl = ReportGenerator.generateShiftReportPDF(formData, imgData.pdfImages);
         if (pdfUrl) {
-          sheet.getRange(lastRow, 18).setValue(pdfUrl); // Update PDF column
+          // อัปเดต Column ที่ 19 (PDF Link) เนื่องจากเราเพิ่ม Column NTT เข้าไปทำให้ลำดับเลื่อน
+          sheet.getRange(lastRow, 19).setValue(pdfUrl);
         }
       } catch (err) {
-        console.error("PDF Generation Error (Non-blocking):", err);
+        console.error("PDF Generation Error:", err);
       }
 
       // 4. Send Chat (Webhook)
       if (formData.chatTarget && typeof CONFIG !== 'undefined' && CONFIG.WEBHOOKS && CONFIG.WEBHOOKS[formData.chatTarget]) {
         try {
           const cardPayload = ReportGenerator.buildChatCard(formData, pdfUrl);
-          UrlFetchApp.fetch(CONFIG.WEBHOOKS[formData.chatTarget], { method: "post", contentType: "application/json", payload: JSON.stringify(cardPayload) });
+          UrlFetchApp.fetch(CONFIG.WEBHOOKS[formData.chatTarget], {
+            method: "post",
+            contentType: "application/json",
+            payload: JSON.stringify(cardPayload)
+          });
         }
         catch (e) { console.error("Webhook Error", e); }
       }
@@ -123,6 +135,7 @@ const ReportController = {
         const row = data[i];
         if (!row[1]) continue;
 
+        // ปรับลำดับ Index ตาม HEADERS ใหม่ที่เราอัปเดตใน processShiftReport
         history.push({
           timestamp: row[0],
           date: API_UTILS.formatDateTime(row[1], 'date'),
@@ -132,8 +145,9 @@ const ReportController = {
           ticketSummary: row[9],
           matchSummary: row[10],
           transferReport: row[12],
-          chatTarget: row[18],
-          pdfUrl: row[17]
+          nttStatus: row[16], // ✨ ดึงค่า NTT Status (Column ที่ 17)
+          pdfUrl: row[18],    // 📄 PDF Link เลื่อนไปที่ Column 19
+          chatTarget: row[19] // 💬 Chat Target เลื่อนไปที่ Column 20
         });
         if (history.length >= 50) break;
       }

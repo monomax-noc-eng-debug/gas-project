@@ -1,0 +1,758 @@
+<script>
+  // บังคับให้ SweetAlert อยู่บนสุดเสมอ
+  (function() {
+    var style = document.createElement('style');
+    style.innerHTML = '.swal2-container { z-index: 99999 !important; }';
+    document.head.appendChild(style);
+  })();
+
+  console.log("Loading JS_Playbook script...");
+
+  var PlaybookManager = (function () {
+    var playbooks = [];
+    var filteredPlaybooks = [];
+    var editorSteps = [];
+    var editorContacts = [];
+    var staffUsers = [];
+    var playbookCategories = [];
+
+    function getSwalTarget() {
+      return document.querySelector('dialog[open]') || document.body;
+    }
+
+    function showToast(msg, icon) {
+      if (typeof Swal !== "undefined") {
+        Swal.fire({
+          target: getSwalTarget(),
+          toast: true,
+          position: 'bottom-end',
+          icon: icon || 'success',
+          title: msg,
+          showConfirmButton: false,
+          timer: 3000,
+          timerProgressBar: true
+        });
+      } else {
+        alert(msg);
+      }
+    }
+
+    function showAlert(title, msg, icon) {
+      if (typeof Swal !== "undefined") {
+        Swal.fire({
+          target: getSwalTarget(),
+          title: title,
+          text: msg,
+          icon: icon || 'error'
+        });
+      } else {
+        alert(title + "\n" + msg);
+      }
+    }
+
+    // ตัวกรองชื่อ (เปลี่ยน Unknown เป็น ไม่ระบุ)
+    function getValidName(nameStr) {
+      if (!nameStr || nameStr.trim() === "") return "ไม่ระบุ";
+      if (nameStr.indexOf("@") !== -1 || nameStr.indexOf("monomax-noc-eng") !== -1) return "ไม่ระบุ";
+      return nameStr;
+    }
+
+    function compressImage(file, maxWidth, maxHeight, quality) {
+      maxWidth = maxWidth || 1200;
+      maxHeight = maxHeight || 1200;
+      quality = quality || 0.8;
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = function (event) {
+          var img = new Image();
+          img.src = event.target.result;
+          img.onload = function () {
+            var width = img.width;
+            var height = img.height;
+            if (width > maxWidth) {
+              height = Math.round(height * (maxWidth / width));
+              width = maxWidth;
+            }
+            if (height > maxHeight) {
+              width = Math.round(width * (maxHeight / height));
+              height = maxHeight;
+            }
+            var canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = function (e) { reject(e); };
+        };
+        reader.onerror = function (e) { reject(e); };
+      });
+    }
+
+    function getSafeStr(val) {
+      return val ? String(val) : "";
+    }
+
+    function parseJSONSafe(str) {
+      if (!str) return [];
+      try {
+        return typeof str === 'string' ? JSON.parse(str) : str;
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function renderSkeleton() {
+      var grid = document.getElementById("playbook-grid");
+      if (!grid) return;
+      var html = "";
+      for (var i = 0; i < 4; i++) {
+        html += '<div class="card bg-base-100 shadow-sm border border-gray-100 h-[340px] flex flex-col overflow-hidden">' +
+          '<div class="skeleton h-40 w-full rounded-none"></div>' +
+          '<div class="card-body p-4 flex flex-col gap-3 flex-1">' +
+          '<div class="skeleton h-6 w-3/4"></div>' +
+          '<div class="skeleton h-4 w-full mt-2"></div>' +
+          '<div class="skeleton h-4 w-5/6"></div>' +
+          '<div class="mt-auto pt-3 border-t border-gray-50 flex justify-between items-center">' +
+          '<div class="skeleton h-4 w-1/3"></div>' +
+          '<div class="skeleton h-6 w-1/4 rounded-full"></div>' +
+          '</div></div></div>';
+      }
+      grid.innerHTML = html;
+    }
+
+    function filterPlaybooks() {
+      var searchInput = document.getElementById("pb-search") || document.getElementById("pb-search-input");
+      var searchText = searchInput ? searchInput.value.toLowerCase() : "";
+      var filterCat = document.getElementById("pb-filter-category").value;
+
+      filteredPlaybooks = playbooks.filter(function (pb) {
+        var matchSearch = !searchText ||
+          (pb.Title || "").toLowerCase().indexOf(searchText) !== -1 ||
+          (pb.Category || "").toLowerCase().indexOf(searchText) !== -1;
+        var matchCat = !filterCat || (pb.Category === filterCat);
+        return matchSearch && matchCat;
+      });
+      renderCards();
+    }
+
+    function renderCards() {
+      var grid = document.getElementById("playbook-grid");
+      if (!grid) return;
+      grid.innerHTML = "";
+
+      var sInput = document.getElementById("pb-search");
+      var cInput = document.getElementById("pb-filter-category");
+      var displayList = (filteredPlaybooks.length > 0 || (sInput && sInput.value) || (cInput && cInput.value))
+        ? filteredPlaybooks : playbooks;
+
+      if (displayList.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center py-10 text-gray-400">ไม่พบข้อมูล</div>';
+        return;
+      }
+
+      displayList.forEach(function (pb) {
+        var card = document.createElement("div");
+        card.className = "group relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-500 flex flex-col h-[360px] overflow-hidden cursor-pointer";
+        card.onclick = function () { PlaybookManager.openViewModal(pb); };
+
+        var coverImg = (pb.Cover_Image && pb.Cover_Image.indexOf('http') === 0) ? pb.Cover_Image : 'https://placehold.co/600x400?text=ไม่มีรูปภาพ';
+        var updatedAt = pb.Updated_At ? dayjs(pb.Updated_At).format('DD/MM/YYYY HH:mm') : '-';
+        var updatedBy = getValidName(pb.Update_By_Name || pb.Updated_By || pb.Creator);
+        var category = pb.Category || 'ทั่วไป';
+        var title = pb.Title || 'ไม่มีชื่อ';
+        var summary = pb.Full_Detail ? pb.Full_Detail.substring(0, 100) + "..." : 'ไม่มีรายละเอียด';
+
+        card.innerHTML = 
+          '<div class="relative h-44 w-full overflow-hidden shrink-0 bg-slate-50">' +
+            '<div class="absolute top-3 left-3 z-20"><span class="px-2.5 py-1 rounded-lg bg-slate-900/60 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest border border-white/10">' + category + '</span></div>' +
+            '<div class="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10"></div>' +
+            '<img src="' + coverImg + '" referrerpolicy="no-referrer" alt="หน้าปก" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" onerror="this.src=\'https://placehold.co/600x400?text=ไม่สามารถโหลดรูปได้\'" />' +
+          '</div>' +
+          '<div class="p-5 flex flex-col flex-1 relative bg-white">' +
+             '<h3 class="text-sm font-extrabold text-slate-800 line-clamp-2 leading-relaxed mb-2">' + title + '</h3>' +
+             '<p class="text-[11px] text-slate-500 font-medium line-clamp-2 mb-4 leading-relaxed">' + summary + '</p>' +
+             '<div class="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">' +
+                '<div class="flex items-center gap-1.5 text-slate-400"><i class="far fa-clock text-[10px]"></i><span class="text-[10px] font-bold">' + updatedAt + '</span></div>' +
+                '<div class="flex items-center gap-2">' +
+                   '<div class="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 overflow-hidden"><i class="fas fa-user text-[9px]"></i></div>' +
+                   '<span class="text-[10px] font-black text-indigo-600 tracking-tight line-clamp-1 max-w-[80px]">' + updatedBy + '</span>' +
+                '</div>' +
+             '</div>' +
+          '</div>';
+        grid.appendChild(card);
+      });
+    }
+
+    function renderEditorSteps() {
+      var container = document.getElementById("pb-editor-steps");
+      if (!container) return;
+      container.innerHTML = "";
+
+      if (editorSteps.length === 0) {
+        container.innerHTML = '<div class="text-[11px] text-slate-400 text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">ยังไม่มีขั้นตอน กดเพิ่มเพื่อเริ่มต้น</div>';
+        return;
+      }
+
+      editorSteps.forEach(function (step, index) {
+        var row = document.createElement("div");
+        row.className = "bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm relative group mb-3 hover:border-emerald-300 transition-colors";
+
+        var imgTag = (step.image && step.image.length > 50) ? '<div class="mt-3 relative inline-block"><img src="' + step.image + '" referrerpolicy="no-referrer" class="h-20 rounded-xl object-cover border border-slate-200 shadow-sm"></div>' : "";
+
+        row.innerHTML =
+          '<button type="button" onclick="PlaybookManager.removeStepRow(' + index + ')" class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-500 text-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:scale-110 z-10"><i class="fas fa-times text-[10px]"></i></button>' +
+          '<div class="flex items-center gap-2 mb-3">' +
+          '<span class="flex items-center justify-center h-5 px-2.5 rounded-md bg-emerald-500 text-white text-[9px] font-black tracking-widest">ขั้นตอนที่ ' + (index + 1) + '</span>' +
+          '</div>' +
+          '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">' +
+          '<div class="form-control"><label class="label py-1"><span class="label-text-alt font-bold text-slate-500">หัวข้อ</span></label><input type="text" class="input input-sm input-bordered w-full text-xs rounded-lg focus:border-emerald-500" placeholder="ระบุสิ่งที่ต้องทำ..." value="' + getSafeStr(step.title) + '" onchange="PlaybookManager.updateStep(' + index + ', \'title\', this.value)"></div>' +
+          '<div class="form-control"><label class="label py-1"><span class="label-text-alt font-bold text-slate-500">รูปภาพประกอบ</span></label><input type="file" accept="image/*" class="file-input file-input-xs file-input-bordered w-full rounded-lg focus:border-emerald-500" onchange="PlaybookManager.handleStepImage(' + index + ', this)"></div>' +
+          '<div class="form-control md:col-span-2"><label class="label py-1"><span class="label-text-alt font-bold text-slate-500">คำอธิบาย</span></label><textarea class="textarea textarea-sm textarea-bordered w-full h-16 rounded-xl text-xs focus:border-emerald-500" placeholder="รายละเอียดขั้นตอน..." onchange="PlaybookManager.updateStep(' + index + ', \'description\', this.value)">' + getSafeStr(step.description) + '</textarea></div>' +
+          '<div class="form-control md:col-span-2"><label class="label py-1"><span class="label-text-alt font-bold text-slate-500">ข้อความคัดลอก</span></label><textarea class="textarea textarea-sm textarea-bordered w-full h-10 rounded-xl font-mono text-xs text-primary focus:border-emerald-500 bg-slate-50" placeholder="โค้ด หรือ คำสั่ง..." onchange="PlaybookManager.updateStep(' + index + ', \'copyText\', this.value)">' + getSafeStr(step.copyText) + '</textarea></div>' +
+          '</div>' +
+          imgTag;
+        container.appendChild(row);
+      });
+    }
+
+    function renderEditorContacts() {
+      var container = document.getElementById("pb-editor-contacts");
+      if (!container) return;
+      container.innerHTML = "";
+
+      if (editorContacts.length === 0) {
+        container.innerHTML = '<div class="text-[11px] text-slate-400 text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">ไม่มีข้อมูลผู้ติดต่อ</div>';
+        return;
+      }
+
+      editorContacts.forEach(function (contact, index) {
+        var row = document.createElement("div");
+        row.className = "flex flex-col md:flex-row gap-2 items-end md:items-center bg-slate-50 p-3 rounded-xl border border-slate-200 mb-2 hover:border-accent transition-colors";
+
+        row.innerHTML =
+          '<div class="grid grid-cols-1 md:grid-cols-4 gap-2 flex-1 w-full">' +
+          '<input type="text" class="input input-sm input-bordered w-full text-xs" placeholder="ชื่อ/ทีม" value="' + getSafeStr(contact.name) + '" onchange="PlaybookManager.updateContact(' + index + ', \'name\', this.value)">' +
+          '<input type="text" class="input input-sm input-bordered w-full text-xs" placeholder="เบอร์โทร" value="' + getSafeStr(contact.phone) + '" onchange="PlaybookManager.updateContact(' + index + ', \'phone\', this.value)">' +
+          '<input type="text" class="input input-sm input-bordered w-full text-xs" placeholder="อีเมล" value="' + getSafeStr(contact.email) + '" onchange="PlaybookManager.updateContact(' + index + ', \'email\', this.value)">' +
+          '<input type="text" class="input input-sm input-bordered w-full text-xs" placeholder="ลิงก์อ้างอิง" value="' + getSafeStr(contact.link) + '" onchange="PlaybookManager.updateContact(' + index + ', \'link\', this.value)">' +
+          '</div>' +
+          '<button type="button" onclick="PlaybookManager.removeContactRow(' + index + ')" class="btn btn-sm btn-square btn-ghost text-error rounded-lg"><i class="fas fa-trash-alt text-[10px]"></i></button>';
+        container.appendChild(row);
+      });
+    }
+
+    function populateDropdowns() {
+      var filterCat = document.getElementById("pb-filter-category");
+      var formCat = document.getElementById("pb-form-category");
+
+      if (filterCat) {
+        var currentFilter = filterCat.value;
+        filterCat.innerHTML = '<option value="">ทุกหมวดหมู่</option>';
+        playbookCategories.forEach(function (cat) {
+          var opt = document.createElement("option");
+          opt.value = cat; opt.textContent = cat;
+          filterCat.appendChild(opt);
+        });
+        filterCat.value = currentFilter;
+      }
+
+      if (formCat) {
+        var currentForm = formCat.value;
+        formCat.innerHTML = '<option value="">-- เลือกหมวดหมู่ --</option>';
+        playbookCategories.forEach(function (cat) {
+          var opt = document.createElement("option");
+          opt.value = cat; opt.textContent = cat;
+          formCat.appendChild(opt);
+        });
+        formCat.value = currentForm;
+      }
+
+      var formCreator = document.getElementById("pb-form-creator");
+      if (formCreator) {
+        var currentCreator = formCreator.value;
+        formCreator.innerHTML = '<option value="">-- เลือกผู้จัดทำ --</option>';
+        staffUsers.forEach(function (u) {
+          var r = u.role || u.Role || "";
+          if (r.toLowerCase() === 'responsibility') {
+            var opt = document.createElement("option");
+            opt.value = u.name || u.Name || u.engName;
+            opt.textContent = u.name || u.Name || u.engName;
+            formCreator.appendChild(opt);
+          }
+        });
+        formCreator.value = currentCreator;
+      }
+
+      var formUpdateBy = document.getElementById("pb-form-update-by");
+      if (formUpdateBy) {
+        var currentUpdateBy = formUpdateBy.value;
+        formUpdateBy.innerHTML = '<option value="">-- เลือกระบุภายหลัง --</option>';
+        staffUsers.forEach(function (u) {
+          var r = u.role || u.Role || "";
+          if (r.toLowerCase() === 'operator') {
+            var opt = document.createElement("option");
+            opt.value = u.name || u.Name || u.engName;
+            opt.textContent = u.name || u.Name || u.engName;
+            formUpdateBy.appendChild(opt);
+          }
+        });
+        formUpdateBy.value = currentUpdateBy;
+      }
+    }
+
+    return {
+      init: function () {
+        console.log("PlaybookManager Init OK");
+        if (typeof Router !== "undefined") {
+          Router.register("page-playbook", this);
+        }
+      },
+      onShow: function () {
+        this.loadData();
+      },
+      onHide: function () { },
+
+      loadData: async function () {
+        var grid = document.getElementById("playbook-grid");
+        try {
+          renderSkeleton();
+
+          var settingsRes = await Server.call({ func: "apiGetAllSettings", silent: true });
+          if (settingsRes && settingsRes.success) {
+            staffUsers = settingsRes.data.staffUsers || [];
+            playbookCategories = settingsRes.data.playbookCategories || [];
+            populateDropdowns();
+          }
+
+          var res = await Server.call({ func: "getPlaybooks", silent: true });
+          if (res && res.success) {
+            playbooks = res.data || [];
+            filteredPlaybooks = playbooks;
+            renderCards();
+          } else {
+            var errMsg = res ? res.message : "เกิดข้อผิดพลาด";
+            if (grid) grid.innerHTML = '<div class="col-span-full text-center py-10 text-error">ไม่สามารถดึงข้อมูลได้: ' + errMsg + '</div>';
+          }
+        } catch (e) {
+          if (grid) grid.innerHTML = '<div class="col-span-full text-center py-10 text-error">เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์</div>';
+        }
+      },
+
+      filterPlaybooks: filterPlaybooks,
+
+      openViewModal: function (pb) {
+        document.getElementById("pb-view-title").textContent = pb.Title || '-';
+        document.getElementById("pb-view-category").textContent = pb.Category || '-';
+        document.getElementById("pb-view-fulldetail").textContent = pb.Full_Detail || '-';
+        if(document.getElementById("pb-view-id")) document.getElementById("pb-view-id").textContent = pb.ID || '-';
+
+        var editBtn = document.getElementById("pb-view-edit-btn");
+        if(editBtn) {
+          editBtn.onclick = function() {
+            var vModal = document.getElementById('playbook-view-modal');
+            if(vModal) vModal.close();
+            PlaybookManager.openEditorModal(pb.ID);
+          };
+        }
+
+        var histories = parseJSONSafe(pb.History_JSON);
+        
+        var latestNote = "";
+        var latestBy = "ไม่ระบุ";
+        var latestDate = pb.Updated_At ? dayjs(pb.Updated_At).format('DD/MM/YYYY HH:mm') : "-";
+
+        if (histories && histories.length > 0) {
+          latestBy = getValidName(histories[0].by || histories[0].update_by_name);
+        } else {
+          latestBy = getValidName(pb.Update_By_Name || pb.Creator);
+        }
+
+        var elUpBy = document.getElementById("pb-view-update-by");
+        var elUpDate = document.getElementById("pb-view-update-date");
+        if(elUpBy) elUpBy.textContent = "ผู้ร้องขอ: " + latestBy; 
+        if(elUpDate) elUpDate.textContent = "เวลา: " + latestDate;
+
+        var linkBtn = document.getElementById("pb-view-link");
+        if (pb.External_Link && pb.External_Link.trim() !== "") {
+          linkBtn.href = pb.External_Link.trim();
+          linkBtn.classList.remove("hidden");
+          linkBtn.classList.add("flex");
+        } else {
+          linkBtn.classList.add("hidden");
+          linkBtn.classList.remove("flex");
+        }
+
+        var imgEl = document.getElementById("pb-view-image");
+        var imgContainer = document.getElementById("pb-view-image-container");
+        if (pb.Cover_Image && pb.Cover_Image.indexOf('http') === 0) {
+          imgEl.src = pb.Cover_Image;
+          imgEl.setAttribute('referrerpolicy', 'no-referrer');
+          if(imgContainer) imgContainer.classList.remove("hidden");
+        } else {
+          if(imgContainer) imgContainer.classList.add("hidden");
+        }
+
+        var stepContainer = document.getElementById("pb-view-stepper");
+        var steps = parseJSONSafe(pb.Steps_JSON);
+        var stepHtml = "";
+        
+        steps.forEach(function (step, idx) {
+          var descHtml = step.description ? 
+            '<div class="text-xs text-slate-600 leading-relaxed whitespace-pre-line mt-2">' + getSafeStr(step.description) + '</div>' : '';
+          var imgHtml = (step.image && step.image.length > 50) ? 
+            '<div class="mt-3"><img src="' + step.image + '" referrerpolicy="no-referrer" class="rounded-xl shadow-sm border border-slate-200 max-w-full md:max-w-xs h-auto object-cover" /></div>' : '';
+          var copyHtml = step.copyText ? 
+            '<div class="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center justify-between gap-3">' +
+              '<code class="text-[10px] text-slate-600 font-mono break-all line-clamp-2">' + getSafeStr(step.copyText) + '</code>' +
+              '<button type="button" onclick="PlaybookManager.copyStepText(\'' + encodeURIComponent(getSafeStr(step.copyText)) + '\')" class="btn btn-xs btn-primary btn-outline shrink-0 bg-white shadow-sm text-[9px]">คัดลอก</button>' +
+            '</div>' : '';
+
+          stepHtml += 
+            '<div class="flex items-start gap-3 w-full relative mb-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">' +
+              '<div class="shrink-0"><div class="bg-primary text-white px-2.5 py-1 rounded-md text-[9px] font-black tracking-widest shadow-sm">ขั้นตอนที่ ' + (idx + 1) + '</div></div>' +
+              '<div class="flex-1 min-w-0">' +
+                '<h5 class="text-sm font-bold text-slate-800 leading-tight">' + getSafeStr(step.title) + '</h5>' +
+                descHtml + copyHtml + imgHtml +
+              '</div>' +
+            '</div>';
+        });
+        stepContainer.innerHTML = stepHtml || '<div class="text-slate-400 text-xs italic py-2">ไม่มีข้อมูลขั้นตอน</div>';
+
+        var contactContainer = document.getElementById("pb-view-contacts");
+        var contacts = parseJSONSafe(pb.Contacts_JSON);
+        var contactHtml = "";
+        contacts.forEach(function (c) {
+          contactHtml += 
+            '<div class="bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm">' +
+              '<div class="font-black text-indigo-600 text-[10px] uppercase tracking-wider mb-1.5">' + getSafeStr(c.name) + '</div>' +
+              (c.phone ? '<div class="text-[10px] text-slate-500 flex items-center gap-1.5 mb-1"><i class="fas fa-phone-alt text-slate-300"></i> ' + getSafeStr(c.phone) + '</div>' : '') +
+              (c.email ? '<div class="text-[10px] text-slate-500 flex items-center gap-1.5"><i class="fas fa-envelope text-slate-300"></i> ' + getSafeStr(c.email) + '</div>' : '') +
+              (c.link ? '<a href="' + getSafeStr(c.link) + '" target="_blank" class="mt-2 w-full btn btn-xs btn-outline btn-indigo rounded-lg h-6 text-[9px]"><i class="fas fa-link"></i> ลิงก์</a>' : '') +
+            '</div>';
+        });
+        contactContainer.innerHTML = contactHtml || '<p class="text-[10px] text-slate-400 italic">ไม่มีข้อมูลผู้ติดต่อ</p>';
+
+        var historyContainer = document.getElementById("pb-view-history-container");
+        var historyList = document.getElementById("pb-view-history-list");
+        
+        if (histories && histories.length > 0) {
+          if(historyContainer) historyContainer.classList.remove("hidden");
+          var logHtml = histories.map(function(l, index) {
+              var actionNote = l.note || "แก้ไขข้อมูล";
+              var date = l.date ? dayjs(l.date).format('DD/MM/YYYY HH:mm') : "-";
+              var displayName = getValidName(l.by || l.update_by_name); 
+              var snapshotData = encodeURIComponent(JSON.stringify(l));
+
+              return '<div class="flex items-start gap-2.5 p-3 rounded-xl bg-white border border-slate-100 mb-2 shadow-sm">' +
+                  '<div class="flex-none mt-1"><div class="w-1.5 h-1.5 rounded-full ' + (index === 0 ? 'bg-primary animate-pulse' : 'bg-slate-300') + '"></div></div>' +
+                  '<div class="flex-grow min-w-0">' +
+                    '<div class="flex justify-between items-center mb-1"><span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">ครั้งที่ ' + (histories.length - index) + '</span><span class="text-[8px] text-slate-400">' + date + '</span></div>' +
+                    '<p class="text-[11px] text-slate-600 leading-relaxed font-medium break-words mb-1.5 line-clamp-2">' + actionNote + '</p>' +
+                    '<div class="flex items-center justify-between border-t border-slate-100 pt-1.5 mt-1">' +
+                      '<div class="text-[9px] text-slate-400 font-bold">โดย: ' + displayName + '</div>' +
+                      '<button type="button" onclick="PlaybookManager.viewOldVersion(\'' + snapshotData + '\')" class="btn btn-xs btn-ghost text-primary text-[9px] font-bold px-1.5 h-auto min-h-0"><i class="fas fa-history"></i> เนื้อหาเดิม</button>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>';
+          }).join('');
+          if(historyList) historyList.innerHTML = logHtml;
+        } else {
+          if(historyContainer) historyContainer.classList.add("hidden");
+        }
+
+        var modal = document.getElementById("playbook-view-modal");
+        if (modal) modal.showModal();
+      },
+
+      openEditorModal: function (editId) {
+        document.getElementById("pb-form-cover").value = "";
+        
+        var cp = document.getElementById("pb-form-cover-preview");
+        if(cp) {
+            cp.classList.add("hidden");
+            cp.querySelector("img").src = ""; 
+        }
+
+        var delBtn = document.getElementById("btn-delete-playbook");
+
+        if (editId) {
+          document.getElementById("pb-editor-header").textContent = 'แก้ไขข้อมูล';
+          if(delBtn) delBtn.classList.remove("hidden");
+
+          var pb = playbooks.find(function (p) { return p.ID === editId; });
+          if (pb) {
+            document.getElementById("pb-form-id").value = pb.ID;
+            document.getElementById("pb-form-title").value = pb.Title || "";
+            document.getElementById("pb-form-category").value = pb.Category || "";
+            document.getElementById("pb-form-creator").value = pb.Creator || "";
+            document.getElementById("pb-form-link").value = pb.External_Link || "";
+            document.getElementById("pb-form-fulldetail").value = pb.Full_Detail || "";
+            
+            var formUpdateBy = document.getElementById("pb-form-update-by");
+            if (formUpdateBy) formUpdateBy.value = pb.Update_By_Name || pb.Updated_By || "";
+
+            if (pb.Cover_Image && pb.Cover_Image.indexOf('http') === 0) {
+               if(cp) {
+                 cp.classList.remove("hidden");
+                 cp.querySelector("img").src = pb.Cover_Image;
+               }
+            }
+
+            editorSteps = parseJSONSafe(pb.Steps_JSON);
+            editorContacts = parseJSONSafe(pb.Contacts_JSON);
+          }
+        } else {
+          document.getElementById("pb-editor-header").textContent = 'สร้างข้อมูลใหม่';
+          if(delBtn) delBtn.classList.add("hidden"); 
+
+          document.getElementById("pb-form-id").value = "";
+          document.getElementById("pb-form-title").value = "";
+          document.getElementById("pb-form-category").value = "";
+          document.getElementById("pb-form-creator").value = "";
+          document.getElementById("pb-form-link").value = "";
+          document.getElementById("pb-form-fulldetail").value = "";
+          if(document.getElementById("pb-form-update-by")) document.getElementById("pb-form-update-by").value = "";
+          
+          editorSteps = [];
+          editorContacts = [];
+        }
+
+        renderEditorSteps();
+        renderEditorContacts();
+
+        var modal = document.getElementById("playbook-editor-modal");
+        if (modal) modal.showModal();
+      },
+
+      viewOldVersion: function (encodedData) {
+        try {
+          var data = JSON.parse(decodeURIComponent(encodedData));
+          var steps = parseJSONSafe(data.steps);
+          
+          var stepHtml = "";
+          steps.forEach(function(s, i) {
+             stepHtml += '<div style="text-align: left; margin-bottom: 15px; border-left: 3px solid #6366f1; padding-left: 12px; background: #fdfdfd; padding: 10px; border-radius: 0 8px 8px 0;">' +
+              '<div style="font-size: 10px; font-weight: 800; color: #6366f1; letter-spacing: 1px;">ขั้นตอนที่ ' + (i+1) + '</div>' +
+              '<div style="font-weight: bold; font-size: 13px; color: #1e293b; margin-top: 2px;">' + (s.title || 'ไม่มีหัวข้อ') + '</div>' +
+              '<div style="font-size: 11px; color: #64748b; margin-top: 5px; white-space: pre-line;">' + (s.description || '-') + '</div>' +
+            '</div>';
+          });
+
+          Swal.fire({
+            target: getSwalTarget(),
+            title: '<div style="font-size: 15px; font-weight: 800;">ข้อมูลเวอร์ชันเดิม (' + dayjs(data.date).format('DD/MM/YYYY HH:mm') + ')</div>',
+            html: '<div style="max-height: 500px; overflow-y: auto; text-align: left; font-family: \'Sarabun\', sans-serif; padding-right: 5px;">' +
+                '<div style="background: #eff6ff; padding: 12px; border-radius: 12px; margin-bottom: 20px; border: 1px dashed #bfdbfe;">' +
+                  '<div style="font-size: 10px; font-weight: 800; color: #3b82f6; text-transform: uppercase; margin-bottom: 5px;">เนื้อหาโดยละเอียดเดิม:</div>' +
+                  '<div style="font-size: 12px; color: #1e3a8a; white-space: pre-line; line-height: 1.6;">' + (data.full_detail || 'ไม่มีข้อมูล') + '</div>' +
+                '</div>' +
+                '<div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 12px; padding-left: 5px;">ขั้นตอนการทำงานเดิม:</div>' +
+                (stepHtml || '<div style="text-align:center; color:#ccc; font-size:11px;">ไม่มีข้อมูลขั้นตอน</div>') +
+              '</div>',
+            width: '600px',
+            confirmButtonText: 'ปิดหน้าต่าง',
+            confirmButtonColor: '#6366f1',
+            customClass: { popup: 'rounded-2xl' }
+          });
+        } catch (e) {
+          showToast("ไม่สามารถเปิดดูข้อมูลเก่าได้", "error");
+        }
+      },
+
+      copyStepText: function (encodedText) {
+        var text = decodeURIComponent(encodedText);
+
+        var copyFallback = function(txt) {
+          var textArea = document.createElement("textarea");
+          textArea.value = txt;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand("Copy");
+          textArea.remove();
+          showToast("คัดลอกข้อความแล้ว", "success");
+        };
+
+        if(navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function() {
+             showToast("คัดลอกข้อความแล้ว", "success");
+          }).catch(function(err) {
+             copyFallback(text);
+          });
+        } else {
+          copyFallback(text);
+        }
+      },
+
+      handleCoverImage: async function (inputEl) {
+        if (inputEl.files && inputEl.files[0]) {
+          try {
+            var compressedB64 = await compressImage(inputEl.files[0], 1200, 1200, 0.8);
+            var previewContainer = document.getElementById("pb-form-cover-preview");
+            if (previewContainer) {
+              previewContainer.classList.remove("hidden");
+              previewContainer.querySelector("img").src = compressedB64;
+            }
+          } catch (e) {
+            showToast("ไฟล์รูปภาพมีปัญหา", "error");
+          }
+        }
+      },
+
+      addStepRow: function () {
+        editorSteps.push({ title: "", description: "", copyText: "", image: "", fileName: "" });
+        renderEditorSteps();
+      },
+      removeStepRow: function (index) {
+        editorSteps.splice(index, 1);
+        renderEditorSteps();
+      },
+      updateStep: function (index, key, value) {
+        editorSteps[index][key] = value;
+      },
+      handleStepImage: async function (index, inputEl) {
+        if (inputEl.files && inputEl.files[0]) {
+          try {
+            var compressedB64 = await compressImage(inputEl.files[0], 1200, 1200, 0.8);
+            editorSteps[index].image = compressedB64;
+            editorSteps[index].fileName = inputEl.files[0].name;
+            renderEditorSteps();
+          } catch (e) {
+            showToast("ไฟล์รูปภาพมีปัญหา", "error");
+          }
+        }
+      },
+
+      addContactRow: function () {
+        editorContacts.push({ name: "", phone: "", email: "", link: "" });
+        renderEditorContacts();
+      },
+      removeContactRow: function (index) {
+        editorContacts.splice(index, 1);
+        renderEditorContacts();
+      },
+      updateContact: function (index, key, value) {
+        editorContacts[index][key] = value;
+      },
+
+      savePlaybook: async function () {
+        var title = document.getElementById("pb-form-title").value.trim();
+        if (!title) {
+          showToast("กรุณาระบุหัวข้อ", "warning");
+          return;
+        }
+
+        var updateByElement = document.getElementById("pb-form-update-by");
+        var updateByName = updateByElement ? updateByElement.value.trim() : "";
+        var finalUpdateByName = updateByName !== "" ? updateByName : "ไม่ระบุ";
+
+        var swalRes = await Swal.fire({
+          target: getSwalTarget(),
+          title: 'บันทึกการแก้ไข',
+          input: 'text',
+          inputLabel: 'ระบุสั้นๆ ว่าครั้งนี้แก้ไขอะไร (จะแสดงในประวัติ)',
+          inputValue: 'อัปเดตข้อมูลทั่วไป',
+          showCancelButton: true,
+          confirmButtonText: 'บันทึก',
+          cancelButtonText: 'ยกเลิก',
+          customClass: { popup: 'rounded-2xl' }
+        });
+
+        if (swalRes.isDismissed || swalRes.value === undefined) return;
+        var updateNote = swalRes.value;
+
+        var coverBase64 = null;
+        var coverName = null;
+        var coverInput = document.getElementById("pb-form-cover");
+
+        if (coverInput.files && coverInput.files.length > 0) {
+          try {
+            coverBase64 = await compressImage(coverInput.files[0], 1200, 1200, 0.8);
+            coverName = coverInput.files[0].name;
+          } catch (e) { }
+        } else {
+           var cp = document.getElementById("pb-form-cover-preview");
+           if (cp && cp.classList.contains("hidden")) {
+               coverBase64 = "REMOVED"; 
+           }
+        }
+
+        var payload = {
+          id: document.getElementById("pb-form-id").value,
+          title: title,
+          category: document.getElementById("pb-form-category").value.trim(),
+          creator: document.getElementById("pb-form-creator").value,
+          external_link: document.getElementById("pb-form-link").value.trim(),
+          full_detail: document.getElementById("pb-form-fulldetail").value.trim(),
+          update_by_name: finalUpdateByName,
+          update_note: updateNote,
+          coverBase64: coverBase64,
+          coverName: coverName,
+          steps: editorSteps,
+          contacts: editorContacts
+        };
+
+        try {
+          if (typeof UIManager !== "undefined") UIManager.showLoading("กำลังบันทึก...");
+          var res = await Server.call({ func: "savePlaybook", silent: true }, payload);
+          if (typeof UIManager !== "undefined") UIManager.hideLoading();
+
+          if (res && res.success) {
+            var modal = document.getElementById("playbook-editor-modal");
+            if(modal) modal.close();
+            showToast("บันทึกสำเร็จ!", "success");
+            this.loadData();
+          } else {
+            var msg = res ? (res.error || res.message) : "ไม่สามารถบันทึกได้";
+            showAlert("ข้อผิดพลาด", msg, "error");
+          }
+        } catch (e) {
+          if (typeof UIManager !== "undefined") UIManager.hideLoading();
+          var errMsg = e.message || e.toString();
+          showAlert("ข้อผิดพลาด", errMsg, "error");
+        }
+      },
+
+      deletePlaybook: async function () {
+        var id = document.getElementById("pb-form-id").value;
+        if (!id) return;
+        
+        var confirmRes = await Swal.fire({
+          target: getSwalTarget(), 
+          title: 'ยืนยันการลบ',
+          text: "คุณต้องการลบข้อมูลรหัส " + id + " ใช่หรือไม่?\n(ข้อมูลจะไม่สามารถกู้คืนได้)",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#ef4444',
+          cancelButtonColor: '#94a3b8',
+          confirmButtonText: 'ใช่, ลบเลย',
+          cancelButtonText: 'ยกเลิก',
+          customClass: { popup: 'rounded-2xl' }
+        });
+        if (!confirmRes.isConfirmed) return;
+
+        try {
+          if (typeof UIManager !== "undefined") UIManager.showLoading("กำลังลบข้อมูล...");
+          var res = await Server.call({ func: "deletePlaybook", silent: true }, { id: id });
+          if (typeof UIManager !== "undefined") UIManager.hideLoading();
+
+          if (res && res.success) {
+            var modal = document.getElementById("playbook-editor-modal");
+            if(modal) modal.close();
+            showToast("ลบข้อมูลสำเร็จ", "success");
+            this.loadData();
+          } else {
+            var msg = res ? (res.error || res.message) : "เกิดข้อผิดพลาดในการลบ";
+            showAlert("ข้อผิดพลาด", msg, "error");
+          }
+        } catch (e) {
+          if (typeof UIManager !== "undefined") UIManager.hideLoading();
+          var errMsg = e.message || e.toString();
+          showAlert("ข้อผิดพลาด", errMsg, "error");
+        }
+      }
+    };
+  })();
+</script>
