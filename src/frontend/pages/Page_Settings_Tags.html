@@ -28,17 +28,18 @@
     </div>
   </div>
 
-  <div class="flex gap-1 shrink-0 flex-wrap">
-    <button onclick="TagSettings.switchTab('handover')" data-tagtab="handover"
-      class="tag-tab-btn btn btn-sm bg-white border-base-200 shadow-sm font-semibold text-gray-500 hover:text-primary gap-1.5 active">
-      <i class="fas fa-hashtag text-info text-[10px]"></i> Handover Tags
-      <span class="badge badge-ghost badge-xs font-mono" id="tag-cnt">0</span>
-    </button>
-    <button onclick="TagSettings.switchTab('playbook')" data-tagtab="playbook"
-      class="tag-tab-btn btn btn-sm bg-white border-base-200 shadow-sm font-semibold text-gray-500 hover:text-primary gap-1.5">
-      <i class="fas fa-book text-emerald-500 text-[10px]"></i> Playbook Categories
-      <span class="badge badge-ghost badge-xs font-mono" id="pb-cat-cnt">0</span>
-    </button>
+  <!-- Tab Headers -->
+  <div role="tablist" class="tabs tabs-boxed bg-white border border-base-200 shadow-sm w-fit p-1 shrink-0">
+    <a role="tab" onclick="TagSettings.switchTab('handover')" data-tagtab="handover"
+      class="tag-tab-btn tab tab-active text-xs font-bold gap-2 text-info px-4">
+      <i class="fas fa-hashtag"></i> Handover Tags
+      <span class="badge badge-info badge-sm font-mono" id="tag-cnt">0</span>
+    </a>
+    <a role="tab" onclick="TagSettings.switchTab('playbook')" data-tagtab="playbook"
+      class="tag-tab-btn tab text-xs font-bold gap-2 text-emerald-600 px-4">
+      <i class="fas fa-book"></i> Playbook Categories
+      <span class="badge badge-success badge-sm font-mono text-white" id="pb-cat-cnt">0</span>
+    </a>
   </div>
 
   <div class="flex-1 bg-white rounded-xl shadow-sm border border-base-200 flex flex-col overflow-hidden min-h-0">

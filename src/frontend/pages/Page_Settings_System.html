@@ -29,28 +29,34 @@
     </div>
   </div>
 
-  <!-- Tabs -->
-  <div class="flex gap-1 shrink-0 flex-wrap">
-    <button onclick="SysSettings.switchTab('statuses')" data-systab="statuses"
-      class="sys-tab-btn btn btn-sm bg-white border-base-200 shadow-sm font-semibold text-gray-500 hover:text-primary gap-1.5"><i
-        class="fas fa-info-circle text-info text-[10px]"></i> Statuses <span
-        class="badge badge-ghost badge-xs font-mono" id="sys-cnt-statuses">0</span></button>
-    <button onclick="SysSettings.switchTab('types')" data-systab="types"
-      class="sys-tab-btn btn btn-sm bg-white border-base-200 shadow-sm font-semibold text-gray-500 hover:text-primary gap-1.5"><i
-        class="fas fa-tag text-secondary text-[10px]"></i> Types <span class="badge badge-ghost badge-xs font-mono"
-        id="sys-cnt-types">0</span></button>
-    <button onclick="SysSettings.switchTab('severities')" data-systab="severities"
-      class="sys-tab-btn btn btn-sm bg-white border-base-200 shadow-sm font-semibold text-gray-500 hover:text-primary gap-1.5"><i
-        class="fas fa-fire text-error text-[10px]"></i> Severities <span class="badge badge-ghost badge-xs font-mono"
-        id="sys-cnt-severities">0</span></button>
-    <button onclick="SysSettings.switchTab('categories')" data-systab="categories"
-      class="sys-tab-btn btn btn-sm bg-white border-base-200 shadow-sm font-semibold text-gray-500 hover:text-primary gap-1.5"><i
-        class="fas fa-folder-tree text-warning text-[10px]"></i> Categories <span
-        class="badge badge-ghost badge-xs font-mono" id="sys-cnt-categories">0</span></button>
-    <button onclick="SysSettings.switchTab('routines')" data-systab="routines"
-      class="sys-tab-btn btn btn-sm bg-white border-base-200 shadow-sm font-semibold text-gray-500 hover:text-primary gap-1.5"><i
-        class="fas fa-magic text-primary text-[10px]"></i> Routines <span class="badge badge-ghost badge-xs font-mono"
-        id="sys-cnt-routines">0</span></button>
+  <!-- Tab Headers -->
+  <div role="tablist"
+    class="tabs tabs-boxed bg-white border border-base-200 shadow-sm w-fit p-1 shrink-0 overflow-x-auto flex-nowrap hide-scrollbar whitespace-nowrap">
+    <a role="tab" onclick="SysSettings.switchTab('statuses')" data-systab="statuses"
+      class="sys-tab-btn tab tab-active text-xs font-bold gap-2 text-info px-4">
+      <i class="fas fa-info-circle"></i> Statuses
+      <span class="badge badge-info badge-sm font-mono text-white" id="sys-cnt-statuses">0</span>
+    </a>
+    <a role="tab" onclick="SysSettings.switchTab('types')" data-systab="types"
+      class="sys-tab-btn tab text-xs font-bold gap-2 text-secondary px-4">
+      <i class="fas fa-tag"></i> Types
+      <span class="badge badge-secondary badge-sm font-mono text-white" id="sys-cnt-types">0</span>
+    </a>
+    <a role="tab" onclick="SysSettings.switchTab('severities')" data-systab="severities"
+      class="sys-tab-btn tab text-xs font-bold gap-2 text-error px-4">
+      <i class="fas fa-fire"></i> Severities
+      <span class="badge badge-error badge-sm font-mono text-white" id="sys-cnt-severities">0</span>
+    </a>
+    <a role="tab" onclick="SysSettings.switchTab('categories')" data-systab="categories"
+      class="sys-tab-btn tab text-xs font-bold gap-2 text-warning px-4">
+      <i class="fas fa-folder-tree"></i> Categories
+      <span class="badge badge-warning badge-sm font-mono text-white" id="sys-cnt-categories">0</span>
+    </a>
+    <a role="tab" onclick="SysSettings.switchTab('routines')" data-systab="routines"
+      class="sys-tab-btn tab text-xs font-bold gap-2 text-primary px-4">
+      <i class="fas fa-magic"></i> Routines
+      <span class="badge badge-primary badge-sm font-mono text-white" id="sys-cnt-routines">0</span>
+    </a>
   </div>
 
   <!-- Table Card -->

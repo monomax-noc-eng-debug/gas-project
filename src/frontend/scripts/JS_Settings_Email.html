@@ -7,9 +7,10 @@
 
     function _activeTab() {
       document.querySelectorAll('.em-tab-btn').forEach(b => {
-        b.classList.remove('btn-primary', 'text-white');
-        b.classList.add('bg-white', 'text-gray-500');
-        if (b.dataset.emtab === _tab) { b.classList.add('btn-primary', 'text-white'); b.classList.remove('bg-white', 'text-gray-500'); }
+        b.classList.remove('tab-active');
+        if (b.dataset.emtab === _tab) {
+          b.classList.add('tab-active');
+        }
       });
     }
 
@@ -61,7 +62,7 @@
           Router.register("page-settings-email", this);
         }
       },
-      onShow() { 
+      onShow() {
         console.log('📄 EmailSettings: onShow');
         try {
           if (!_loaded) this.loadData();

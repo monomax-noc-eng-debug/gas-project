@@ -59,11 +59,9 @@
       document.querySelectorAll('.tag-tab-btn').forEach(btn => {
         const tab = btn.dataset.tagtab;
         if (tab === _activeTab) {
-          btn.classList.add('btn-primary', 'text-white');
-          btn.classList.remove('bg-white', 'text-gray-500');
+          btn.classList.add('tab-active');
         } else {
-          btn.classList.remove('btn-primary', 'text-white');
-          btn.classList.add('bg-white', 'text-gray-500');
+          btn.classList.remove('tab-active');
         }
       });
     }
