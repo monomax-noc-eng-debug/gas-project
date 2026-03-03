@@ -137,6 +137,7 @@ const ReportController = {
 
         // ปรับลำดับ Index ตาม HEADERS ใหม่ที่เราอัปเดตใน processShiftReport
         history.push({
+          rowIndex: i + 1,  // 1-based row number for delete
           timestamp: row[0],
           date: API_UTILS.formatDateTime(row[1], 'date'),
           shift: row[2],
@@ -145,14 +146,34 @@ const ReportController = {
           ticketSummary: row[9],
           matchSummary: row[10],
           transferReport: row[12],
-          nttStatus: row[16], // ✨ ดึงค่า NTT Status (Column ที่ 17)
-          pdfUrl: row[18],    // 📄 PDF Link เลื่อนไปที่ Column 19
-          chatTarget: row[19] // 💬 Chat Target เลื่อนไปที่ Column 20
+          nttStatus: row[16],
+          pdfUrl: row[18],
+          chatTarget: row[19]
         });
         if (history.length >= 50) break;
       }
       return API_UTILS.createRes(true, history);
     } catch (e) { return API_UTILS.createRes(false, e.toString()); }
+  },
+
+  deleteShiftHistory: function (payload) {
+    try {
+      const rowIndex = payload && payload.rowIndex ? Number(payload.rowIndex) : 0;
+      if (!rowIndex || rowIndex < 2) return API_UTILS.createRes(false, "Invalid rowIndex");
+
+      const dbId = (typeof CONFIG !== 'undefined') ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty('CORE_SHEET_ID');
+      const ss = SpreadsheetApp.openById(dbId);
+      const sheet = ss.getSheetByName("DB_Reports");
+      if (!sheet) return API_UTILS.createRes(false, "DB_Reports sheet not found");
+
+      const lastRow = sheet.getLastRow();
+      if (rowIndex > lastRow) return API_UTILS.createRes(false, "Row not found");
+
+      sheet.deleteRow(rowIndex);
+      return API_UTILS.createRes(true, { message: "ลบรายการเรียบร้อย" });
+    } catch (e) {
+      return API_UTILS.createRes(false, e.toString());
+    }
   },
 
   getDailyProofImages: function (dateStr) {

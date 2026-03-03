@@ -41,6 +41,7 @@
       if (typeof UsrSettings !== 'undefined' && UsrSettings.init) UsrSettings.init();
       if (typeof EmailSettings !== 'undefined' && EmailSettings.init) EmailSettings.init();
       if (typeof TagSettings !== 'undefined' && TagSettings.init) TagSettings.init();
+      if (typeof HistoryManager !== 'undefined' && HistoryManager.init) HistoryManager.init();
 
       if (typeof Store !== "undefined" && Store.init) {
         // รอจนกว่าจะดึงข้อมูล User Settings จาก GAS สำเร็จ

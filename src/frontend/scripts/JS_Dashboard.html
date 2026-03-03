@@ -25,6 +25,17 @@
     // ✨ NEW: Checklist vars
     let _currentChecklistMatchId = null;
     let _currentChecklistData = [];
+    let _checklistStaffOptions = null;
+
+    const escapeHTML = (str) => {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
 
     // ✨ NEW: เก็บเวลาที่ดึงข้อมูลล่าสุด เพื่อใช้เทียบว่ามีข้อมูลใหม่หรือไม่
     let _lastSyncTime = Date.now();
@@ -350,26 +361,28 @@
           }
 
           var itemJson = encodeURIComponent(JSON.stringify(item));
-          var actionWidget = '<div class="flex flex-col items-center gap-1">';
+          var actionWidget = '<div class="flex items-center justify-center gap-1.5 flex-wrap">';
           if (hasStart && !isDone) {
-            var stopBtnClass = isTimeReached ? "btn-error" : "btn-success";
+            var stopBtnClass = isTimeReached ? "btn-error hover:bg-red-600 text-white" : "btn-success hover:bg-green-600 text-white";
             actionWidget +=
               "<button onclick=\"Dashboard.openStopModal('" +
               item.id +
-              '\')" class="btn btn-xs btn-outline ' +
+              '\')" class="btn btn-xs border-none shadow-sm ' +
               stopBtnClass +
-              ' bg-white hover:text-white transition-all shadow-sm w-full max-w-[80px] gap-1"><i class="fas fa-stop"></i> จบงาน</button>';
+              ' tooltip tooltip-left" data-tip="จบงาน / Stop"><i class="fas fa-stop"></i></button>';
           }
-          actionWidget +=
-            "<button onclick=\"Dashboard.openEditModal('" +
-            itemJson +
-            '\', \'all\')" class="btn btn-ghost btn-xs text-base-content/40 hover:text-primary hover:bg-base-200 gap-1 w-full max-w-[80px]"><i class="fas fa-pencil-alt"></i> แก้ไข</button>';
 
-          // ✨ NEW: Add Checklist button
           actionWidget +=
             "<button onclick=\"Dashboard.openChecklistModal('" +
             itemJson +
-            '\')" class="btn btn-ghost btn-xs text-teal-600 hover:text-teal-700 hover:bg-teal-50 gap-1 w-full max-w-[80px] mt-0.5 border border-teal-100 shadow-sm"><i class="fas fa-tasks"></i> เช็คงาน</button>';
+            '\', this)" class="btn btn-xs bg-teal-50 border border-teal-200 text-teal-600 hover:bg-teal-500 hover:text-white hover:border-teal-500 shadow-sm tooltip tooltip-left" data-tip="รายการตรวจสอบ (Checklist)">' +
+            '<i class="fas fa-clipboard-check"></i></button>';
+
+          actionWidget +=
+            "<button onclick=\"Dashboard.openEditModal('" +
+            itemJson +
+            '\', \'all\')" class="btn btn-xs bg-slate-100 border border-slate-200 text-slate-500 hover:bg-primary hover:text-white hover:border-primary shadow-sm tooltip tooltip-left" data-tip="แก้ไขข้อมูล (Edit)"><i class="fas fa-pen"></i></button>';
+
           actionWidget += "</div>";
 
           var btnProof = function (imgData, label) {
@@ -390,7 +403,7 @@
                 itemJson +
                 "', '" +
                 label.toLowerCase().replace(" ", "-") +
-                '\')" class="tooltip cursor-pointer w-10 h-10 rounded-lg bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center mx-auto hover:bg-slate-100 hover:border-primary/30 transition-all group" data-tip="เพิ่ม ' + label + '">' +
+                '\')" class="tooltip tooltip-bottom cursor-pointer w-10 h-10 rounded-lg bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center mx-auto hover:bg-slate-100 hover:border-primary/30 transition-all group" data-tip="เพิ่ม ' + label + '">' +
                 '<i class="fas fa-plus text-[10px] text-slate-300 group-hover:text-primary transition-colors"></i>' +
                 "</div>"
               );
@@ -409,7 +422,7 @@
               item.id +
               "', '" +
               label.toLowerCase() +
-              '\')" class="tooltip cursor-pointer bg-white rounded-lg shadow-sm border border-base-200 p-0.5 inline-block relative group" data-tip="ดูรูป ' +
+              '\')" class="tooltip tooltip-bottom cursor-pointer bg-white rounded-lg shadow-sm border border-base-200 p-0.5 inline-block relative group" data-tip="ดูรูป ' +
               label +
               " (" +
               count +
@@ -433,41 +446,41 @@
           }
 
           // 1. คอลัมน์เวลา (เอาป้ายแดงออก ให้เหลือแค่ตัวเลขคลีนๆ)
-          var timeColumnHtml = '<div class="font-mono text-[16px] font-extrabold text-slate-800 tracking-tight">' + matchTimeDisplay + '</div>';
+          var timeColumnHtml = '<div class="font-mono text-[14px] sm:text-[15px] font-extrabold text-slate-700 tracking-tight">' + matchTimeDisplay + '</div>';
 
           // 2. คอลัมน์รายการแข่งขัน
           var matchColumnHtml =
             '<div class="flex flex-col justify-center h-full min-w-0 pr-2">' +
-            // บรรทัดบน: ลีก
-            '<div class="flex items-center gap-2 mb-0.5">' +
-            '<span class="text-[9px] font-bold text-gray-400 uppercase tracking-widest truncate max-w-[120px]">' + (item.league || "-") + '</span>' +
-            '</div>' +
-            // บรรทัดล่าง: คู่แข่งขัน (ให้กางได้เต็มที่ ไม่โดนบีบ)
-            '<div class="font-bold text-[13px] text-gray-800 flex items-center gap-1.5 w-full">' +
+            // บรรทัดบน: คู่แข่งขัน (เด่นกว่ากางได้เต็มที่)
+            '<div class="font-bold text-[13px] text-slate-800 flex items-center gap-1.5 w-full mb-0.5">' +
             '<div class="truncate">' + (hasStart ? '<span class="text-primary">' + item.home + "</span>" : item.home) + '</div>' +
-            '<span class="text-[10px] text-gray-300 font-normal shrink-0">vs</span>' +
+            '<span class="text-[10px] text-slate-300 font-black shrink-0 px-1">vs</span>' +
             '<div class="truncate">' + (hasStart ? '<span class="text-primary">' + item.away + "</span>" : item.away) + '</div>' +
+            '</div>' +
+            // บรรทัดล่าง: ลีก (เล็กและไม่เด่น)
+            '<div class="flex items-center gap-2">' +
+            '<span class="text-[9px] text-slate-400 font-normal truncate max-w-[200px]">' + (item.league || "-") + '</span>' +
             '</div>' +
             '</div>';
 
           // 3. คอลัมน์ Plan Start
           var planColumnHtml = planTimeDisplay ?
-            '<div class="font-mono text-[14px] font-black text-red-600">' + planTimeDisplay + '</div>' :
-            '<div class="text-[14px] text-gray-300">-</div>';
+            '<div class="font-mono text-[12px] sm:text-[13px] font-bold text-red-500 bg-red-50 px-1.5 py-1 rounded inline-block border border-red-100 shadow-sm">' + planTimeDisplay + '</div>' :
+            '<div class="text-[13px] text-gray-300">-</div>';
 
           // ประกอบร่างลงตาราง
           html +=
-            '<tr class="hover:bg-slate-50 transition-colors border-b border-gray-100 last:border-none h-[72px]">' +
+            '<tr class="hover:bg-blue-50/40 transition-colors border-b border-gray-100 last:border-none duration-200 group">' +
             '<td class="text-center align-middle">' + timeColumnHtml + '</td>' +
-            '<td class="text-center align-middle bg-red-50/20">' + planColumnHtml + '</td>' +
-            '<td class="pl-4 align-middle overflow-hidden w-40">' + matchColumnHtml + '</td>' +
-            '<td class="text-center align-middle px-1 w-24 overflow-hidden"><span class="block w-full truncate badge badge-ghost badge-sm font-mono text-[10px] bg-gray-100 border-0 text-gray-500 leading-5" title="' + (item.channel || "-").replace(/"/g, '&quot;') + '">' + (item.channel || "-") + '</span></td>' +
-            '<td class="text-center align-middle w-20">' + btnProof(item.start_mono || (index === 0 ? item.start_img : ""), "Start Mono") + '</td>' +
-            '<td class="text-center align-middle w-20">' + btnProof(item.start_ais, "Start AIS") + '</td>' +
-            '<td class="text-center align-middle w-20">' + btnProof(item.stop_mono || (index === 0 ? item.stop_img : ""), "Stop Mono") + '</td>' +
-            '<td class="text-center align-middle w-20">' + btnProof(item.stop_ais, "Stop AIS") + '</td>' +
-            '<td class="text-center align-middle bg-slate-50/10 h-[72px] w-24">' + statusWidget + '</td>' +
-            '<td class="text-center align-middle w-32">' + actionWidget + "</td></tr>";
+            '<td class="text-center align-middle">' + planColumnHtml + '</td>' +
+            '<td class="pl-4 align-middle overflow-hidden w-auto min-w-[200px]">' + matchColumnHtml + '</td>' +
+            '<td class="text-center align-middle px-1 overflow-hidden"><span class="inline-block px-2 py-1 max-w-[100px] truncate rounded text-[10px] font-mono font-bold bg-white border border-slate-200 text-slate-600 shadow-sm" title="' + (item.channel || "-").replace(/"/g, '&quot;') + '">' + (item.channel || "-") + '</span></td>' +
+            '<td class="text-center align-middle w-24 py-2">' + btnProof(item.start_mono || (index === 0 ? item.start_img : ""), "Start Mono") + '</td>' +
+            '<td class="text-center align-middle w-24 py-2">' + btnProof(item.start_ais, "Start AIS") + '</td>' +
+            '<td class="text-center align-middle w-24 py-2">' + btnProof(item.stop_mono || (index === 0 ? item.stop_img : ""), "Stop Mono") + '</td>' +
+            '<td class="text-center align-middle w-24 py-2">' + btnProof(item.stop_ais, "Stop AIS") + '</td>' +
+            '<td class="text-center align-middle w-24">' + statusWidget + '</td>' +
+            '<td class="text-center align-middle w-40 px-2">' + actionWidget + "</td></tr>";
         });
 
         tbody.innerHTML = html;
@@ -1193,7 +1206,46 @@
       // ==========================================
       // ✅ CHECKLIST MODAL LOGIC
       // ==========================================
-      openChecklistModal: function (itemJsonRaw) {
+      openChecklistModal: function (itemJsonRaw, btnElement) {
+        var defaultHtml = '<i class="fas fa-clipboard-check"></i>';
+        var loadingHtml = '<i class="fas fa-spinner fa-spin"></i>';
+
+        if (btnElement) {
+          btnElement.disabled = true;
+          btnElement.innerHTML = loadingHtml;
+        }
+
+        if (!_checklistStaffOptions) {
+          Server.call({ func: "apiGetAllSettings", silent: true }).then(res => {
+            if (btnElement) {
+              btnElement.disabled = false;
+              btnElement.innerHTML = defaultHtml;
+            }
+            const config = res.data || {};
+            const staffUsers = config.staffUsers || [];
+            _checklistStaffOptions = staffUsers.length > 0
+              ? staffUsers.filter(u => String(u.role).toLowerCase().includes('responsibility') || String(u.role).toLowerCase().includes('leader'))
+              : (config.staff || []).map(s => ({ name: s }));
+            Dashboard._openChecklistModalInner(itemJsonRaw);
+          }).catch(err => {
+            if (btnElement) {
+              btnElement.disabled = false;
+              btnElement.innerHTML = defaultHtml;
+            }
+            console.error(err);
+            _checklistStaffOptions = [];
+            Dashboard._openChecklistModalInner(itemJsonRaw);
+          });
+        } else {
+          if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.innerHTML = defaultHtml;
+          }
+          Dashboard._openChecklistModalInner(itemJsonRaw);
+        }
+      },
+
+      _openChecklistModalInner: function (itemJsonRaw) {
         try {
           var item = JSON.parse(decodeURIComponent(itemJsonRaw));
           _currentChecklistMatchId = item.id;
@@ -1208,13 +1260,15 @@
           } else {
             var defaultTasks = (typeof ChecklistSettings !== 'undefined' && typeof ChecklistSettings.getTasks === 'function')
               ? ChecklistSettings.getTasks() : [];
-            _currentChecklistData = defaultTasks.map(t => ({
-              id: Date.now() + Math.floor(Math.random() * 1000).toString(),
-              title: t.title,
-              status: false,
-              checker: "",
-              remark: ""
-            }));
+            _currentChecklistData = defaultTasks.map(function (t) {
+              return {
+                id: String(Date.now() + Math.floor(Math.random() * 1000)),
+                title: typeof t === 'string' ? t : (t.title || t),
+                status: false,
+                checker: '',
+                remark: ''
+              };
+            });
           }
 
           Dashboard.renderChecklistTable();
@@ -1238,20 +1292,27 @@
           html += `
               <tr class="hover">
                 <td class="text-center font-mono text-[10px] text-slate-400">${index + 1}</td>
-                <td class="font-medium text-[11px] text-slate-700 w-full" style="white-space:normal; overflow-wrap:anywhere;">${Dashboard.escapeHTML(task.title)}</td>
+                <td class="font-medium text-[11px] text-slate-700" style="white-space:normal; overflow-wrap:anywhere;">${escapeHTML(task.title)}</td>
                 <td class="text-center">
                   <input type="checkbox" class="checkbox checkbox-sm checkbox-warning" 
                      ${task.status ? 'checked' : ''} 
                      onchange="Dashboard.updateChecklistField(${index}, 'status', this.checked)">
                 </td>
                 <td>
-                  <input type="text" class="input input-xs input-bordered w-full text-[11px] bg-slate-50 focus:bg-white focus:border-warning" 
-                     value="${Dashboard.escapeHTML(task.checker || '')}" placeholder="..."
+                  <select class="select select-xs select-bordered w-full text-[11px] bg-slate-50 focus:bg-white focus:border-warning" 
                      onchange="Dashboard.updateChecklistField(${index}, 'checker', this.value)">
+                     <option value="">-- ระบุชื่อ --</option>
+                     ${(_checklistStaffOptions || []).map(u =>
+            `<option value="${escapeHTML(u.name)}" ${task.checker === u.name ? 'selected' : ''}>${escapeHTML(u.name)}</option>`
+          ).join('')}
+                     ${task.checker && !(_checklistStaffOptions || []).some(u => u.name === task.checker)
+              ? `<option value="${escapeHTML(task.checker)}" selected>${escapeHTML(task.checker)} (เดิม)</option>`
+              : ''}
+                  </select>
                 </td>
                 <td>
                   <input type="text" class="input input-xs input-bordered w-full text-[11px] bg-slate-50 focus:bg-white focus:border-warning" 
-                     value="${Dashboard.escapeHTML(task.remark || '')}" placeholder="..."
+                     value="${escapeHTML(task.remark || '')}" placeholder="..."
                      onchange="Dashboard.updateChecklistField(${index}, 'remark', this.value)">
                 </td>
               </tr>

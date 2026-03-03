@@ -33,16 +33,37 @@
           Router.register("page-settings-users", this);
         }
       },
-      onShow() { 
+      onShow() {
         console.log('📄 UsrSettings: onShow');
         try {
           if (!_loaded) this.loadData();
+          this.switchTab('staff'); // Ensure correct initial tab
         } catch (e) {
           console.error('❌ UsrSettings: onShow error', e);
           if (typeof UIManager !== 'undefined') {
             UIManager.showToast('เกิดข้อผิดพลาดในการโหลดการตั้งค่าผู้ใช้: ' + e.message, 'error');
           }
         }
+      },
+
+      switchTab(tabId) {
+        ['staff', 'assignees'].forEach(id => {
+          const btn = el('usr-tab-btn-' + id);
+          const panel = el('usr-tab-panel-' + id);
+          if (id === tabId) {
+            if (btn) btn.classList.add('tab-active');
+            if (panel) {
+              panel.classList.remove('opacity-0', 'pointer-events-none', 'z-0');
+              panel.classList.add('z-10');
+            }
+          } else {
+            if (btn) btn.classList.remove('tab-active');
+            if (panel) {
+              panel.classList.add('opacity-0', 'pointer-events-none', 'z-0');
+              panel.classList.remove('z-10');
+            }
+          }
+        });
       },
 
       loadData(force) {
@@ -144,4 +165,8 @@
       }
     };
   })();
+
+  document.addEventListener("DOMContentLoaded", () => {
+    if (window.UsrSettings) window.UsrSettings.init();
+  });
 </script>

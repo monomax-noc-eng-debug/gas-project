@@ -96,6 +96,8 @@ function apiHandler(request) {
     apiResetSettings: () => SettingController.resetSettingSheets(),
     apiGetAllSettings: () => SettingController.apiGetAllSettings(),
     apiSaveAllSettings: (d) => SettingController.apiSaveAllSettings(d),
+    apiGetChecklistTemplate: () => SettingController.apiGetChecklist(),
+    apiSaveChecklistTemplate: (d) => SettingController.apiSaveChecklist(d),
 
     updateTicketIdOnly: (d) => TicketController.updateTicketIdOnly(d.oldId, d.newId),
 
@@ -135,6 +137,7 @@ function apiHandler(request) {
     getVerificationReport: (d) => MatchService.getVerificationReport(d),
     processShiftReport: (d) => ReportController.processShiftReport(d),
     getShiftHistory: () => ReportController.getShiftHistory(),
+    deleteShiftHistory: (d) => ReportController.deleteShiftHistory(d),
     getDailyProofImages: (d) => ReportController.getDailyProofImages(d),
 
     // Master & Config

@@ -24,110 +24,111 @@
     </div>
   </div>
 
-  <!-- Two-Column Tables -->
-  <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2 overflow-hidden min-h-0">
-    <!-- Staff / Leaders -->
-    <div class="bg-white rounded-xl shadow-sm border border-base-200 flex flex-col overflow-hidden">
-      <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-indigo-50/50 shrink-0">
-        <h3 class="text-xs font-bold text-indigo-700 uppercase flex items-center gap-2"><i class="fas fa-user-tie"></i>
-          ผู้รับผิดชอบ (Leaders) <span class="badge badge-primary badge-outline badge-xs font-mono"
-            id="usr-cnt-staff">0</span></h3>
-        <button onclick="UsrSettings.openAdd('staff')"
-          class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
-          <i class="fas fa-plus text-[10px]"></i>
-          <span class="hidden sm:inline text-[11px] font-semibold">เพิ่ม</span>
-        </button>
-      </div>
-      <div class="flex-1 overflow-y-auto">
-        <table class="table table-sm w-full">
-          <thead class="bg-base-100 sticky top-0">
-            <tr>
-              <th class="w-10 text-center">#</th>
-              <th>ชื่อ</th>
-              <th>EngName</th>
-              <th class="w-24 text-center">จัดการ</th>
-            </tr>
-          </thead>
-          <tbody id="usr-tbody-staff"></tbody>
-        </table>
+  <!-- Tabs Layout -->
+  <div class="flex-1 flex flex-col gap-2 overflow-hidden min-h-0">
 
-        <div id="usr-loader-staff" class="hidden flex-col w-full bg-white z-10">
-          <div class="p-4 space-y-4 w-full">
-            <div class="flex gap-4 w-full items-center">
-              <div class="skeleton h-8 w-10 rounded-lg"></div>
-              <div class="skeleton h-8 flex-1 rounded-lg"></div>
-              <div class="skeleton h-8 w-24 rounded-lg"></div>
-            </div>
-            <div class="flex gap-4 w-full items-center">
-              <div class="skeleton h-8 w-10 rounded-lg"></div>
-              <div class="skeleton h-8 flex-1 rounded-lg"></div>
-              <div class="skeleton h-8 w-24 rounded-lg"></div>
-            </div>
-            <div class="flex gap-4 w-full items-center">
-              <div class="skeleton h-8 w-10 rounded-lg"></div>
-              <div class="skeleton h-8 flex-1 rounded-lg"></div>
-              <div class="skeleton h-8 w-24 rounded-lg"></div>
-            </div>
-          </div>
-        </div>
-
-        <div id="usr-empty-staff" class="hidden text-center py-10 text-gray-300"><i
-            class="fas fa-user-slash text-2xl mb-2"></i>
-          <p class="text-xs font-bold">ไม่มีข้อมูล</p>
-        </div>
-      </div>
+    <!-- Tab Headers -->
+    <div role="tablist" class="tabs tabs-boxed bg-white border border-base-200 shadow-sm w-fit p-1 shrink-0">
+      <a role="tab" id="usr-tab-btn-staff" class="tab tab-active text-xs font-bold gap-2 text-indigo-700 px-4"
+        onclick="UsrSettings.switchTab('staff')">
+        <i class="fas fa-user-tie"></i> ผู้รับผิดชอบ (Leaders)
+        <span class="badge badge-primary badge-sm font-mono" id="usr-cnt-staff">0</span>
+      </a>
+      <a role="tab" id="usr-tab-btn-assignees" class="tab text-xs font-bold gap-2 text-teal-700 px-4"
+        onclick="UsrSettings.switchTab('assignees')">
+        <i class="fas fa-users"></i> ผู้ปฏิบัติงาน (Operators)
+        <span class="badge badge-accent badge-sm font-mono" id="usr-cnt-assignees">0</span>
+      </a>
     </div>
 
-    <!-- Operators / Assignees -->
-    <div class="bg-white rounded-xl shadow-sm border border-base-200 flex flex-col overflow-hidden">
-      <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-teal-50/50 shrink-0">
-        <h3 class="text-xs font-bold text-teal-700 uppercase flex items-center gap-2"><i class="fas fa-users"></i>
-          ผู้ปฏิบัติงาน (Operators) <span class="badge badge-accent badge-outline badge-xs font-mono"
-            id="usr-cnt-assignees">0</span></h3>
-        <button onclick="UsrSettings.openAdd('assignees')"
-          class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
-          <i class="fas fa-plus text-[10px]"></i>
-          <span class="hidden sm:inline text-[11px] font-semibold">เพิ่ม</span>
-        </button>
-      </div>
-      <div class="flex-1 overflow-y-auto">
-        <table class="table table-sm w-full">
-          <thead class="bg-base-100 sticky top-0">
-            <tr>
-              <th class="w-10 text-center">#</th>
-              <th>ชื่อ</th>
-              <th>EngName</th>
-              <th class="w-24 text-center">จัดการ</th>
-            </tr>
-          </thead>
-          <tbody id="usr-tbody-assignees"></tbody>
-        </table>
+    <!-- Tab Contents Container -->
+    <div class="flex-1 relative overflow-hidden min-h-0">
 
-        <div id="usr-loader-assignees" class="hidden flex-col w-full bg-white z-10">
-          <div class="p-4 space-y-4 w-full">
-            <div class="flex gap-4 w-full items-center">
-              <div class="skeleton h-8 w-10 rounded-lg"></div>
-              <div class="skeleton h-8 flex-1 rounded-lg"></div>
-              <div class="skeleton h-8 w-24 rounded-lg"></div>
-            </div>
-            <div class="flex gap-4 w-full items-center">
-              <div class="skeleton h-8 w-10 rounded-lg"></div>
-              <div class="skeleton h-8 flex-1 rounded-lg"></div>
-              <div class="skeleton h-8 w-24 rounded-lg"></div>
-            </div>
-            <div class="flex gap-4 w-full items-center">
-              <div class="skeleton h-8 w-10 rounded-lg"></div>
-              <div class="skeleton h-8 flex-1 rounded-lg"></div>
-              <div class="skeleton h-8 w-24 rounded-lg"></div>
+      <!-- Staff / Leaders Panel -->
+      <div id="usr-tab-panel-staff"
+        class="absolute inset-0 bg-white rounded-xl shadow-sm border border-base-200 flex flex-col overflow-hidden transition-opacity duration-200 z-10">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-indigo-50/50 shrink-0">
+          <h3 class="text-xs font-bold text-indigo-700 uppercase flex items-center gap-2"><i
+              class="fas fa-user-tie"></i>
+            ผู้รับผิดชอบ (Leaders)</h3>
+          <button onclick="UsrSettings.openAdd('staff')"
+            class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
+            <i class="fas fa-plus text-[10px]"></i>
+            <span class="hidden sm:inline text-[11px] font-semibold">เพิ่ม</span>
+          </button>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+          <table class="table table-sm w-full">
+            <thead class="bg-base-100 sticky top-0">
+              <tr>
+                <th class="w-10 text-center">#</th>
+                <th>ชื่อ</th>
+                <th>EngName</th>
+                <th class="w-24 text-center">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="usr-tbody-staff"></tbody>
+          </table>
+
+          <div id="usr-loader-staff" class="hidden flex-col w-full bg-white z-10">
+            <div class="p-4 space-y-4 w-full">
+              <div class="flex gap-4 w-full items-center">
+                <div class="skeleton h-8 w-10 rounded-lg"></div>
+                <div class="skeleton h-8 flex-1 rounded-lg"></div>
+                <div class="skeleton h-8 w-24 rounded-lg"></div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div id="usr-empty-assignees" class="hidden text-center py-10 text-gray-300"><i
-            class="fas fa-user-slash text-2xl mb-2"></i>
-          <p class="text-xs font-bold">ไม่มีข้อมูล</p>
+          <div id="usr-empty-staff" class="hidden text-center py-10 text-gray-300"><i
+              class="fas fa-user-slash text-2xl mb-2"></i>
+            <p class="text-xs font-bold">ไม่มีข้อมูล</p>
+          </div>
         </div>
       </div>
+
+      <!-- Operators / Assignees Panel -->
+      <div id="usr-tab-panel-assignees"
+        class="absolute inset-0 bg-white rounded-xl shadow-sm border border-base-200 flex flex-col overflow-hidden transition-opacity duration-200 opacity-0 pointer-events-none z-0">
+        <div class="px-4 py-3 border-b border-base-100 flex justify-between items-center bg-teal-50/50 shrink-0">
+          <h3 class="text-xs font-bold text-teal-700 uppercase flex items-center gap-2"><i class="fas fa-users"></i>
+            ผู้ปฏิบัติงาน (Operators)</h3>
+          <button onclick="UsrSettings.openAdd('assignees')"
+            class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
+            <i class="fas fa-plus text-[10px]"></i>
+            <span class="hidden sm:inline text-[11px] font-semibold">เพิ่ม</span>
+          </button>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+          <table class="table table-sm w-full">
+            <thead class="bg-base-100 sticky top-0">
+              <tr>
+                <th class="w-10 text-center">#</th>
+                <th>ชื่อ</th>
+                <th>EngName</th>
+                <th class="w-24 text-center">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="usr-tbody-assignees"></tbody>
+          </table>
+
+          <div id="usr-loader-assignees" class="hidden flex-col w-full bg-white z-10">
+            <div class="p-4 space-y-4 w-full">
+              <div class="flex gap-4 w-full items-center">
+                <div class="skeleton h-8 w-10 rounded-lg"></div>
+                <div class="skeleton h-8 flex-1 rounded-lg"></div>
+                <div class="skeleton h-8 w-24 rounded-lg"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="usr-empty-assignees" class="hidden text-center py-10 text-gray-300"><i
+              class="fas fa-user-slash text-2xl mb-2"></i>
+            <p class="text-xs font-bold">ไม่มีข้อมูล</p>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 

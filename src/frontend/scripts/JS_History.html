@@ -83,13 +83,20 @@
                if (item.chatTarget === 'group_all') groupBadge = '<span class="badge badge-success badge-outline badge-xs gap-1"><i class="fas fa-users"></i> All</span>';
                if (item.chatTarget === 'group_dev') groupBadge = '<span class="badge badge-primary badge-outline badge-xs gap-1"><i class="fas fa-code"></i> Dev</span>';
 
-               return `<tr class="hover:bg-slate-100 transition-colors cursor-pointer group" onclick="HistoryManager.viewDetail('${itemJson}')">
-                        <td class="text-center font-mono text-xs text-slate-500">${item.date}</td>
-                        <td class="text-center text-xs"><span class="badge badge-ghost badge-sm text-[10px] whitespace-nowrap">${item.shift}</span></td>
-                        <td class="text-xs font-bold text-slate-700">${item.reporter}</td>
-                        <td class="text-center">${groupBadge}</td>
-                        <td class="text-center text-slate-400 group-hover:text-primary transition-colors">
-                            <i class="fas fa-chevron-right text-[10px]"></i>
+               return `<tr class="hover:bg-slate-100 transition-colors group">
+                        <td class="text-center font-mono text-xs text-slate-500 cursor-pointer" onclick="HistoryManager.viewDetail('${itemJson}')">${item.date}</td>
+                        <td class="text-center text-xs cursor-pointer" onclick="HistoryManager.viewDetail('${itemJson}')"><span class="badge badge-ghost badge-sm text-[10px] whitespace-nowrap">${item.shift}</span></td>
+                        <td class="text-xs font-bold text-slate-700 cursor-pointer" onclick="HistoryManager.viewDetail('${itemJson}')">${item.reporter}</td>
+                        <td class="text-center cursor-pointer" onclick="HistoryManager.viewDetail('${itemJson}')">${groupBadge}</td>
+                        <td class="text-center w-20">
+                            <div class="flex items-center justify-center gap-1">
+                              <button onclick="HistoryManager.viewDetail('${itemJson}')" class="btn btn-xs btn-ghost text-slate-400 group-hover:text-primary transition-colors px-1.5">
+                                <i class="fas fa-chevron-right text-[10px]"></i>
+                              </button>
+                              <button onclick="event.stopPropagation(); HistoryManager.deleteHistory(${item.rowIndex}, '${item.date}', '${item.shift}')" class="btn btn-xs btn-ghost text-rose-300 hover:text-rose-600 hover:bg-rose-50 transition-colors px-1.5" title="ลบรายการนี้">
+                                <i class="fas fa-trash text-[10px]"></i>
+                              </button>
+                            </div>
                         </td>
                     </tr>`;
             }).join('');
@@ -150,7 +157,7 @@
                if (nttStatus === 'เรียบร้อย' || nttStatus === 'ปกติ') {
                   nttBadgeClass = 'bg-emerald-50 text-emerald-600 border-emerald-200';
                   nttIcon = 'fa-check-circle';
-                  nttStatus = 'ปกติ'; 
+                  nttStatus = 'ปกติ';
                } else if (nttStatus === 'มีปัญหา') {
                   nttBadgeClass = 'bg-rose-50 text-rose-600 border-rose-200';
                   nttIcon = 'fa-exclamation-triangle';
@@ -241,7 +248,43 @@
                if (typeof UIManager !== 'undefined') UIManager.showToast("เกิดข้อผิดพลาดในการแสดงผล", "error");
             }
          },
-         
+
+         deleteHistory: function (rowIndex, date, shift) {
+            Swal.fire({
+               title: 'ลบรายการนี้?',
+               html: `<div class="text-sm text-slate-600 mt-1">
+                        <span class="font-bold text-slate-800">${date}</span> · ${shift}<br>
+                        <span class="text-xs text-rose-500 mt-2 block">ข้อมูลจะถูกลบออกจากชีทและไม่สามารถกู้คืนได้</span>
+                      </div>`,
+               icon: 'warning',
+               showCancelButton: true,
+               confirmButtonColor: '#ef4444',
+               cancelButtonColor: '#94a3b8',
+               confirmButtonText: '<i class="fas fa-trash mr-1"></i> ลบ',
+               cancelButtonText: 'ยกเลิก',
+               reverseButtons: true
+            }).then(result => {
+               if (!result.isConfirmed) return;
+
+               UIManager.showLoading('กำลังลบรายการ...');
+
+               Server.call({ func: 'deleteShiftHistory', silent: true }, { rowIndex: rowIndex })
+                  .then(res => {
+                     if (res && res.success) {
+                        UIManager.showToast('ลบรายการเรียบร้อย', 'success');
+                        this.loadHistory(true);
+                     } else {
+                        UIManager.showToast((res && res.error) || 'ลบไม่สำเร็จ', 'error');
+                     }
+                  })
+                  .catch(e => {
+                     console.error(e);
+                     UIManager.showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+                  })
+                  .finally(() => UIManager.hideLoading());
+            });
+         },
+
          init: function () {
             if (typeof Router !== 'undefined') {
                Router.register('page-history', this);
@@ -250,8 +293,5 @@
       };
    })();
 
-   // ✨ [ส่วนที่เพิ่ม] เรียกใช้งาน HistoryManager
-   if (window.HistoryManager) {
-      window.HistoryManager.init();
-   }
+
 </script>

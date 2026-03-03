@@ -1,0 +1,201 @@
+<script>
+  window.ChecklistSettings = (() => {
+    let _tasks = [];
+    let _dirty = false;
+
+    // ── Load Data ─────────────────────────────────────────────────────
+    const loadData = (force = false) => {
+      const loader = document.getElementById("cl-loader");
+      const empty = document.getElementById("cl-empty");
+      const tbody = document.getElementById("cl-tbody");
+      const spinner = document.getElementById("spinner-refresh-checklist");
+      const icon = document.getElementById("icon-refresh-checklist");
+
+      if (force && loader) loader.classList.remove("hidden");
+      if (force && spinner) spinner.classList.remove("hidden");
+      if (force && icon) icon.classList.add("hidden");
+      if (force && tbody) tbody.innerHTML = "";
+      if (force && empty) empty.classList.add("hidden");
+
+      Server.call({ func: "apiGetChecklistTemplate", silent: true })
+        .then(res => {
+          if (res && res.success && res.data) {
+            _tasks = res.data.checklistTasks || [];
+            _dirty = false;
+            if (force) render();
+          } else if (force) {
+            showError("โหลดข้อมูลไม่สำเร็จ");
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          if (force) showError("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+        })
+        .finally(() => {
+          if (force && loader) loader.classList.add("hidden");
+          if (force && spinner) spinner.classList.add("hidden");
+          if (force && icon) icon.classList.remove("hidden");
+        });
+    };
+
+    // ── Render Table ──────────────────────────────────────────────────
+    const render = () => {
+      const tbody = document.getElementById("cl-tbody");
+      const empty = document.getElementById("cl-empty");
+      if (!tbody) return;
+
+      tbody.innerHTML = "";
+      if (_tasks.length === 0) {
+        if (empty) empty.classList.remove("hidden");
+        return;
+      }
+      if (empty) empty.classList.add("hidden");
+
+      let html = "";
+      _tasks.forEach((task, i) => {
+        html += `
+          <tr class="hover:bg-slate-50 transition-colors border-b border-blue-50 last:border-0 group">
+            <td class="text-center font-mono font-bold text-blue-400 bg-blue-50/30 w-12">${i + 1}</td>
+            <td class="font-medium text-slate-700 w-auto">${task}</td>
+            <td class="text-center w-32 relative">
+              <!-- Reorder Buttons -->
+              <div class="absolute inset-y-0 left-2 flex flex-col justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onclick="ChecklistSettings.moveUp(${i})" class="btn btn-ghost btn-xs px-1 text-slate-400 hover:text-blue-500 disabled:opacity-20 flex-1" ${i === 0 ? 'disabled' : ''}><i class="fas fa-caret-up"></i></button>
+                <button onclick="ChecklistSettings.moveDown(${i})" class="btn btn-ghost btn-xs px-1 text-slate-400 hover:text-blue-500 disabled:opacity-20 flex-1" ${i === _tasks.length - 1 ? 'disabled' : ''}><i class="fas fa-caret-down"></i></button>
+              </div>
+              <button onclick="ChecklistSettings.openEdit(${i})" class="btn btn-xs btn-ghost text-sky-500 hover:bg-sky-50 px-2"><i class="fas fa-pencil-alt"></i></button>
+              <button onclick="ChecklistSettings.deleteTask(${i})" class="btn btn-xs btn-ghost text-rose-500 hover:bg-rose-50 px-2"><i class="fas fa-trash"></i></button>
+            </td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+      updateSaveBtn();
+    };
+
+    // ── Save Button Indicator ──────────────────────────────────────────
+    const updateSaveBtn = () => {
+      const btn = document.getElementById("btn-save-checklist-all");
+      if (btn) {
+        if (_dirty) {
+          btn.classList.remove("btn-primary");
+          btn.classList.add("btn-error", "animate-pulse");
+        } else {
+          btn.classList.add("btn-primary");
+          btn.classList.remove("btn-error", "animate-pulse");
+        }
+      }
+    };
+
+    // ── Add / Edit Modal ───────────────────────────────────────────────
+    const openAdd = () => {
+      document.getElementById("cl-edit-index").value = "-1";
+      document.getElementById("cl-input-task").value = "";
+      document.getElementById("cl-modal-title").innerHTML = '<i class="fas fa-plus-circle text-blue-500"></i> เพิ่ม Task';
+      document.getElementById("modal-cl-item").showModal();
+    };
+
+    const openEdit = (index) => {
+      document.getElementById("cl-edit-index").value = index;
+      document.getElementById("cl-input-task").value = _tasks[index];
+      document.getElementById("cl-modal-title").innerHTML = '<i class="fas fa-pencil-alt text-blue-400"></i> แก้ไข Task';
+      document.getElementById("modal-cl-item").showModal();
+    };
+
+    const saveModal = () => {
+      const val = document.getElementById("cl-input-task").value.trim();
+      if (!val) {
+        UIManager.showToast("กรุณากรอกชื่อ Task", "warning");
+        return;
+      }
+      const idx = parseInt(document.getElementById("cl-edit-index").value, 10);
+      if (idx > -1) {
+        _tasks[idx] = val;
+      } else {
+        _tasks.push(val);
+      }
+      _dirty = true;
+      document.getElementById("modal-cl-item").close();
+      render();
+    };
+
+    // ── Reorder ────────────────────────────────────────────────────────
+    const moveUp = (idx) => {
+      if (idx <= 0) return;
+      [_tasks[idx - 1], _tasks[idx]] = [_tasks[idx], _tasks[idx - 1]];
+      _dirty = true;
+      render();
+    };
+
+    const moveDown = (idx) => {
+      if (idx >= _tasks.length - 1) return;
+      [_tasks[idx + 1], _tasks[idx]] = [_tasks[idx], _tasks[idx + 1]];
+      _dirty = true;
+      render();
+    };
+
+    // ── Delete ─────────────────────────────────────────────────────────
+    const deleteTask = (idx) => {
+      if (!confirm(`ลบ Task: "${_tasks[idx]}" หรือไม่?`)) return;
+      _tasks.splice(idx, 1);
+      _dirty = true;
+      render();
+    };
+
+    // ── Save All → dedicated SYS_Checklist sheet ───────────────────────
+    const saveAll = () => {
+      if (!_dirty) {
+        UIManager.showToast("ไม่มีการเปลี่ยนแปลง", "info");
+        return;
+      }
+
+      // Full-screen loading overlay
+      UIManager.showLoading("กำลังบันทึก Checklist...");
+
+      Server.call({ func: "apiSaveChecklistTemplate", silent: true }, { checklistTasks: _tasks })
+        .then(res => {
+          if (res && res.success) {
+            UIManager.showToast(`บันทึก Checklist เรียบร้อย (${_tasks.length} รายการ)`, "success");
+            _dirty = false;
+            render();
+          } else {
+            showError((res && (res.error || res.message)) || "บันทึกไม่สำเร็จ");
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          showError("เกิดข้อผิดพลาดในการสื่อสาร");
+        })
+        .finally(() => {
+          UIManager.hideLoading();
+        });
+    };
+
+    const showError = (msg) => UIManager.showToast(msg, "error");
+
+    // ── Public API ─────────────────────────────────────────────────────
+    return {
+      init: function () {
+        if (typeof Router !== 'undefined') {
+          Router.register('page-settings-checklist', this);
+        }
+        // โหลด tasks เงียบๆ ตอนเริ่ม App เพื่อให้ Dashboard.openChecklistModal ใช้งาน getTasks() ได้ทันที
+        loadData(false);
+      },
+      onShow: function () {
+        console.log('📄 Settings Checklist: onShow');
+        loadData(true);
+      },
+      loadData,
+      openAdd,
+      openEdit,
+      saveModal,
+      deleteTask,
+      moveUp,
+      moveDown,
+      saveAll,
+      getTasks: () => _tasks
+    };
+  })();
+
+</script>

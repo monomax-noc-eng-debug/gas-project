@@ -182,4 +182,8 @@
       }
     };
   })();
+
+  document.addEventListener("DOMContentLoaded", () => {
+    if (window.TagSettings) window.TagSettings.init();
+  });
 </script>

@@ -549,7 +549,18 @@ const MatchController = (() => {
         const idCol = resolve(["Match ID", "ID"]);
         let clCol = resolve(["Checklist", "รายการตรวจสอบ"]);
 
-        if (!clCol) return Response.error("ไม่พบคอลัมน์ 'Checklist' ในฐานข้อมูล กรุณาเพิ่มคอลัมน์นี้ก่อน");
+        if (!clCol) {
+          const ss = SpreadsheetApp.openById(dbId);
+          const sheet = ss.getSheetByName(sheetName);
+          if (sheet) {
+            const newColIndex = Math.max(sheet.getLastColumn() + 1, 1);
+            sheet.getRange(1, newColIndex).setValue("Checklist");
+            CacheService.getScriptCache().remove(`SHEET_DATA_${dbId}_${sheetName}`);
+            clCol = "Checklist";
+          } else {
+            return Response.error("ไม่พบ Sheet " + sheetName);
+          }
+        }
 
         const updateMap = {};
         updateMap[clCol] = JSON.stringify(data.checklist);

@@ -1,0 +1,94 @@
+<div id="page-settings-checklist"
+  class="page-section hidden w-full h-full relative bg-base-200 overflow-hidden flex flex-col p-3 gap-2">
+
+  <!-- Header -->
+  <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-base-300 shrink-0">
+    <div class="flex items-center gap-2">
+      <div class="bg-blue-50 p-1.5 rounded-lg text-blue-500"><i class="fas fa-clipboard-list text-sm"></i></div>
+      <div class="hidden sm:block">
+        <h2 class="text-xs font-bold text-gray-800">Match Checklist Templates</h2>
+        <p class="text-[10px] text-gray-400">จัดการรายการตรวจสอบ (ลำดับเดียวกับที่แสดงใน Dashboard)</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-1.5 ml-auto">
+      <button id="btn-refresh-checklist" onclick="ChecklistSettings.loadData(true)"
+        class="btn btn-xs btn-outline border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-800 hover:border-blue-400 gap-1.5 px-3">
+        <span class="loading loading-spinner loading-xs text-blue-500 hidden" id="spinner-refresh-checklist"></span>
+        <i class="fas fa-sync-alt text-[10px]" id="icon-refresh-checklist"></i>
+        <span class="hidden sm:inline text-[11px] font-semibold">โหลดใหม่</span>
+      </button>
+      <button onclick="ChecklistSettings.openAdd()"
+        class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
+        <i class="fas fa-plus text-[10px]"></i>
+        <span class="hidden sm:inline text-[11px] font-semibold">เพิ่ม Task</span>
+      </button>
+      <button onclick="ChecklistSettings.saveAll()"
+        class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md" id="btn-save-checklist-all">
+        <span class="loading loading-spinner loading-xs hidden" id="spinner-save-checklist-settings"></span>
+        <i class="fas fa-save text-[10px]" id="icon-save-checklist-settings"></i>
+        <span class="hidden sm:inline text-[11px] font-semibold">บันทึกทั้งหมด</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Table Card -->
+  <div
+    class="flex-1 bg-white rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 flex flex-col relative overflow-hidden">
+    <div id="cl-loader" class="absolute inset-0 z-20 flex bg-white/90 backdrop-blur-sm flex-col hidden">
+      <div class="overflow-auto w-full h-full p-6 space-y-4">
+        <div class="skeleton h-10 w-full rounded-lg opacity-40"></div>
+        <div class="skeleton h-12 w-full rounded-lg opacity-30"></div>
+        <div class="skeleton h-12 w-full rounded-lg opacity-30"></div>
+        <div class="skeleton h-12 w-full rounded-lg opacity-30"></div>
+      </div>
+    </div>
+
+    <div class="overflow-auto h-full w-full custom-scrollbar z-10">
+
+      <table class="table table-pin-rows w-full border-collapse">
+        <thead>
+          <tr class="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-200">
+            <th class="py-3 px-4 w-12 text-center font-bold bg-slate-50">#</th>
+            <th class="py-3 px-4 font-bold bg-slate-50">Task / ชื่อรายการตรวจสอบ</th>
+            <th class="py-3 px-4 w-32 text-center font-bold bg-slate-50">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="cl-tbody" class="text-sm">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+
+      <!-- Empty State -->
+      <div id="cl-empty" class="hidden text-center py-16 text-gray-300">
+        <i class="fas fa-clipboard text-5xl mb-3"></i>
+        <p class="text-sm font-bold">ยังไม่มีรายการ Task</p>
+        <p class="text-xs mt-1">กดปุ่ม "+ เพิ่ม Task" เพื่อเพิ่มรายการ</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <dialog id="modal-cl-item" class="modal">
+    <div class="modal-box max-w-md">
+      <h3 class="font-bold text-base mb-1 flex items-center gap-2" id="cl-modal-title">
+        <i class="fas fa-plus-circle text-blue-500"></i> เพิ่ม Task
+      </h3>
+      <p class="text-[11px] text-gray-400 mb-4">ชื่อ Task จะแสดงในตาราง Match Checklist บนหน้า Dashboard</p>
+      <input type="hidden" id="cl-edit-index" value="-1">
+      <div class="form-control mb-4">
+        <label class="label pb-1"><span class="label-text text-xs font-bold">ชื่อ Task <span
+              class="text-error">*</span></span></label>
+        <input type="text" id="cl-input-task" class="input input-sm input-bordered w-full"
+          placeholder="เช่น Match Status Check, Monitor : Grafana : CPU...">
+      </div>
+      <div class="modal-action mt-4">
+        <button class="btn btn-sm btn-ghost" onclick="document.getElementById('modal-cl-item').close()">ยกเลิก</button>
+        <button class="btn btn-sm btn-primary text-white px-6" onclick="ChecklistSettings.saveModal()">
+          <i class="fas fa-save"></i> บันทึก
+        </button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+</div>

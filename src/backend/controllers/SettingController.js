@@ -315,6 +315,50 @@ const SettingController = (() => {
       } finally {
         lock.releaseLock();
       }
+    },
+
+    /** ──────────────────────────────────────────
+     *  Checklist Sheet API (SYS_Checklist)
+     *  Headers: Order | TaskName | IsActive
+     * ──────────────────────────────────────────*/
+    apiGetChecklist: function () {
+      try {
+        const dbId = typeof CONFIG !== "undefined" ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty("CORE_SHEET_ID");
+        const ss = SpreadsheetApp.openById(dbId);
+        const sheet = ensureSheet(ss, "SYS_Checklist", ["Order", "TaskName", "IsActive"]);
+        const rows = parseData(sheet);
+        const tasks = rows
+          .sort((a, b) => Number(a.Order) - Number(b.Order))
+          .map(r => String(r.TaskName || "").trim())
+          .filter(t => t !== "");
+        return Response.success({ checklistTasks: tasks });
+      } catch (e) {
+        return Response.error("Get Checklist Failed: " + String(e));
+      }
+    },
+
+    apiSaveChecklist: function (payload) {
+      const lock = LockService.getScriptLock();
+      try {
+        if (lock.tryLock(30000)) {
+          const dbId = typeof CONFIG !== "undefined" ? CONFIG.DB_ID : PropertiesService.getScriptProperties().getProperty("CORE_SHEET_ID");
+          const ss = SpreadsheetApp.openById(dbId);
+          const tasks = (payload && payload.checklistTasks) ? payload.checklistTasks : [];
+          const rows = tasks.map((taskName, idx) => ({
+            Order: idx + 1,
+            TaskName: String(taskName).trim(),
+            IsActive: "TRUE"
+          }));
+          saveData(ss, "SYS_Checklist", ["Order", "TaskName", "IsActive"], rows);
+          // Also invalidate settings cache so Dashboard picks up new list
+          try { CacheService.getScriptCache().remove("GLOBAL_APP_SETTINGS_V1"); } catch (e) { }
+          return Response.success({ message: "บันทึก Checklist เรียบร้อย", count: tasks.length });
+        }
+      } catch (e) {
+        return Response.error("Save Checklist Failed: " + String(e));
+      } finally {
+        lock.releaseLock();
+      }
     }
   };
 })();
