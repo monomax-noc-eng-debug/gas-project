@@ -438,13 +438,6 @@
             TicketManager.applyRoutineProfile(_routineProfiles.indexOf(autoProfile), true);
           }
 
-          // ✨ เพิ่มโค้ดนี้เพื่อซ่อนกล่องแสกนทุกครั้งที่เปิดฟอร์ม
-        const svrContainer = getEl("svr-scan-results");
-        if (svrContainer) {
-          svrContainer.classList.add("hidden");
-          svrContainer.classList.remove("flex");
-        }
-
           const btnEmailTab = getEl("tab-btn-email");
           if (btnEmailTab) btnEmailTab.classList.add("hidden");
 
@@ -533,6 +526,13 @@
           getEl("ticket-id-display-container").classList.add("flex");
         }
 
+        // ✨ ซ่อนกล่องแสกน SVR ทุกครั้งที่เปิดฟอร์ม (แก้ไขบั๊กกล่องค้าง)
+        const svrContainer = getEl("svr-scan-results");
+        if (svrContainer) {
+          svrContainer.classList.add("hidden");
+          svrContainer.classList.remove("flex");
+        }
+
         drawerToggle.checked = true;
       },
 
@@ -602,34 +602,54 @@
       scanSvrFromEmail: () => {
         const container = getEl("svr-scan-results");
         const listEl = getEl("svr-scan-list");
-        
+        const btnSvr = getEl("btn-scan-svr");
+
         if (!container || !listEl) return;
-        
-        UIManager.showLoading("กำลังค้นหาอีเมลล่าสุด...");
-        
+
+        // ✨ ใช้ Skeleton Loader แสดงผลลัพธ์การโหลดในกล่องแทนการโหลดเต็มหน้าจอ
+        container.classList.remove("hidden");
+        container.classList.add("flex");
+        listEl.innerHTML = `
+          <div class="flex flex-col gap-2 p-2 w-full">
+            <div class="skeleton h-12 w-full rounded-lg opacity-60"></div>
+            <div class="skeleton h-12 w-full rounded-lg opacity-40"></div>
+            <div class="skeleton h-12 w-full rounded-lg opacity-20"></div>
+          </div>
+        `;
+
+        let oldIconHtml = "";
+        if (btnSvr) {
+          oldIconHtml = btnSvr.innerHTML;
+          btnSvr.innerHTML = '<span class="loading loading-spinner loading-xs text-blue-500"></span>';
+          btnSvr.disabled = true;
+        }
+
         TicketService.fetchEmailPreviews().then((res) => {
-          UIManager.hideLoading();
-          
-          if (!res.success || !res.items || res.items.length === 0) {
-             UIManager.showToast("ไม่พบอีเมลใหม่ใน Inbox", "warning");
-             return;
+          if (btnSvr) {
+            btnSvr.innerHTML = oldIconHtml;
+            btnSvr.disabled = false;
           }
-          
+
+          if (!res.success || !res.items || res.items.length === 0) {
+            listEl.innerHTML = '<div class="text-center text-xs text-blue-400 py-4"><i class="fas fa-inbox text-2xl mb-2 opacity-50 block"></i>ไม่พบอีเมลเกี่ยวกับ SVR</div>';
+            return;
+          }
+
           // กรองเอาเฉพาะอีเมลที่มีรหัส SVR
           const svrItems = res.items.filter(item => item.id);
-          
+
           if (svrItems.length === 0) {
-             UIManager.showToast("ไม่พบรหัส SVR ในหัวข้ออีเมล", "warning");
-             return;
+            UIManager.showToast("ไม่พบรหัส SVR ในหัวข้ออีเมล", "warning");
+            return;
           }
-          
+
           // ดึง ID ที่กำลังใส่อยู่ในฟอร์มปัจจุบัน (เผื่อเปิดมาดูเฉยๆ จะได้รู้ว่าอันนี้คือใบนี้)
           const currentInputId = getEl("inp-ticket-id").value;
 
           // สร้างรายการให้คลิกเลือก โดยเช็คสถานะซ้ำซ้อน
           listEl.innerHTML = svrItems.map(item => {
             const safeSubject = TicketManager.escapeHTML(item.subject).replace(/'/g, "\\'");
-            
+
             // 🔍 ลอจิกสำคัญ: ตรวจสอบว่า SVR นี้มีอยู่ใน _tickets (ฐานข้อมูล) หรือยัง
             const isExists = _tickets.some(t => t.ticketNumber === item.id);
             const isCurrent = currentInputId === item.id; // เช็คว่าเป็นอันที่กำลังใส่อยู่ในฟอร์มไหม
@@ -672,48 +692,51 @@
               `;
             }
           }).join("");
-          
+
           // แสดงกล่อง
           container.classList.remove("hidden");
           container.classList.add("flex");
         }).catch(err => {
           console.error(err);
-          UIManager.hideLoading();
-          UIManager.showToast("ค้นหาล้มเหลว", "error");
+          if (btnSvr) {
+            btnSvr.innerHTML = oldIconHtml;
+            btnSvr.disabled = false;
+          }
+          listEl.innerHTML = '<div class="text-center text-xs text-red-400 py-4"><i class="fas fa-exclamation-triangle text-2xl mb-2 opacity-50 block"></i>เกิดข้อผิดพลาดในการค้นหา</div>';
         });
       },
 
       selectSvrFromScan: (svrId, subject) => {
         if (!svrId) return;
-        
+
         const mode = getEl("ticket-modal-title").innerText.includes("สร้าง") ? "CREATE" : "EDIT";
         const container = getEl("svr-scan-results");
-        
+
         if (mode === "CREATE") {
           // โหมด CREATE: แค่แทนค่าลงไปในฟอร์ม ยังไม่ได้บันทึกลง Database
           getEl("inp-ticket-id").value = svrId;
           getEl("ticket-modal-id-display").innerText = svrId;
-          
+
           // โบนัส: ถ้าช่อง Subject ว่าง ให้เอาหัวข้ออีเมลมาใส่ให้อัตโนมัติ
           const subjEl = getEl("inp-ticket-subject");
           if (subjEl && !subjEl.value) {
             subjEl.value = subject;
           }
-          
+
           UIManager.showToast(`นำ ${svrId} ใส่ฟอร์มแล้ว (รอคุณกดบันทึก)`, "success");
           if (container) {
             container.classList.add("hidden");
             container.classList.remove("flex");
           }
-          
+
         } else {
           // โหมด EDIT: มี Ticket อยู่แล้ว ต้องยิง API ผูก ID เข้ากับ Database
           const currentId = getEl("inp-ticket-id").value;
           if (currentId === svrId) {
-             UIManager.showToast("ID นี้ผูกกับ Ticket ปัจจุบันอยู่แล้ว", "info");
-             return;
+            UIManager.showToast("ID นี้ผูกกับ Ticket ปัจจุบันอยู่แล้ว", "info");
+            return;
           }
-          
+
           UIManager.showLoading(`กำลังผูก ID เป็น ${svrId}...`);
           Server.call({ func: "updateTicketIdOnly", retryable: false }, { oldId: currentId, newId: svrId })
             .then(res => {
@@ -722,10 +745,10 @@
                 getEl("inp-ticket-id").value = svrId;
                 getEl("ticket-modal-id-display").innerText = svrId;
                 getEl("ticket-modal-title").innerText = "แก้ไข Ticket: " + svrId;
-                
+
                 UIManager.showToast("ผูก SVR เข้ากับระบบสำเร็จ!", "success");
                 TicketManager.loadData(true); // โหลดตารางหลักใหม่
-                
+
                 if (container) {
                   container.classList.add("hidden");
                   container.classList.remove("flex");

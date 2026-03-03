@@ -1,226 +1,229 @@
 <!doctype html>
 <html lang="en" data-theme="light">
-  <head>
-    <base target="_top" />
-    <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <title>NOC Management</title>
 
-    <link
-      href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-    />
+<head>
+  <base target="_top" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>NOC Management</title>
 
-    <link
-      href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css"
-      rel="stylesheet"
-      type="text/css"
-    />
-    <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css"
-    />
-    <script src="https://cdn.jsdelivr.net/npm/pikaday/pikaday.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
-    />
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css" />
+  <script src="https://cdn.jsdelivr.net/npm/pikaday/pikaday.js"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/locale/th.js"></script>
-    <script>
-      dayjs.locale("th");
-    </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: { fontFamily: { sans: ["Sarabun", "sans-serif"] } },
-        },
-      };
-    </script>
-    <?!= include('frontend/styles/CSS_Custom'); ?>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/locale/th.js"></script>
+  <script>
+    dayjs.locale("th");
+  </script>
 
-    <style>
-      .pika-single {
-        background: #1f2937;
-        border: 1px solid #374151;
-        border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-        color: #fff;
-        font-family: "Sarabun", sans-serif;
-      }
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: { fontFamily: { sans: ["Sarabun", "sans-serif"] } },
+      },
+    };
+  </script>
+  <?!= include('frontend/styles/CSS_Custom'); ?>
 
-      .pika-label {
-        background-color: #1f2937;
-        color: #f3f4f6;
-        font-weight: bold;
-      }
+  <style>
+    .pika-single {
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      color: #fff;
+      font-family: "Sarabun", sans-serif;
+    }
 
-      .pika-prev,
-      .pika-next {
-        opacity: 0.7;
-      }
+    .pika-label {
+      background-color: #1f2937;
+      color: #f3f4f6;
+      font-weight: bold;
+    }
 
-      .pika-prev:hover,
-      .pika-next:hover {
-        opacity: 1;
-        background-color: #374151;
-        border-radius: 4px;
-      }
+    .pika-prev,
+    .pika-next {
+      opacity: 0.7;
+    }
 
-      .pika-table th {
-        color: #9ca3af;
-      }
+    .pika-prev:hover,
+    .pika-next:hover {
+      opacity: 1;
+      background-color: #374151;
+      border-radius: 4px;
+    }
 
-      .pika-button {
-        color: #e5e7eb;
-        background: transparent;
-        border-radius: 8px;
-        text-align: center;
-      }
+    .pika-table th {
+      color: #9ca3af;
+    }
 
-      .pika-button:hover {
-        background: #374151 !important;
-        color: #fff !important;
-      }
+    .pika-button {
+      color: #e5e7eb;
+      background: transparent;
+      border-radius: 8px;
+      text-align: center;
+    }
 
-      .is-selected .pika-button {
-        background: #3b82f6 !important;
-        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
-        color: #fff;
-        font-weight: bold;
-      }
+    .pika-button:hover {
+      background: #374151 !important;
+      color: #fff !important;
+    }
 
-      .is-today .pika-button {
-        color: #3b82f6;
-        font-weight: bold;
-      }
+    .is-selected .pika-button {
+      background: #3b82f6 !important;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+      color: #fff;
+      font-weight: bold;
+    }
 
-      body.swal2-shown:not(.swal2-no-backdrop):not(.swal2-toast-shown) {
-        padding-right: 0 !important;
-        overflow-y: hidden !important;
-      }
-    </style>
-  </head>
+    .is-today .pika-button {
+      color: #3b82f6;
+      font-weight: bold;
+    }
 
-  <body
-    class="bg-base-200 text-base-content font-sans h-screen overflow-hidden relative"
-  >
-    <div
-      id="global-page-loader"
-      class="fixed inset-0 z-[9999] bg-base-200 flex flex-col items-center justify-center transition-opacity duration-500 opacity-100"
-    >
-      <span class="loading loading-bars loading-lg text-primary"></span>
-      <h2 class="mt-4 text-sm font-bold text-base-content/70 tracking-wider">
-        กำลังเชื่อมต่อฐานข้อมูล...
-      </h2>
-    </div>
-    <div
-      id="main-app"
-      class="drawer lg:drawer-open h-full transition-opacity duration-500 opacity-0"
-    >
-      <input id="my-drawer" type="checkbox" class="drawer-toggle" />
-      <div class="drawer-content flex flex-col h-full overflow-hidden relative">
-        <label
-          for="my-drawer"
-          class="btn btn-sm btn-circle btn-primary shadow-lg lg:hidden fixed bottom-4 right-4 z-[60]"
-        >
-          <i class="fas fa-bars"></i>
-        </label>
+    body.swal2-shown:not(.swal2-no-backdrop):not(.swal2-toast-shown) {
+      padding-right: 0 !important;
+      overflow-y: hidden !important;
+    }
+  </style>
+</head>
 
-        <main class="flex-1 relative w-full h-full overflow-hidden">
-          <?!= include('frontend/pages/Page_Dashboard'); ?> <?!=
-          include('frontend/pages/Page_Handover'); ?> <?!=
-          include('frontend/pages/Page_Report'); ?> <?!=
-          include('frontend/pages/Page_Ticket'); ?> <?!=
-          include('frontend/pages/Page_Playbook'); ?> <?!=
-          include('frontend/pages/Page_Email_Fetch'); ?> <?!=
-          include('frontend/pages/Page_Email_Send'); ?> <?!=
-          include('frontend/pages/Page_History'); ?> <?!=
-          include('frontend/pages/Page_Settings_System'); ?> <?!=
-          include('frontend/pages/Page_Settings_Users'); ?> <?!=
-          include('frontend/pages/Page_Settings_Email'); ?> <?!=
+<body class="bg-base-200 text-base-content font-sans h-screen overflow-hidden relative">
+  <div id="global-page-loader"
+    class="fixed inset-0 z-[9999] bg-base-200 flex flex-col items-center justify-center transition-opacity duration-500 opacity-100">
+    <span class="loading loading-bars loading-lg text-primary"></span>
+    <h2 class="mt-4 text-sm font-bold text-base-content/70 tracking-wider">
+      กำลังเชื่อมต่อฐานข้อมูล...
+    </h2>
+  </div>
+  <div id="main-app" class="drawer lg:drawer-open h-full transition-opacity duration-500 opacity-0">
+    <input id="my-drawer" type="checkbox" class="drawer-toggle" />
+    <div class="drawer-content flex flex-col h-full overflow-hidden relative">
+      <label for="my-drawer"
+        class="btn btn-sm btn-circle btn-primary shadow-lg lg:hidden fixed bottom-4 right-4 z-[60]">
+        <i class="fas fa-bars"></i>
+      </label>
+
+      <main class="flex-1 relative w-full h-full overflow-hidden">
+        <?!= include('frontend/pages/Page_Dashboard'); ?>
+        <?!=
+          include('frontend/pages/Page_Handover'); ?>
+        <?!=
+          include('frontend/pages/Page_Report'); ?>
+        <?!=
+          include('frontend/pages/Page_Ticket'); ?>
+        <?!=
+          include('frontend/pages/Page_Playbook'); ?>
+        <?!=
+          include('frontend/pages/Page_Email_Fetch'); ?>
+        <?!=
+          include('frontend/pages/Page_Email_Send'); ?>
+        <?!=
+          include('frontend/pages/Page_History'); ?>
+        <?!=
+          include('frontend/pages/Page_Settings_Checklist'); ?>
+        <?!=
+          include('frontend/pages/Page_Settings_System'); ?>
+        <?!=
+          include('frontend/pages/Page_Settings_Users'); ?>
+        <?!=
+          include('frontend/pages/Page_Settings_Email'); ?>
+        <?!=
           include('frontend/pages/Page_Settings_Tags'); ?>
-        </main>
-      </div>
-      <div class="drawer-side z-50">
-        <label
-          for="my-drawer"
-          aria-label="close sidebar"
-          class="drawer-overlay"
-        ></label>
-        <?!= include('frontend/components/Part_Sidebar'); ?>
-      </div>
+      </main>
     </div>
+    <div class="drawer-side z-50">
+      <label for="my-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+      <?!= include('frontend/components/Part_Sidebar'); ?>
+    </div>
+  </div>
 
-    <?!= include('frontend/components/Part_Modal_Core'); ?> <?!=
-    include('frontend/scripts/JS_Core'); ?> <?!=
-    include('frontend/scripts/JS_Dashboard'); ?> <?!=
-    include('frontend/scripts/JS_Handover'); ?> <?!=
-    include('frontend/scripts/JS_Report'); ?> <?!=
-    include('frontend/scripts/JS_Ticket_Service'); ?> <?!=
-    include('frontend/scripts/JS_Ticket_View'); ?> <?!=
-    include('frontend/scripts/JS_Ticket_Email'); ?> <?!=
-    include('frontend/scripts/JS_Ticket_Controller'); ?> <?!=
-    include('frontend/scripts/JS_Playbook'); ?> <?!=
-    include('frontend/scripts/JS_Email_Fetch'); ?> <?!=
-    include('frontend/scripts/JS_Email_Send'); ?> <?!=
-    include('frontend/scripts/JS_History'); ?> <?!=
-    include('frontend/scripts/JS_Settings_System'); ?> <?!=
-    include('frontend/scripts/JS_Settings_Users'); ?> <?!=
-    include('frontend/scripts/JS_Settings_Email'); ?> <?!=
-    include('frontend/scripts/JS_Settings_Tags'); ?> <?!=
+  <?!= include('frontend/components/Part_Modal_Core'); ?>
+  <?!=
+    include('frontend/scripts/JS_Core'); ?>
+  <?!=
+    include('frontend/scripts/JS_Dashboard'); ?>
+  <?!=
+    include('frontend/scripts/JS_Handover'); ?>
+  <?!=
+    include('frontend/scripts/JS_Report'); ?>
+  <?!=
+    include('frontend/scripts/JS_Ticket_Service'); ?>
+  <?!=
+    include('frontend/scripts/JS_Ticket_View'); ?>
+  <?!=
+    include('frontend/scripts/JS_Ticket_Email'); ?>
+  <?!=
+    include('frontend/scripts/JS_Ticket_Controller'); ?>
+  <?!=
+    include('frontend/scripts/JS_Playbook'); ?>
+  <?!=
+    include('frontend/scripts/JS_Email_Fetch'); ?>
+  <?!=
+    include('frontend/scripts/JS_Email_Send'); ?>
+  <?!=
+    include('frontend/scripts/JS_History'); ?>
+  <?!=
+    include('frontend/scripts/JS_Settings_Checklist'); ?>
+  <?!=
+    include('frontend/scripts/JS_Settings_System'); ?>
+  <?!=
+    include('frontend/scripts/JS_Settings_Users'); ?>
+  <?!=
+    include('frontend/scripts/JS_Settings_Email'); ?>
+  <?!=
+    include('frontend/scripts/JS_Settings_Tags'); ?>
+  <?!=
     include('frontend/scripts/JS_App'); ?>
 
-    <script>
-      /**
-       * ฟังก์ชันสำหรับปิดหน้าต่างโหลดเต็มจอ
-       * *ข้อควรระวัง: คุณต้องนำคำสั่ง hideGlobalLoader() ไปเรียกใช้ใน withSuccessHandler
-       * ของการดึงข้อมูลก้อนแรกใน JS_App หรือ JS_Core
-       */
-      function hideGlobalLoader() {
-        const loader = document.getElementById("global-page-loader");
-        const mainApp = document.getElementById("main-app");
+  <script>
+    /**
+     * ฟังก์ชันสำหรับปิดหน้าต่างโหลดเต็มจอ
+     * *ข้อควรระวัง: คุณต้องนำคำสั่ง hideGlobalLoader() ไปเรียกใช้ใน withSuccessHandler
+     * ของการดึงข้อมูลก้อนแรกใน JS_App หรือ JS_Core
+     */
+    function hideGlobalLoader() {
+      const loader = document.getElementById("global-page-loader");
+      const mainApp = document.getElementById("main-app");
 
-        if (loader && mainApp) {
-          // 1. ทำให้ Loader โปร่งใส
-          loader.classList.replace("opacity-100", "opacity-0");
-          // 2. แสดง UI หลัก
-          mainApp.classList.replace("opacity-0", "opacity-100");
+      if (loader && mainApp) {
+        // 1. ทำให้ Loader โปร่งใส
+        loader.classList.replace("opacity-100", "opacity-0");
+        // 2. แสดง UI หลัก
+        mainApp.classList.replace("opacity-0", "opacity-100");
 
-          // 3. รอให้ Animation จบแล้วค่อยซ่อน Loader ทิ้งเพื่อไม่ให้ขวางการคลิก
-          setTimeout(() => {
-            loader.classList.add("hidden");
-          }, 500);
-        }
+        // 3. รอให้ Animation จบแล้วค่อยซ่อน Loader ทิ้งเพื่อไม่ให้ขวางการคลิก
+        setTimeout(() => {
+          loader.classList.add("hidden");
+        }, 500);
       }
+    }
 
-      // [ตัวเลือกเสริม] ป้องกันกรณีเน็ตหลุดหรือโหลดนานเกิน 15 วินาที ให้บังคับเปิด UI เลย
-      setTimeout(() => {
-        if (
-          !document
-            .getElementById("global-page-loader")
-            .classList.contains("hidden")
-        ) {
-          console.warn("Loader timeout fallback triggered.");
-          hideGlobalLoader();
-        }
-      }, 15000);
-    </script>
-  </body>
+    // [ตัวเลือกเสริม] ป้องกันกรณีเน็ตหลุดหรือโหลดนานเกิน 15 วินาที ให้บังคับเปิด UI เลย
+    setTimeout(() => {
+      if (
+        !document
+          .getElementById("global-page-loader")
+          .classList.contains("hidden")
+      ) {
+        console.warn("Loader timeout fallback triggered.");
+        hideGlobalLoader();
+      }
+    }, 15000);
+  </script>
+</body>
+
 </html>
