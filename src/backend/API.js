@@ -110,6 +110,7 @@ function apiHandler(request) {
     apiUpdateWorkItem: (d) => MatchController.apiUpdateWorkItem(d),
     apiDeleteWorkItem: (d) => MatchController.apiDeleteWorkItem(d),
     apiStopWorkItem: (d) => MatchController.apiStopWorkItem(d),
+    apiSaveChecklist: (d) => MatchController.apiSaveChecklist(d),
     getCalendarEvents: (d) => MatchController.apiGetCalendarEvents(d),
     apiGetCalendarEvents: (d) => MatchController.apiGetCalendarEvents(d),
     apiCheckMatchUpdate: (d) => MatchController.apiCheckMatchUpdate(d),

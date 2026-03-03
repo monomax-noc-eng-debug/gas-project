@@ -213,6 +213,7 @@ const MatchController = (() => {
           // Legacy fallback - exact match only for "Start" or "Stop" to avoid matching "Start Mono"
           startImg: getIdx(["Start Image", "Start"], true),
           stopImg: getIdx(["Stop Image", "Stop"], true),
+          checklist: getIdx(["Checklist", "รายการตรวจสอบ"], false),
         };
 
         // Second pass: if some critical headers not found, try fuzzy
@@ -266,7 +267,8 @@ const MatchController = (() => {
             start_ais: sAis,
             stop_ais: eAis,
             start_img: startAll, // UI uses this for thumbnail + count
-            stop_img: stopAll    // UI uses this for thumbnail + count
+            stop_img: stopAll,    // UI uses this for thumbnail + count
+            checklist: idx.checklist > -1 ? _parseImageCell(row[idx.checklist]) : []
           };
         });
 
@@ -530,6 +532,42 @@ const MatchController = (() => {
           : Response.error("Delete Failed");
       } catch (e) {
         return Response.error("Delete Error: " + e.toString());
+      }
+    },
+
+    // =================================================================
+    // ✅ SAVE CHECKLIST
+    // =================================================================
+    apiSaveChecklist: function (data) {
+      try {
+        if (!data.id) return Response.error("Missing ID");
+        const sheetName = getSheetName();
+        const dbId = getDbId();
+        const headers = SheetService.getAll(sheetName, 0, dbId)[0];
+        const resolve = (keys) => _resolveHeader(headers, keys);
+
+        const idCol = resolve(["Match ID", "ID"]);
+        let clCol = resolve(["Checklist", "รายการตรวจสอบ"]);
+
+        if (!clCol) return Response.error("ไม่พบคอลัมน์ 'Checklist' ในฐานข้อมูล กรุณาเพิ่มคอลัมน์นี้ก่อน");
+
+        const updateMap = {};
+        updateMap[clCol] = JSON.stringify(data.checklist);
+
+        const success = SheetService.update(
+          sheetName,
+          data.id,
+          updateMap,
+          idCol || "Match ID",
+          dbId
+        );
+        if (success) this._triggerMatchUpdate();
+
+        return success
+          ? Response.success({ message: "Checklist Saved" })
+          : Response.error("Update Failed");
+      } catch (e) {
+        return Response.error("Save Checklist Error: " + e.toString());
       }
     },
 

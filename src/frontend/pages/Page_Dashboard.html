@@ -75,7 +75,7 @@
           <span class="hidden sm:inline text-[11px] font-semibold">โหลดใหม่</span>
         </button>
 
-        <button onclick="Router.navigate('page-settings-checklist')"
+        <button onclick="Router.navigateTo('page-settings-checklist')"
           class="btn btn-xs btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-400 gap-1.5 px-3">
           <i class="fas fa-clipboard-list text-[10px]"></i>
           <span class="hidden sm:inline text-[11px] font-semibold">Checklist</span>
@@ -411,6 +411,69 @@
           class="fas fa-chevron-right text-xl"></i></button>
     </div>
     <form method="dialog" class="modal-backdrop bg-black/90"><button>close</button></form>
+  </dialog>
+
+  <!-- Checklist Modal -->
+  <dialog id="modal-checklist-match" class="modal">
+    <div class="modal-box max-w-4xl p-0 overflow-visible bg-white rounded-2xl shadow-2xl">
+      <div class="bg-warning text-warning-content px-6 py-4 flex justify-between items-center rounded-t-2xl">
+        <h3 class="font-bold text-lg flex items-center gap-2">
+          <i class="fas fa-clipboard-list"></i> <span id="cl-match-header-title">Match Checklist</span>
+        </h3>
+        <form method="dialog"><button
+            class="btn btn-sm btn-circle btn-ghost text-warning-content/80 hover:bg-warning-content/20">✕</button>
+        </form>
+      </div>
+      <div class="p-6 bg-slate-50/50 max-h-[75vh] overflow-y-auto custom-scrollbar">
+        <div
+          class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 gap-2">
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 text-xl font-bold">
+              <i class="fas fa-tv"></i>
+            </div>
+            <div>
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Match Info</p>
+              <h4 id="cl-match-title" class="font-bold text-slate-800 text-sm">HOME vs AWAY</h4>
+            </div>
+          </div>
+          <div class="text-left sm:text-right">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Match begin:</p>
+            <p id="cl-match-time" class="font-mono font-bold text-slate-700 text-sm">--:--</p>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <table class="table table-sm w-full">
+            <thead class="bg-slate-50 border-b border-slate-200 text-slate-500">
+              <tr>
+                <th class="w-12 text-center text-xs">#</th>
+                <th class="text-xs">Task</th>
+                <th class="w-20 text-center text-xs">Status</th>
+                <th class="w-32 text-center text-xs">Checker</th>
+                <th class="w-48 text-xs">Remark</th>
+              </tr>
+            </thead>
+            <tbody id="cl-match-tbody">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
+          <div id="cl-match-empty" class="hidden py-12 text-center text-slate-400">
+            <i class="fas fa-clipboard text-4xl mb-2 opacity-50"></i>
+            <p class="text-sm">ยังไม่มีรายการ Checklist กรุณาเพิ่มในตั้งค่า Checklist</p>
+          </div>
+        </div>
+      </div>
+      <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-end gap-2 rounded-b-2xl">
+        <form method="dialog"><button class="btn btn-sm btn-ghost text-slate-500 hover:bg-slate-200">ยกเลิก</button>
+        </form>
+        <button type="button" onclick="Dashboard.saveChecklist()"
+          class="btn btn-sm btn-warning text-white gap-1.5 shadow-md hover:shadow-lg">
+          <span class="loading loading-spinner loading-xs hidden" id="spinner-save-checklist"></span>
+          <i class="fas fa-save" id="icon-save-checklist"></i> บันทึก Checklist
+        </button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop bg-black/40 backdrop-blur-[1px]"><button>close</button></form>
   </dialog>
 
 </div> <!-- End #page-dashboard -->

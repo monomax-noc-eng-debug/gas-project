@@ -22,6 +22,10 @@
     let _galleryList = [];
     let _galleryIndex = 0;
 
+    // ✨ NEW: Checklist vars
+    let _currentChecklistMatchId = null;
+    let _currentChecklistData = [];
+
     // ✨ NEW: เก็บเวลาที่ดึงข้อมูลล่าสุด เพื่อใช้เทียบว่ามีข้อมูลใหม่หรือไม่
     let _lastSyncTime = Date.now();
 
@@ -360,6 +364,12 @@
             "<button onclick=\"Dashboard.openEditModal('" +
             itemJson +
             '\', \'all\')" class="btn btn-ghost btn-xs text-base-content/40 hover:text-primary hover:bg-base-200 gap-1 w-full max-w-[80px]"><i class="fas fa-pencil-alt"></i> แก้ไข</button>';
+
+          // ✨ NEW: Add Checklist button
+          actionWidget +=
+            "<button onclick=\"Dashboard.openChecklistModal('" +
+            itemJson +
+            '\')" class="btn btn-ghost btn-xs text-teal-600 hover:text-teal-700 hover:bg-teal-50 gap-1 w-full max-w-[80px] mt-0.5 border border-teal-100 shadow-sm"><i class="fas fa-tasks"></i> เช็คงาน</button>';
           actionWidget += "</div>";
 
           var btnProof = function (imgData, label) {
@@ -1117,7 +1127,7 @@
           });
 
         var html = "";
-        var filteredEvents = events.filter(function(evt) {
+        var filteredEvents = events.filter(function (evt) {
           var key = (evt.home || "").trim().toLowerCase() + "|" + (evt.away || "").trim().toLowerCase();
           return !existingKeys.has(key);
         });
@@ -1178,6 +1188,111 @@
         } catch (e) {
           console.error(e);
         }
+      },
+
+      // ==========================================
+      // ✅ CHECKLIST MODAL LOGIC
+      // ==========================================
+      openChecklistModal: function (itemJsonRaw) {
+        try {
+          var item = JSON.parse(decodeURIComponent(itemJsonRaw));
+          _currentChecklistMatchId = item.id;
+
+          var home = item.home || "?";
+          var away = item.away || "?";
+          getEl("cl-match-title").innerText = home + " vs " + away;
+          getEl("cl-match-time").innerText = item.time || "--:--";
+
+          if (item.checklist && Array.isArray(item.checklist) && item.checklist.length > 0) {
+            _currentChecklistData = JSON.parse(JSON.stringify(item.checklist));
+          } else {
+            var defaultTasks = (typeof ChecklistSettings !== 'undefined' && typeof ChecklistSettings.getTasks === 'function')
+              ? ChecklistSettings.getTasks() : [];
+            _currentChecklistData = defaultTasks.map(t => ({
+              id: Date.now() + Math.floor(Math.random() * 1000).toString(),
+              title: t.title,
+              status: false,
+              checker: "",
+              remark: ""
+            }));
+          }
+
+          Dashboard.renderChecklistTable();
+          getEl("modal-checklist-match").showModal();
+        } catch (e) { console.error("Open Checklist Error", e); }
+      },
+
+      renderChecklistTable: function () {
+        var tbody = getEl("cl-match-tbody");
+        var empty = getEl("cl-match-empty");
+
+        if (!_currentChecklistData || _currentChecklistData.length === 0) {
+          tbody.innerHTML = "";
+          empty.classList.remove("hidden");
+          return;
+        }
+
+        empty.classList.add("hidden");
+        var html = "";
+        _currentChecklistData.forEach((task, index) => {
+          html += `
+              <tr class="hover">
+                <td class="text-center font-mono text-[10px] text-slate-400">${index + 1}</td>
+                <td class="font-medium text-[11px] text-slate-700 w-full" style="white-space:normal; overflow-wrap:anywhere;">${Dashboard.escapeHTML(task.title)}</td>
+                <td class="text-center">
+                  <input type="checkbox" class="checkbox checkbox-sm checkbox-warning" 
+                     ${task.status ? 'checked' : ''} 
+                     onchange="Dashboard.updateChecklistField(${index}, 'status', this.checked)">
+                </td>
+                <td>
+                  <input type="text" class="input input-xs input-bordered w-full text-[11px] bg-slate-50 focus:bg-white focus:border-warning" 
+                     value="${Dashboard.escapeHTML(task.checker || '')}" placeholder="..."
+                     onchange="Dashboard.updateChecklistField(${index}, 'checker', this.value)">
+                </td>
+                <td>
+                  <input type="text" class="input input-xs input-bordered w-full text-[11px] bg-slate-50 focus:bg-white focus:border-warning" 
+                     value="${Dashboard.escapeHTML(task.remark || '')}" placeholder="..."
+                     onchange="Dashboard.updateChecklistField(${index}, 'remark', this.value)">
+                </td>
+              </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+      },
+
+      updateChecklistField: function (index, field, value) {
+        if (_currentChecklistData[index]) {
+          _currentChecklistData[index][field] = value;
+        }
+      },
+
+      saveChecklist: function () {
+        if (!_currentChecklistMatchId) return;
+
+        var btnIcon = getEl("icon-save-checklist");
+        var btnSpin = getEl("spinner-save-checklist");
+        if (btnIcon) btnIcon.classList.add("hidden");
+        if (btnSpin) btnSpin.classList.remove("hidden");
+
+        var payload = {
+          id: _currentChecklistMatchId,
+          checklist: _currentChecklistData
+        };
+
+        Server.call({ func: "apiSaveChecklist", retryable: false }, payload).then(res => {
+          if (res.success) {
+            showToastInModal("บันทึก Checklist เรียบร้อย", "success", "modal-checklist-match");
+            getEl("modal-checklist-match").close();
+            Dashboard.loadWorkList(true); // force refresh main table
+          } else {
+            showToastInModal(res.message || "บันทึกไม่สำเร็จ", "error", "modal-checklist-match");
+          }
+        }).catch(err => {
+          showToastInModal("เซิิร์ฟเวอร์ไม่ตอบสนอง", "error", "modal-checklist-match");
+        }).finally(() => {
+          if (btnIcon) btnIcon.classList.remove("hidden");
+          if (btnSpin) btnSpin.classList.add("hidden");
+        });
       },
     };
   })();
