@@ -143,6 +143,10 @@ function apiHandler(request) {
     // Master & Config
     getMasterTeamList: () => API_UTILS.createRes(true, []),
 
+    // Vendor Status
+    getVendorStatuses: (d) => VendorStatusController.getVendorStatuses(d),
+    getVendorTimelineLogs: () => VendorStatusController.getVendorTimelineLogs(),
+
     // User Settings (ดึงข้อมูล Profile กลับไปให้ Frontend)
     getUserSettings: () => {
       const email = Session.getActiveUser().getEmail();

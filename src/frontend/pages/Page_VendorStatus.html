@@ -1,0 +1,131 @@
+<div id="page-vendor-status"
+  class="page-section hidden w-full h-full relative bg-slate-50 overflow-hidden flex flex-col">
+
+  <!-- 💡 Left Side Info Button -->
+  <div class="absolute top-4 left-4 z-50">
+    <button onclick="document.getElementById('modal-vendor-info').showModal()"
+      class="btn btn-sm btn-circle bg-white/50 backdrop-blur border-none shadow-sm hover:bg-white text-slate-500 hover:text-primary transition-all">
+      <i class="fas fa-info-circle text-lg"></i>
+    </button>
+  </div>
+
+  <div class="absolute top-4 right-4 z-50 flex items-center gap-2">
+    <button id="btn-refresh-vendor" onclick="VendorStatusManager.loadData(true)"
+      class="btn btn-sm bg-white/50 backdrop-blur border-none shadow-sm hover:bg-white text-slate-700 rounded-full px-4 transition-all">
+      <span id="spin-vendor" class="loading loading-spinner loading-xs text-primary hidden"></span>
+      <i id="icon-vendor" class="fas fa-sync-alt text-xs"></i>
+      <span class="hidden sm:inline text-xs font-bold tracking-wide">อัปเดตข้อมูล</span>
+    </button>
+  </div>
+
+  <div class="flex-1 flex flex-col w-full min-h-full">
+
+    <div id="vendor-overall-status" class="w-full shrink-0 animate-fade-in transition-all duration-500 ease-in-out">
+    </div>
+
+    <div id="vendor-status-loading" class="flex-1 flex flex-col items-center justify-center py-20 bg-slate-50">
+      <span class="loading loading-spinner loading-lg text-primary mb-4"></span>
+      <p class="text-sm text-slate-500 font-bold tracking-wide animate-pulse">กำลังตรวจสอบสถานะระบบทั้งหมด...</p>
+    </div>
+
+    <div id="vendor-content-area"
+      class="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6 hidden flex flex-col gap-6 overflow-y-auto scrollbar-hidden">
+      <h3 class="text-sm font-black text-slate-400 uppercase tracking-widest mb-2"><i class="fas fa-server mr-1"></i>
+        รายละเอียดแยกระบบ</h3>
+
+      <div id="vendor-status-list" class="flex flex-col gap-4">
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ℹ️ Info Modal -->
+  <dialog id="modal-vendor-info" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box bg-white max-w-2xl p-0 overflow-hidden rounded-2xl shadow-2xl">
+      <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
+        <h3 class="font-bold text-lg flex items-center gap-2">
+          <i class="fas fa-info-circle text-sky-400"></i> ข้อมูลการทำงานของระบบ Monitor
+        </h3>
+        <form method="dialog"><button class="btn btn-sm btn-circle btn-ghost text-white/50 hover:text-white">✕</button>
+        </form>
+      </div>
+
+      <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar bg-slate-50/50 text-slate-700">
+
+        <section>
+          <h4 class="font-black text-xs text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-primary"></span> แหล่งที่มาของข้อมูล (Data Source)
+          </h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="bg-white p-4 rounded-xl border border-slate-200">
+              <div class="font-bold text-sm mb-1 text-slate-800"><i class="fas fa-code text-blue-500 mr-2"></i>Official
+                API</div>
+              <p class="text-[11px] leading-relaxed opacity-70">ดึงข้อมูลจาก Status Page ของผู้ให้บริการโดยตรง (JSON
+                API) เพื่อความแม่นยำสูงสุด (เช่น Mux, Akamai)</p>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200">
+              <div class="font-bold text-sm mb-1 text-slate-800"><i class="fas fa-bolt text-amber-500 mr-2"></i>HTTP
+                Health Check</div>
+              <p class="text-[11px] leading-relaxed opacity-70">ตรวจสอบผ่านการส่งคำขอ HTTP
+                เพื่อเช็คการตอบสนองและวัดความเร็ว (Latency) แบบ Real-time</p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h4 class="font-black text-xs text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-primary"></span> เกณฑ์การแบ่งสีสถานะ (Status Logic)
+          </h4>
+          <div class="space-y-2">
+            <div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200">
+              <div
+                class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <i class="fas fa-check-circle"></i>
+              </div>
+              <div class="flex-1">
+                <div class="text-xs font-bold text-emerald-700 uppercase">Operational (ปกติ)</div>
+                <div class="text-[10px] opacity-70">API แจ้งว่าปกติ หรือ HTTP ตอบกลับ 200 OK ภายใน 3 วินาที</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200">
+              <div class="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600 shrink-0"><i
+                  class="fas fa-exclamation-triangle"></i></div>
+              <div class="flex-1">
+                <div class="text-xs font-bold text-amber-700 uppercase">Degraded (เฝ้าระวัง)</div>
+                <div class="text-[10px] opacity-70">API แจ้งปัญหาเล็กน้อย หรือ HTTP ตอบช้าเกิน 3 วินาที (Latency สูง)
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200">
+              <div class="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600 shrink-0"><i
+                  class="fas fa-times-circle"></i></div>
+              <div class="flex-1">
+                <div class="text-xs font-bold text-rose-700 uppercase">Critical (ล่ม/ขัดข้อง)</div>
+                <div class="text-[10px] opacity-70">API แจ้งปัญหาหลัก หรือไม่สามารถเชื่อมต่อได้/พบ Error รหัส 5xx หรือ
+                  4xx</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h4 class="font-black text-xs text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-primary"></span> ระบบจัดการแคช (Caching System)
+          </h4>
+          <div class="bg-sky-50 p-4 rounded-xl border border-sky-100 text-sky-900">
+            <p class="text-xs leading-relaxed">ข้อมูลจะถูกจดจำไว้เป็นเวลา <b>2 นาที</b>
+              เพื่อประหยัดทรัพยากรและให้หน้าจอโหลดได้รวดเร็วเมื่อสลับหน้าไปมา ระบบจะทำการ <b>Auto Refresh ทุกๆ 5
+                นาที</b> ขณะเปิดหน้าจอนี้ทิ้งไว้เพื่อให้ข้อมูลอัปเดตตลอดเวลา</p>
+          </div>
+        </section>
+
+      </div>
+
+      <div class="bg-slate-100 px-6 py-4 flex justify-end gap-2 border-t border-slate-200">
+        <form method="dialog"><button class="btn btn-sm btn-neutral px-6 rounded-full">รับทราบ</button></form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop bg-black/50 backdrop-blur-sm"><button>close</button></form>
+  </dialog>
+
+</div>

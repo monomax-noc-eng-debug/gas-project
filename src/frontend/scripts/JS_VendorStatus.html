@@ -1,0 +1,329 @@
+<script>
+  const VendorStatusManager = (function () {
+    const getEl = (id) => document.getElementById(id);
+
+    return {
+      timelineLogs: null,
+
+      onShow: function () {
+        this.loadData(false); // เรียกแบบไม่บังคับ (ใช้ cache ถ้ามี)
+      },
+
+      loadData: function (isForce) {
+        this.timelineLogs = null;
+        this.loadTimeline();
+
+        const btn = getEl('btn-refresh-vendor');
+        const icon = getEl('icon-vendor');
+        const spin = getEl('spin-vendor');
+
+        if (btn) btn.disabled = true;
+        if (icon) icon.classList.add('hidden');
+        if (spin) spin.classList.remove('hidden');
+
+        const loader = getEl('vendor-status-loading');
+        const list = getEl('vendor-status-list');
+        const overall = getEl('vendor-overall-status');
+        const contentArea = getEl('vendor-content-area');
+
+        if (loader) loader.classList.remove('hidden');
+        if (contentArea) contentArea.classList.add('hidden');
+        if (overall) { overall.innerHTML = ''; overall.className = 'w-full shrink-0 animate-fade-in transition-all duration-500 ease-in-out'; }
+        if (list) { list.innerHTML = ''; }
+
+        Server.call({ func: 'getVendorStatuses', silent: true }, isForce)
+          .then(res => {
+            if (res.success) {
+              this.renderVendors(res.data);
+            } else {
+              if (overall) {
+                overall.innerHTML = `<div class="bg-slate-200 py-20 text-center"><h1 class="text-3xl font-bold text-slate-500">API Error</h1><p>${res.error}</p></div>`;
+              }
+            }
+          })
+          .catch(e => {
+            console.error('VendorStatus error:', e);
+          })
+          .finally(() => {
+            if (loader) loader.classList.add('hidden');
+            if (contentArea) contentArea.classList.remove('hidden');
+            if (btn) btn.disabled = false;
+            if (icon) icon.classList.remove('hidden');
+            if (spin) spin.classList.add('hidden');
+          });
+      },
+
+      renderVendors: function (data) {
+        const list = getEl('vendor-status-list');
+        const overall = getEl('vendor-overall-status');
+        if (!data || !list) return;
+
+        let outageVendors = [];
+        let degradedVendors = [];
+
+        data.forEach(v => {
+          if (v.color === 'red') outageVendors.push(v);
+          else if (v.color === 'yellow') degradedVendors.push(v);
+        });
+
+        const totalIssues = outageVendors.length + degradedVendors.length;
+        const now = new Date();
+        const updateTime = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+
+        // 1. Hero Banner
+        if (overall) {
+          overall.className = 'w-full shrink-0 animate-fade-in transition-all duration-500 ease-in-out text-white';
+
+          if (outageVendors.length > 0) {
+            let issueNames = outageVendors.map(v => v.name).join(', ');
+            overall.classList.add('bg-rose-600');
+            overall.innerHTML = `
+              <div class="px-6 py-8 md:py-12 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                 <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg==')] opacity-20"></div>
+                 <i class="fas fa-exclamation-triangle text-5xl md:text-7xl mb-4 text-rose-300 animate-pulse"></i>
+                 <h1 class="text-3xl md:text-5xl font-black tracking-tight mb-2 drop-shadow-md">CRITICAL OUTAGE</h1>
+                 <p class="text-base md:text-xl font-medium text-rose-100 max-w-2xl leading-relaxed">ตรวจพบระบบล่ม (Critical) ใน <b class="text-white">${issueNames}</b></p>
+                 <div class="mt-6 px-4 py-2 bg-black/20 rounded-full text-[10px] md:text-xs font-mono tracking-widest backdrop-blur-md border border-white/10 shadow-inner">
+                    LAST UPDATED: ${updateTime}
+                 </div>
+              </div>
+            `;
+          } else if (degradedVendors.length > 0) {
+            let issueNames = degradedVendors.map(v => v.name).join(', ');
+            overall.classList.add('bg-amber-500');
+            overall.innerHTML = `
+              <div class="px-6 py-8 md:py-12 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                 <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg==')] opacity-20"></div>
+                 <i class="fas fa-exclamation-circle text-5xl md:text-7xl mb-4 text-amber-200 animate-pulse"></i>
+                 <h1 class="text-3xl md:text-5xl font-black tracking-tight mb-2 drop-shadow-md">DEGRADED PERFORMANCE</h1>
+                 <p class="text-base md:text-xl font-medium text-amber-50 max-w-2xl leading-relaxed">ตรวจพบระบบทำงานล่าช้าหรือมีปัญหา (Degraded) ใน <b class="text-white">${issueNames}</b></p>
+                 <div class="mt-6 px-4 py-2 bg-black/20 rounded-full text-[10px] md:text-xs font-mono tracking-widest backdrop-blur-md border border-white/10 shadow-inner">
+                    LAST UPDATED: ${updateTime}
+                 </div>
+              </div>
+            `;
+          } else {
+            overall.classList.add('bg-emerald-500');
+            overall.innerHTML = `
+              <div class="px-6 py-8 md:py-12 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                 <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg==')] opacity-20"></div>
+                 <i class="fas fa-check-circle text-5xl md:text-7xl mb-4 text-emerald-200"></i>
+                 <h1 class="text-3xl md:text-5xl font-black tracking-tight mb-2 drop-shadow-md">ALL SYSTEMS OPERATIONAL</h1>
+                 <p class="text-base md:text-xl font-medium text-emerald-50 max-w-2xl">ระบบผู้ให้บริการทั้งหมดทำงานปกติ ไม่พบการขัดข้อง</p>
+                 <div class="mt-6 px-4 py-2 bg-black/20 rounded-full text-[10px] md:text-xs font-mono tracking-widest backdrop-blur-md border border-white/10 shadow-inner">
+                    LAST UPDATED: ${updateTime}
+                 </div>
+              </div>
+            `;
+          }
+        }
+
+        // 2. Vendor Cards
+        const html = data.map(vendor => {
+          let colorTheme = 'emerald';
+          let iconHtml = '<i class="fas fa-check-circle"></i>';
+          let statusLabel = 'NORMAL';
+
+          if (vendor.color === 'red') {
+            colorTheme = 'rose'; iconHtml = '<i class="fas fa-times-circle animate-pulse"></i>'; statusLabel = 'OUTAGE';
+          } else if (vendor.color === 'yellow') {
+            colorTheme = 'amber'; iconHtml = '<i class="fas fa-exclamation-triangle animate-pulse"></i>'; statusLabel = 'DEGRADED';
+          }
+
+          let alertHtml = '';
+          if (vendor.message) {
+            alertHtml = `
+               <div class="mb-4 bg-${colorTheme}-50 border-l-4 border-${colorTheme}-500 p-4 rounded-r-xl shadow-sm">
+                 <h4 class="text-xs font-black text-${colorTheme}-800 uppercase tracking-widest mb-1">Current Incident Details</h4>
+                 <p class="text-sm text-${colorTheme}-900">${vendor.message}</p>
+               </div>
+             `;
+          }
+
+          let iframeDisplayHtml = `<iframe src="${vendor.link}" class="absolute inset-0 w-full h-full border-none z-10 bg-white" loading="lazy"></iframe>`;
+
+          if (vendor.name.toLowerCase().includes('aws') || vendor.name.toLowerCase().includes('tencent') || vendor.name.toLowerCase().includes('unleash')) {
+            iframeDisplayHtml = `
+                <div class="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-20 p-6 text-center">
+                   <div class="w-16 h-16 rounded-full bg-slate-200/50 flex items-center justify-center mb-4">
+                      <i class="fas fa-lock text-2xl text-slate-400"></i>
+                   </div>
+                   <h4 class="font-bold text-slate-700 mb-2">แสดงตัวอย่างหน้าเว็บไม่ได้</h4>
+                   <p class="text-xs text-slate-500 max-w-sm leading-relaxed">เว็บไซต์นี้มีระบบรักษาความปลอดภัย (CSP) ป้องกันการนำไปฝังในหน้าจออื่น<br>กรุณากดปุ่ม <b>"เปิดเว็บไซต์หลัก"</b> เพื่อดูข้อมูล</p>
+                </div>
+             `;
+          }
+
+          return `
+            <div class="collapse collapse-arrow bg-white rounded-2xl shadow-sm border border-slate-200 overflow-visible transition-all hover:shadow-md group">
+              <input type="checkbox" class="peer" /> 
+              
+              <div class="collapse-title p-0 pr-12 md:pr-16 flex items-center min-h-[5rem]">
+                 <div class="w-20 min-h-[5rem] h-full flex items-center justify-center bg-${colorTheme}-100/50 text-${colorTheme}-500 text-3xl shrink-0 group-hover:bg-${colorTheme}-100 transition-colors">
+                    ${iconHtml}
+                 </div>
+                 <div class="flex-1 pl-5 py-3 flex flex-col md:flex-row md:items-center justify-between min-w-0 gap-2">
+                    <h2 class="text-xl md:text-2xl font-black text-slate-800 tracking-tight truncate">${vendor.name}</h2>
+                    <span class="badge bg-${colorTheme}-100 text-${colorTheme}-700 border-none font-bold tracking-widest px-3 py-3 rounded-lg">${statusLabel}</span>
+                 </div>
+              </div>
+
+              <div class="collapse-content px-5 pb-5 pt-2 border-t border-slate-100 bg-slate-50">
+                 <div class="pt-4">
+                    ${alertHtml}
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
+                       <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col">
+                          <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                             <h4 class="font-bold text-slate-800 flex items-center gap-2"><i class="fas fa-history text-slate-400"></i> ประวัติเหตุการณ์ (7 วัน)</h4>
+                          </div>
+                          <div class="vendor-timeline-container flex-1 overflow-y-auto max-h-[400px] custom-scrollbar pr-2" data-vendor="${vendor.name}">
+                             <div class="flex items-center justify-center py-10"><span class="loading loading-spinner text-primary"></span></div>
+                          </div>
+                       </div>
+
+                       <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[400px] lg:h-auto">
+                          <div class="bg-slate-100 px-4 py-3 border-b border-slate-200 flex justify-between items-center shrink-0">
+                             <span class="text-xs font-bold text-slate-600 uppercase tracking-widest">Web Recheck</span>
+                             <a href="${vendor.link}" target="_blank" class="btn btn-xs btn-outline border-slate-300 hover:bg-slate-200 text-slate-600">เปิดเว็บไซต์หลัก <i class="fas fa-external-link-alt"></i></a>
+                          </div>
+                          <div class="flex-1 relative bg-slate-50">
+                             <div class="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-0">
+                               <span class="loading loading-spinner text-slate-300 mb-2"></span>
+                               <span class="text-xs text-slate-400 font-bold tracking-widest uppercase">Loading View</span>
+                             </div>
+                             ${iframeDisplayHtml}
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        list.innerHTML = html;
+
+        if (this.timelineLogs !== null) {
+          this.renderTimeline();
+        }
+      },
+
+      loadTimeline: function () {
+        Server.call({ func: "getVendorTimelineLogs", silent: true })
+          .then(res => {
+            this.timelineLogs = (res && res.success) ? (res.data || []) : [];
+            this.renderTimeline();
+          })
+          .catch(() => {
+            this.timelineLogs = [];
+            this.renderTimeline();
+          });
+      },
+
+      renderTimeline: function () {
+        const logs = this.timelineLogs;
+        if (!logs) return;
+
+        const containers = document.querySelectorAll('.vendor-timeline-container');
+        if (containers.length === 0) return;
+
+        const escapeHTML = (str) => {
+          if (!str) return '';
+          return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        };
+
+        containers.forEach(container => {
+          // ทำให้รองรับชื่อ AWS Health หรือ AWS เฉยๆ ได้
+          const vendorName = container.dataset.vendor;
+          const vendorLogs = logs.filter(l => l.vendorName === vendorName || (vendorName.includes('AWS') && l.vendorName.includes('AWS')));
+
+          if (vendorLogs.length === 0) {
+            container.innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center text-center py-10 opacity-60">
+                  <i class="fas fa-check-circle text-4xl text-emerald-400 mb-3"></i>
+                  <span class="text-sm text-slate-500 font-bold">ไม่มีประวัติขัดข้องใน 7 วัน</span>
+                </div>`;
+            return;
+          }
+
+          const groupedByDay = {};
+          vendorLogs.forEach(log => {
+            if (!groupedByDay[log.formattedDate]) groupedByDay[log.formattedDate] = {};
+            if (!groupedByDay[log.formattedDate][log.incidentTitle]) groupedByDay[log.formattedDate][log.incidentTitle] = [];
+            groupedByDay[log.formattedDate][log.incidentTitle].push(log);
+          });
+
+          let html = '<div class="flex flex-col gap-6 w-full">';
+
+          for (const [date, incidents] of Object.entries(groupedByDay)) {
+            html += `
+                <div class="flex flex-col">
+                   <div class="sticky top-0 bg-white z-10 py-1 mb-2">
+                      <span class="badge bg-slate-800 text-white border-none font-bold text-xs px-3 py-3 shadow-sm"><i class="far fa-calendar-alt mr-2 opacity-80"></i> ${date}</span>
+                   </div>
+                   <div class="flex flex-col gap-4 pl-3">
+              `;
+
+            for (const [incidentTitle, updates] of Object.entries(incidents)) {
+              html += `
+                    <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                       <div class="bg-slate-100/80 px-4 py-2.5 border-b border-slate-200">
+                          <h5 class="text-sm font-bold text-slate-800 tracking-tight leading-snug">${incidentTitle}</h5>
+                       </div>
+                       <div class="p-4 flex flex-col gap-4">
+                 `;
+
+              updates.forEach((update, index) => {
+                const isLast = index === updates.length - 1;
+
+                let sColor = 'text-slate-500'; let sIcon = 'fas fa-info-circle';
+                let sText = update.status.toLowerCase();
+                if (sText.includes('investigating')) { sColor = 'text-amber-500'; sIcon = 'fas fa-search'; }
+                else if (sText.includes('identified')) { sColor = 'text-orange-500'; sIcon = 'fas fa-bug'; }
+                else if (sText.includes('monitoring')) { sColor = 'text-blue-500'; sIcon = 'fas fa-eye'; }
+                else if (sText.includes('resolved')) { sColor = 'text-emerald-500'; sIcon = 'fas fa-check'; }
+
+                html += `
+                       <div class="relative flex gap-3 ${!isLast ? 'pb-4' : ''}">
+                          ${!isLast ? '<div class="absolute left-[3px] top-4 bottom-0 w-0.5 bg-slate-200"></div>' : ''}
+                          <div class="w-2 h-2 rounded-full bg-white border-2 border-slate-300 shadow-sm mt-1.5 shrink-0 z-10 relative"></div>
+                          <div class="flex-1 min-w-0">
+                             <div class="flex items-center gap-2 mb-1">
+                                <span class="text-[10px] font-mono font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100">${update.formattedTime}</span>
+                                <span class="text-[10px] font-black uppercase tracking-wider ${sColor} flex items-center gap-1"><i class="${sIcon}"></i> ${update.status}</span>
+                             </div>
+                             <div class="text-xs text-slate-600 leading-relaxed break-words">${escapeHTML(update.updateBody).replace(/\\n/g, '<br>')}</div>
+                          </div>
+                       </div>
+                    `;
+              });
+
+              html += `
+                       </div>
+                    </div>
+                 `;
+            }
+            html += `</div></div>`;
+          }
+          html += '</div>';
+
+          container.innerHTML = html;
+        });
+      },
+
+      init: function () {
+        if (typeof Router !== 'undefined') Router.register('page-vendor-status', this);
+
+        // Auto Refresh ทุกๆ 5 นาที (300,000 ms)
+        setInterval(() => {
+          // โหลดเฉพาะตอนที่หน้าจอ Vendor Status แสดงอยู่เท่านั้น
+          const page = getEl('page-vendor-status');
+          if (page && !page.classList.contains('hidden')) {
+            this.loadData(false);
+          }
+        }, 300000);
+      }
+    };
+  })();
+</script>

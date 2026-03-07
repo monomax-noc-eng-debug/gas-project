@@ -119,6 +119,7 @@
       </label>
 
       <main class="flex-1 relative w-full h-full overflow-hidden">
+        <?!= include('frontend/pages/Page_VendorStatus'); ?>
         <?!= include('frontend/pages/Page_Dashboard'); ?>
         <?!=
           include('frontend/pages/Page_Handover'); ?>
@@ -157,6 +158,7 @@
     include('frontend/scripts/JS_Core'); ?>
   <?!=
     include('frontend/scripts/JS_Dashboard'); ?>
+  <?!= include('frontend/scripts/JS_VendorStatus'); ?>
   <?!=
     include('frontend/scripts/JS_Dashboard_Checklist'); ?>
   <?!=

@@ -39,6 +39,15 @@
     background: #cbd5e1;
   }
 
+  /* Hide Scrollbar while keeping functionality */
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
   /* Utils */
   .page-section {
     position: absolute;
