@@ -17,7 +17,7 @@
     var _isDataLoaded = false;
     var _lastFetchedDate = null;
     var _isReportersLoaded = false;
-    
+
     var _lastPasteTime = 0;
 
     // --- Helpers ---
@@ -100,7 +100,7 @@
       },
 
       onShow: function () {
-        console.log('📄 ReportManager: onShow');
+        Logger.log('📄 ReportManager: onShow');
         try {
           this.onPageShow();
           if (!_isDataLoaded) {
@@ -159,7 +159,7 @@
         if (!dateVal) return;
 
         if (!force && _isDataLoaded && _lastFetchedDate === dateVal) {
-          console.log("🚀 Report Cache Hit");
+          Logger.log("🚀 Report Cache Hit");
           return;
         }
 
@@ -617,6 +617,14 @@
             var idx = urlArray.indexOf(img.url);
             if (idx > -1) urlArray.splice(idx, 1);
           } else {
+            // ⏬ เช็คลิมิตจำนวนรูป Auto-fetch สูงสุด 8 รูป
+            if (urlArray.length >= 8) {
+              if (typeof UIManager !== "undefined") {
+                UIManager.showToast("เลือกรูปเยอะเกินไป! (สูงสุด 8 รูปต่อหัวข้อ)", "warning");
+              }
+              return;
+            }
+
             div.classList.add("ring-2", "ring-green-500", "border-green-400");
             div.classList.remove("border-slate-200");
             checkEl.classList.remove("hidden");
@@ -696,7 +704,7 @@
         var nttStatus = el("nttStatusSelect") ? el("nttStatusSelect").value : "รอตรวจสอบ";
         if (nttStatus === "รอตรวจสอบ") {
           var modal = document.getElementById('ntt_check_modal');
-          if(modal) modal.showModal();
+          if (modal) modal.showModal();
           return UIManager.showToast("กรุณากดตรวจสอบ NTT และเลือกสถานะก่อนส่งรายงาน", "warning");
         }
 
@@ -739,7 +747,7 @@
           isDraft: mode === "preview",
         };
 
-        var compress = (file) =>
+        var compress = (file, isHighVolume = false) =>
           new Promise((res) => {
             if (!file.type.match(/image.*/)) return res(null);
             var r = new FileReader();
@@ -748,20 +756,23 @@
               i.onload = () => {
                 var c = document.createElement("canvas");
                 var ctx = c.getContext("2d");
-                var m = 1000,
+                // ⏬ ลดขนาดความละเอียดจาก 1000 เหลือ 600 หากรูปเยอะ
+                var m = isHighVolume ? 600 : 800,
                   w = i.width,
                   h = i.height;
                 if (w > h && w > m) {
-                  h *= m / w;
+                  h = Math.round(h * m / w);
                   w = m;
                 } else if (h > m) {
-                  w *= m / h;
+                  w = Math.round(w * m / h);
                   h = m;
                 }
                 c.width = w;
                 c.height = h;
                 ctx.drawImage(i, 0, 0, w, h);
-                res(c.toDataURL("image/jpeg", 0.8).split(",")[1]);
+                // ⏬ ลดคุณภาพของ JPEG หากปริมาณรูปเยอะเกินไป
+                var quality = isHighVolume ? 0.6 : 0.8;
+                res(c.toDataURL("image/jpeg", quality).split(",")[1]);
               };
               i.onerror = () => res(null);
               i.src = e.target.result;
@@ -775,9 +786,18 @@
             if (mode !== "preview") {
               const types = ['startMono', 'stopMono', 'startAis', 'stopAis'];
               for (const t of types) {
-                const files = _files[t] || [];
+                let files = _files[t] || [];
+                // ⏬ จำกัดรูปภาพสูงสุด 8 รูปต่อแต่ละหัวข้อเพื่อป้องกัน Payload ใหญ่เกิน
+                if (files.length > 8) {
+                  console.warn(`⚠️ รูปเยอะเกินไป (${files.length} รูป) ตัดเหลือ 8 รูปแรก`);
+                  files = files.slice(0, 8);
+                }
+                const isHighVolume = files.length > 4; // ถ้ามากกว่า 4 รูป เปิดโหมดบีบอัดสูง
+
                 if (files.length > 0) {
-                  formData.proofImages[t] = (await Promise.all(files.map(compress))).filter(Boolean);
+                  formData.proofImages[t] = (await Promise.all(
+                    files.map(f => compress(f, isHighVolume))
+                  )).filter(Boolean);
                 }
               }
             }
@@ -792,13 +812,26 @@
                 el("chatPreviewText").innerText = res.chatPreview;
                 el("preview_modal").showModal();
               } else {
-                Swal.fire({
-                  icon: "success",
-                  title: "บันทึกสำเร็จ",
-                  text: "ระบบได้ส่งรายงานเรียบร้อยแล้ว",
-                  timer: 1500,
-                  showConfirmButton: false,
-                }).then(() => {
+                let swalPromise;
+                if (res.webhookError) {
+                  console.error("Webhook Send Failed:", res.webhookError);
+                  swalPromise = Swal.fire({
+                    icon: "warning",
+                    title: "บันทึกข้อมูลเรียบร้อย",
+                    text: "แต่เกิดปัญหาในการส่งข้อความไปยัง Google Chat",
+                    showConfirmButton: true
+                  });
+                } else {
+                  swalPromise = Swal.fire({
+                    icon: "success",
+                    title: "บันทึกสำเร็จ",
+                    text: "ระบบได้ส่งรายงานเรียบร้อยแล้ว",
+                    timer: 1500,
+                    showConfirmButton: false,
+                  });
+                }
+
+                swalPromise.then(() => {
                   var today = new Date();
                   var yyyy = today.getFullYear();
                   var mm = String(today.getMonth() + 1).padStart(2, "0");
@@ -815,7 +848,7 @@
 
                   // ✨ รีเซ็ตสถานะ NTT กลับเป็นรอตรวจสอบ
                   if (typeof ReportManager.setNttStatus === 'function') {
-                      ReportManager.setNttStatus("รอตรวจสอบ"); 
+                    ReportManager.setNttStatus("รอตรวจสอบ");
                   }
 
                   _files = { startMono: [], stopMono: [], startAis: [], stopAis: [] };
@@ -875,7 +908,7 @@
       showEvidenceInfo: function () {
         Swal.fire({
           title: "แหล่งที่มา รูปหลักฐาน",
-          html: '<div style="text-align:left;font-size:12px;line-height:1.7"><div style="background:#f8fafc;padding:10px 12px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:8px"><b style="color:#475569">📸 รูปภาพดึงอัตโนมัติ (Auto Images)</b><br><span style="color:#64748b">รูป Snapshot / หลักฐานต่างๆ ที่คุณแคปเจอร์ไว้ล่วงหน้าจาก <u>หน้า Dashboard</u> ระบบจะดึงรูปของวันที่เลือกนั้นๆ มาแสดงให้เลือกใช้งานเองโดยอัตโนมัติ</span></div><div style="background:#f8fafc;padding:10px 12px;border-radius:8px;border:1px solid #e2e8f0;"><b style="color:#475569">🚀 เพิ่มรูปเพิ่มเติม (Manual Upload)</b><br><span style="color:#64748b">คุณสามารถเพิ่มรูปภาพเพิ่มเติมได้ตลอดเวลาโดยกด ปุ่มคลิกอัปโหลด หรือใช้วิธีคลิกที่กรอบแล้วกดปุ่ม <kbd style="background:#eee;padding:2px 4px;border-radius:3px;border:1px solid #ccc">Ctrl</kbd> + <kbd style="background:#eee;padding:2px 4px;border-radius:3px;border:1px solid #ccc">V</kbd> เพื่อวางรูปจาก Clipboard ได้อย่างรวดเร็ว</span></div></div>',
+          html: '<div style="text-align:left;font-size:12px;line-height:1.7"><div style="background:#f8fafc;padding:10px 12px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:8px"><b style="color:#475569">📸 รูปภาพดึงอัตโนมัติ (Auto Images)</b><br><span style="color:#64748b">รูป Snapshot / หลักฐานต่างๆ ที่คุณแคปเจอร์ไว้ล่วงหน้าจาก <u>หน้า Dashboard</u> ระบบจะดึงรูปของวันที่เลือกนั้นๆ มาแสดงให้เลือกใช้งานเองโดยอัตโนมัติ (สูงสุด 8 รูป)</span></div><div style="background:#f8fafc;padding:10px 12px;border-radius:8px;border:1px solid #e2e8f0;"><b style="color:#475569">🚀 เพิ่มรูปเพิ่มเติม (Manual Upload)</b><br><span style="color:#64748b">คุณสามารถเพิ่มรูปภาพเพิ่มเติมได้ตลอดเวลาโดยกด ปุ่มคลิกอัปโหลด หรือใช้วิธีคลิกที่กรอบแล้วกดปุ่ม <kbd style="background:#eee;padding:2px 4px;border-radius:3px;border:1px solid #ccc">Ctrl</kbd> + <kbd style="background:#eee;padding:2px 4px;border-radius:3px;border:1px solid #ccc">V</kbd> เพื่อวางรูปจาก Clipboard ได้อย่างรวดเร็ว (สูงสุด 8 รูป)</span></div></div>',
           icon: "info",
           confirmButtonText: "เข้าใจแล้ว 👍",
           heightAuto: false,
@@ -933,46 +966,46 @@
         var popupHeight = 800;
         var left = (window.screen.width - popupWidth) / 2;
         var top = (window.screen.height - popupHeight) / 2;
-        var windowFeatures = 'width=' + popupWidth + ',height=' + popupHeight + 
-                             ',top=' + top + ',left=' + left + 
-                             ',resizable=yes,scrollbars=yes,status=no,menubar=no,toolbar=no,location=no';
+        var windowFeatures = 'width=' + popupWidth + ',height=' + popupHeight +
+          ',top=' + top + ',left=' + left +
+          ',resizable=yes,scrollbars=yes,status=no,menubar=no,toolbar=no,location=no';
         window.open(url, "NTT_Status_Window", windowFeatures);
       },
 
       // ✨ ฟังก์ชันตั้งค่าสถานะ NTT และเปลี่ยนสีปุ่ม
-      setNttStatus: function(status) {
-         var input = document.getElementById("nttStatusSelect");
-         var btnMain = document.getElementById("btn-ntt-status-main");
-         var textSpan = document.getElementById("ntt-status-text");
-         
-         if (input) input.value = status;
-         
-         if (btnMain && textSpan) {
-            btnMain.classList.remove(
-               "bg-slate-100", "text-slate-500", "border-slate-300", "hover:bg-slate-200", 
-               "bg-emerald-500", "text-white", "border-emerald-600", "hover:bg-emerald-600", 
-               "bg-rose-500", "border-rose-600", "hover:bg-rose-600"
-            );
+      setNttStatus: function (status) {
+        var input = document.getElementById("nttStatusSelect");
+        var btnMain = document.getElementById("btn-ntt-status-main");
+        var textSpan = document.getElementById("ntt-status-text");
 
-            if (status === "เรียบร้อย" || status === "ปกติ") {
-               btnMain.classList.add("bg-emerald-500", "text-white", "border-emerald-600", "hover:bg-emerald-600");
-               textSpan.innerText = "ปกติ";
-               if(input) input.value = "เรียบร้อย";
-            } 
-            else if (status === "มีปัญหา") {
-               btnMain.classList.add("bg-rose-500", "text-white", "border-rose-600", "hover:bg-rose-600");
-               textSpan.innerText = "มีปัญหา";
-            } 
-            else {
-               btnMain.classList.add("bg-slate-100", "text-slate-500", "border-slate-300", "hover:bg-slate-200");
-               textSpan.innerText = "รอตรวจสอบ";
-            }
-         }
-         
-         var modal = document.getElementById('ntt_check_modal');
-         if(modal && typeof modal.close === 'function') {
-            modal.close();
-         }
+        if (input) input.value = status;
+
+        if (btnMain && textSpan) {
+          btnMain.classList.remove(
+            "bg-slate-100", "text-slate-500", "border-slate-300", "hover:bg-slate-200",
+            "bg-emerald-500", "text-white", "border-emerald-600", "hover:bg-emerald-600",
+            "bg-rose-500", "border-rose-600", "hover:bg-rose-600"
+          );
+
+          if (status === "เรียบร้อย" || status === "ปกติ") {
+            btnMain.classList.add("bg-emerald-500", "text-white", "border-emerald-600", "hover:bg-emerald-600");
+            textSpan.innerText = "ปกติ";
+            if (input) input.value = "เรียบร้อย";
+          }
+          else if (status === "มีปัญหา") {
+            btnMain.classList.add("bg-rose-500", "text-white", "border-rose-600", "hover:bg-rose-600");
+            textSpan.innerText = "มีปัญหา";
+          }
+          else {
+            btnMain.classList.add("bg-slate-100", "text-slate-500", "border-slate-300", "hover:bg-slate-200");
+            textSpan.innerText = "รอตรวจสอบ";
+          }
+        }
+
+        var modal = document.getElementById('ntt_check_modal');
+        if (modal && typeof modal.close === 'function') {
+          modal.close();
+        }
       },
 
       handleReporterChange: function (v) {
@@ -1060,7 +1093,7 @@
 
       loadHandoverTopics: function (force = false) {
         if (!force && _isHandoverLoaded) {
-          console.log("🚚 Handover Cache Hit");
+          Logger.log("🚚 Handover Cache Hit");
           return Promise.resolve();
         }
 
@@ -1156,18 +1189,26 @@
 
         var clipboardData = (e.clipboardData || (e.originalEvent && e.originalEvent.clipboardData));
         if (!clipboardData) return;
-        
+
         var items = clipboardData.items;
         for (var i = 0; i < items.length; i++) {
           if (items[i].type.indexOf("image") !== -1) {
             var blob = items[i].getAsFile();
             if (!_files[type]) _files[type] = [];
+
+            // ⏬ เช็คลิมิตจำนวนรูป 8 รูปต่อแต่ละประเภท
+            if (_files[type].length >= 8) {
+              UIManager.showToast("ใส่รูปเยอะเกินไป! (สูงสุด 8 รูป)", "warning");
+              e.preventDefault();
+              return;
+            }
+
             _files[type].push(blob);
             this.renderFileList(type);
             this._updateStartStatus();
             if (typeof UIManager !== "undefined")
               UIManager.showToast("วางรูปเรียบร้อย ✅", "success");
-              
+
             e.preventDefault();
             e.stopImmediatePropagation();
             return;
@@ -1186,7 +1227,7 @@
           }
         });
       },
-      
+
     };
   })();
 

@@ -34,7 +34,7 @@
         }
       },
       onShow() {
-        console.log('📄 UsrSettings: onShow');
+        Logger.log('📄 UsrSettings: onShow');
         try {
           if (!_loaded) this.loadData();
           this.switchTab('staff'); // Ensure correct initial tab

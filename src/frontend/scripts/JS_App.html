@@ -3,7 +3,7 @@
   let isAppReady = false;
 
   document.addEventListener("DOMContentLoaded", async () => {
-    console.log("🚀 App Starting...");
+    Logger.log("🚀 App Starting...");
 
     // 1. Sidebar Links
     document.querySelectorAll("aside a[data-target]").forEach((el) => {
@@ -62,7 +62,7 @@
       Router.navigateTo("page-dashboard");
     } finally {
       isAppReady = true;
-      console.log("✅ App is fully ready.");
+      Logger.log("✅ App is fully ready.");
 
       // ✨ ปิด Global Loader (ที่ฝังไว้ใน HTML) เมื่อข้อมูลจากหลังบ้านโหลดเสร็จ
       if (typeof hideGlobalLoader === 'function') {

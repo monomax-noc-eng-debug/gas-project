@@ -40,6 +40,7 @@
 
   <style>
     .pika-single {
+      z-index: 100000 !important;
       background: #1f2937;
       border: 1px solid #374151;
       border-radius: 12px;
@@ -156,6 +157,10 @@
     include('frontend/scripts/JS_Core'); ?>
   <?!=
     include('frontend/scripts/JS_Dashboard'); ?>
+  <?!=
+    include('frontend/scripts/JS_Dashboard_Checklist'); ?>
+  <?!=
+    include('frontend/scripts/JS_Dashboard_Calendar'); ?>
   <?!=
     include('frontend/scripts/JS_Handover'); ?>
   <?!=

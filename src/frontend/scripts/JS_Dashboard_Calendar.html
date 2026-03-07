@@ -1,0 +1,141 @@
+<script>
+  /**
+   * JS_Dashboard_Calendar.html
+   * จัดการส่วนของการดึงข้อมูลตารางแข่งขันมาจาก API
+   */
+  const DashboardCalendar = (function () {
+    const getEl = (id) => document.getElementById(id);
+
+    const showToastInModal = (msg, type, modalId) => {
+      const targetEl = getEl(modalId);
+      Swal.fire({
+        toast: true,
+        position: "bottom-end",
+        showConfirmButton: false,
+        timer: 3000,
+        icon: type,
+        title: msg,
+        target: targetEl || "body",
+        customClass: { container: "z-[999999]" },
+      });
+    };
+
+    const toInputDate = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
+    return {
+      fetchCalendarEvents: function () {
+        var dateVal = getEl("import-date-picker").value || getEl("input-date").value;
+        if (!dateVal) return;
+
+        var loader = getEl("cal-loader");
+        var list = getEl("calendar-picker-list");
+        loader.classList.remove("hidden");
+        list.innerHTML = "";
+
+        Server.call({ func: "apiGetCalendarEvents", silent: true }, dateVal)
+          .then((res) => {
+            loader.classList.add("hidden");
+            if (res && res.success) {
+              DashboardCalendar.renderImportList(res.data);
+              Dashboard.setLastCalendarFetchDate(dateVal);
+            } else {
+              list.innerHTML =
+                '<div class="text-error text-center text-xs p-4">' +
+                (res ? res.error || res.message || "No Data" : "No Data") +
+                "</div>";
+            }
+          })
+          .catch((err) => {
+            loader.classList.add("hidden");
+            list.innerHTML =
+              '<div class="text-error text-center text-xs p-4">Connection failed</div>';
+          });
+      },
+
+      renderImportList: function (events) {
+        var list = getEl("calendar-picker-list");
+        if (!events || events.length === 0) {
+          list.innerHTML =
+            '<div class="text-center text-xs text-base-content/40 py-6">ไม่พบรายการแข่งขัน</div>';
+          return;
+        }
+
+        var curDateStr = getEl("import-date-picker").value || toInputDate(new Date());
+        var existingKeys = new Set();
+
+        var allWorkData = Dashboard.getAllWorkData();
+        allWorkData
+          .filter(item => item.date === curDateStr)
+          .forEach(item => {
+            var key = (item.home || "").trim().toLowerCase() + "|" + (item.away || "").trim().toLowerCase();
+            existingKeys.add(key);
+          });
+
+        var html = "";
+        var filteredEvents = events.filter(function (evt) {
+          var key = (evt.home || "").trim().toLowerCase() + "|" + (evt.away || "").trim().toLowerCase();
+          return !existingKeys.has(key);
+        });
+
+        if (filteredEvents.length === 0) {
+          list.innerHTML =
+            '<div class="text-center text-xs text-success/60 py-6 px-4 bg-success/5 rounded-xl border border-dashed border-success/20"><i class="fas fa-check-circle mb-1 text-lg block"></i>นำเข้าข้อมูลทั้งหมดที่มีแล้ว</div>';
+          return;
+        }
+
+        filteredEvents.forEach(function (evt) {
+          var evtJson = encodeURIComponent(JSON.stringify(evt));
+          var timeBadgeClass = evt.isPreviousDay ? "badge-error text-white border-none" : "badge-neutral";
+          var timeLabel = evt.time + (evt.isPreviousDay ? '<span class="ml-1 text-[9px] opacity-90 font-normal">(ข้ามวัน)</span>' : "");
+          html +=
+            "<div onclick=\"DashboardCalendar.selectImportEvent('" +
+            evtJson +
+            '\')" class="p-2 bg-white hover:bg-primary/5 border border-base-200 rounded-lg cursor-pointer transition-all hover:shadow-sm group mb-1"><div class="flex items-center gap-3"><div class="badge ' +
+            timeBadgeClass +
+            ' font-mono font-bold h-6 whitespace-nowrap">' +
+            timeLabel +
+            '</div><div class="flex-1 min-w-0"><div class="text-[10px] font-bold text-primary/70 uppercase tracking-wider truncate">' +
+            (evt.league || "Unknown") +
+            '</div><div class="text-sm font-bold text-base-content/80 truncate group-hover:text-primary transition-colors">' +
+            evt.home +
+            ' <span class="text-xs text-base-content/40 font-normal px-1">vs</span> ' +
+            evt.away +
+            '</div></div><i class="fas fa-plus-circle text-base-content/10 group-hover:text-primary text-xl transition-colors"></i></div></div>';
+        });
+        list.innerHTML = html;
+      },
+
+      selectImportEvent: function (evtEncoded) {
+        try {
+          var evt = JSON.parse(decodeURIComponent(evtEncoded));
+          getEl("input-time").value = evt.time;
+          getEl("input-league").value = evt.league;
+          getEl("input-home").value = evt.home;
+          getEl("input-away").value = evt.away;
+          getEl("input-channel").value = evt.channel || "N/A";
+
+          var importDate = getEl("import-date-picker") ? getEl("import-date-picker").value : "";
+          if (importDate) getEl("input-date").value = importDate;
+
+          showToastInModal(
+            "นำเข้าข้อมูลเรียบร้อย",
+            "success",
+            "modal-add-work",
+          );
+
+          Dashboard.checkFormInput();
+          Dashboard.calcPlanStart();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+  })();
+</script>

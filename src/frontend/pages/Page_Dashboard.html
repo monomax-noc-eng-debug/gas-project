@@ -1,16 +1,6 @@
 <div id="page-dashboard"
   class="page-section hidden w-full h-full relative font-sans bg-base-200 flex flex-col p-3 gap-2 overflow-hidden">
 
-  <style>
-    .pika-single {
-      z-index: 100000 !important;
-    }
-
-    dialog .swal2-container {
-      z-index: 100000 !important;
-    }
-  </style>
-
   <header class="shrink-0 flex flex-col gap-2">
     <!-- Navbar with Stats and Controls -->
     <div
@@ -153,7 +143,7 @@
                 class="input input-sm input-bordered w-full text-center cursor-pointer font-mono text-xs rounded-lg"
                 placeholder="เลือกวันที่">
               <button type="button" class="btn btn-sm btn-square btn-primary rounded-lg"
-                onclick="Dashboard.fetchCalendarEvents()"><i class="fas fa-search"></i></button>
+                onclick="DashboardCalendar.fetchCalendarEvents()"><i class="fas fa-search"></i></button>
             </div>
             <div class="relative h-[350px] overflow-y-auto custom-scrollbar rounded-xl border border-gray-200 bg-white">
               <div id="cal-loader" class="absolute inset-0 bg-white/80 flex items-center justify-center hidden z-10">
@@ -460,9 +450,9 @@
       <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-end gap-2 rounded-b-2xl">
         <form method="dialog"><button class="btn btn-sm btn-ghost text-slate-500 hover:bg-slate-200">ยกเลิก</button>
         </form>
-        <button type="button" onclick="Dashboard.saveChecklist()"
+        <button type="button" id="btn-save-checklist" onclick="Dashboard.saveChecklist()"
           class="btn btn-sm btn-warning text-white gap-1.5 shadow-md hover:shadow-lg">
-          <span class="loading loading-spinner loading-xs hidden" id="spinner-save-checklist"></span>
+          <span class="loading loading-spinner loading-xs" id="spinner-save-checklist"></span>
           <i class="fas fa-save" id="icon-save-checklist"></i> บันทึก Checklist
         </button>
       </div>

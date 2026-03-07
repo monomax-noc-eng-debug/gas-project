@@ -105,18 +105,31 @@ const ReportController = {
       }
 
       // 4. Send Chat (Webhook)
+      let webhookSuccess = false;
+      let webhookError = null;
       if (formData.chatTarget && typeof CONFIG !== 'undefined' && CONFIG.WEBHOOKS && CONFIG.WEBHOOKS[formData.chatTarget]) {
         try {
           const cardPayload = ReportGenerator.buildChatCard(formData, pdfUrl);
-          UrlFetchApp.fetch(CONFIG.WEBHOOKS[formData.chatTarget], {
+          const response = UrlFetchApp.fetch(CONFIG.WEBHOOKS[formData.chatTarget], {
             method: "post",
             contentType: "application/json",
-            payload: JSON.stringify(cardPayload)
+            payload: JSON.stringify(cardPayload),
+            muteHttpExceptions: true
           });
+
+          if (response.getResponseCode() >= 200 && response.getResponseCode() < 300) {
+            webhookSuccess = true;
+          } else {
+            webhookError = "HTTP " + response.getResponseCode() + ": " + response.getContentText();
+            console.error("Webhook Error", webhookError);
+          }
         }
-        catch (e) { console.error("Webhook Error", e); }
+        catch (e) {
+          webhookError = e.toString();
+          console.error("Webhook Error Exception", e);
+        }
       }
-      return JSON.stringify({ success: true });
+      return JSON.stringify({ success: true, webhookSuccess: webhookSuccess, webhookError: webhookError });
 
     } catch (e) { return JSON.stringify({ success: false, error: e.toString() }); }
   },

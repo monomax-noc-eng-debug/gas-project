@@ -72,7 +72,7 @@
        * 1. Initialization
        */
       init: function () {
-        console.log("🚀 Ticket Controller Initialized");
+        Logger.log("🚀 Ticket Controller Initialized");
         if (typeof Router !== "undefined") {
           Router.register("page-ticket", this);
         }
@@ -86,7 +86,7 @@
       },
 
       onShow: () => {
-        console.log('📄 TicketManager: onShow');
+        Logger.log('📄 TicketManager: onShow');
         try {
           TicketManager.loadData(false);
           TicketManager.loadRoutineProfiles(); // โหลด Profile ทุกครั้งที่เปิดหน้า
@@ -139,7 +139,7 @@
        */
       loadData: (force = false) => {
         if (!force && _isLoaded) {
-          console.log("🚀 Ticket Cache Hit");
+          Logger.log("🚀 Ticket Cache Hit");
           return;
         }
 
@@ -434,7 +434,7 @@
           // ✨ NEW: Auto-Load Routine Profile if exists
           const autoProfile = _routineProfiles.find(p => p.isAutoLoad);
           if (autoProfile) {
-            console.log("🪄 Auto-loading routine profile:", autoProfile.name);
+            Logger.log("🪄 Auto-loading routine profile:", autoProfile.name);
             TicketManager.applyRoutineProfile(_routineProfiles.indexOf(autoProfile), true);
           }
 

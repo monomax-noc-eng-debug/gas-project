@@ -2,6 +2,7 @@
   window.ChecklistSettings = (() => {
     let _tasks = [];
     let _dirty = false;
+    let _loaded = false;
 
     // ── Load Data ─────────────────────────────────────────────────────
     const loadData = (force = false) => {
@@ -22,6 +23,7 @@
           if (res && res.success && res.data) {
             _tasks = res.data.checklistTasks || [];
             _dirty = false;
+            _loaded = true;
             if (force) render();
           } else if (force) {
             showError("โหลดข้อมูลไม่สำเร็จ");
@@ -157,6 +159,7 @@
           if (res && res.success) {
             UIManager.showToast(`บันทึก Checklist เรียบร้อย (${_tasks.length} รายการ)`, "success");
             _dirty = false;
+            _loaded = true;
             render();
           } else {
             showError((res && (res.error || res.message)) || "บันทึกไม่สำเร็จ");
@@ -183,7 +186,7 @@
         loadData(false);
       },
       onShow: function () {
-        console.log('📄 Settings Checklist: onShow');
+        Logger.log('📄 Settings Checklist: onShow');
         loadData(true);
       },
       loadData,
@@ -194,7 +197,8 @@
       moveUp,
       moveDown,
       saveAll,
-      getTasks: () => _tasks
+      getTasks: () => _tasks,
+      isLoaded: () => _loaded
     };
   })();
 

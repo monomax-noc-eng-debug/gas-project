@@ -108,15 +108,15 @@ const ReportGenerator = {
 
       // Process all groups
       if (formData.proofImages) {
-        handleUpload(formData.proofImages.startMono, "StartMono", blobs.startMono);
-        handleUpload(formData.proofImages.stopMono, "StopMono", blobs.stopMono);
-        handleUpload(formData.proofImages.startAis, "StartAIS", blobs.startAis);
-        handleUpload(formData.proofImages.stopAis, "StopAIS", blobs.stopAis);
+        handleUpload((formData.proofImages.startMono || []).slice(0, 8), "StartMono", blobs.startMono);
+        handleUpload((formData.proofImages.stopMono || []).slice(0, 8), "StopMono", blobs.stopMono);
+        handleUpload((formData.proofImages.startAis || []).slice(0, 8), "StartAIS", blobs.startAis);
+        handleUpload((formData.proofImages.stopAis || []).slice(0, 8), "StopAIS", blobs.stopAis);
       }
-      handleUpload(formData.autoStartMonoUrls, "StartMono", blobs.startMono);
-      handleUpload(formData.autoStopMonoUrls, "StopMono", blobs.stopMono);
-      handleUpload(formData.autoStartAisUrls, "StartAIS", blobs.startAis);
-      handleUpload(formData.autoStopAisUrls, "StopAIS", blobs.stopAis);
+      handleUpload((formData.autoStartMonoUrls || []).slice(0, 8), "StartMono", blobs.startMono);
+      handleUpload((formData.autoStopMonoUrls || []).slice(0, 8), "StopMono", blobs.stopMono);
+      handleUpload((formData.autoStartAisUrls || []).slice(0, 8), "StartAIS", blobs.startAis);
+      handleUpload((formData.autoStopAisUrls || []).slice(0, 8), "StopAIS", blobs.stopAis);
 
       console.timeEnd("ProcessImages"); // 🏁 จบเวลา
       return { blobs, urls: uploadedUrls, pdfImages };
@@ -135,23 +135,30 @@ const ReportGenerator = {
     const ts = formData.ticketStats || {};
     const iconUrl =
       "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/PDF_file_icon.svg/1200px-PDF_file_icon.svg.png";
-    const matches = (formData.matchSummary || "-")
+    let matchText = formData.matchSummary || "-";
+    if (matchText.length > 3000) { matchText = matchText.substring(0, 3000) + "..."; }
+    const matches = matchText
       .split("\n")
       .map((m) => `<b>${m}</b>`)
       .join("<br>");
 
-    // ✅ ปรับปรุง: รองรับกรณี PDF สร้างไม่สำเร็จ (Graceful Degradation)
-    const pdfButton = pdfUrl
-      ? {
-        text: "เปิดรายงาน PDF",
-        icon: { knownIcon: "DESCRIPTION" },
-        onClick: { openLink: { url: pdfUrl } },
-        color: { red: 0, green: 0.5, blue: 1, alpha: 1 },
-      }
-      : {
-        text: "⚠️ สร้าง PDF ไม่สำเร็จ (ตรวจสอบ Base64 รูปภาพ)",
-        color: { red: 1, green: 0, blue: 0, alpha: 1 },
-      };
+    // ✅ ปรับปรุง: รองรับกรณี PDF สร้างไม่สำเร็จ (Graceful Degradation) โดยเปลี่ยนเป็น Text แทน Button เนื่องจาก Button บังคับต้องมี onClick (ไม่เช่นนั้นจะ Error 400 Bad Request)
+    const pdfWidgets = pdfUrl
+      ? [{
+        buttonList: {
+          buttons: [{
+            text: "เปิดรายงาน PDF",
+            icon: { knownIcon: "DESCRIPTION" },
+            onClick: { openLink: { url: pdfUrl } },
+            color: { red: 0.0, green: 0.5, blue: 1.0, alpha: 1.0 },
+          }]
+        }
+      }]
+      : [{
+        textParagraph: {
+          text: "<font color=\"#dc2626\"><b>⚠️ สร้าง PDF ไม่สำเร็จ:</b> (รูปภาพอาจใหญ่เกินไป หรือเกิดข้อผิดพลาดของ Base64)</font>"
+        }
+      }];
 
     // ✨ คำนวณ Icon ของ NTT
     const nttIcon = formData.nttStatus === "เรียบร้อย" || formData.nttStatus === "ปกติ" ? "✅" : (formData.nttStatus === "มีปัญหา" ? "❌" : "⚠️");
@@ -213,7 +220,7 @@ const ReportGenerator = {
                 ],
               },
               {
-                widgets: [{ buttonList: { buttons: [pdfButton] } }],
+                widgets: pdfWidgets,
               },
             ],
           },

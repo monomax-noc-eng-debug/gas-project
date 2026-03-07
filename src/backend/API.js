@@ -90,7 +90,7 @@ function apiHandler(request) {
     createTicket: (d) => TicketController.createTicket(d),
     updateTicket: (d) => TicketController.updateTicket(d),
     deleteTicket: (id) => TicketController.deleteTicket(id),
-    createTicketAndDraft: (d) => TicketController.createTicketAndDraft(d),
+    createTicketAndDraft: (d) => TicketEmailController.createTicketAndDraft(d),
 
     // Unified Settings
     apiResetSettings: () => SettingController.resetSettingSheets(),
@@ -101,10 +101,10 @@ function apiHandler(request) {
 
     updateTicketIdOnly: (d) => TicketController.updateTicketIdOnly(d.oldId, d.newId),
 
-    // Gmail & Import
     getEmailPreviews: () => GmailService.getUnsyncedEmails(),
     saveBatchTickets: (d) => GmailService.saveBatchTickets(d),
     apiCreateDraftEmail: (d) => GmailService.createDraftTicket(d),
+    getTicketMappings: () => TicketImportController.getTicketMappings(),
 
     // Match Core
     apiGetWorkList: (d) => MatchController.apiGetWorkList(d),

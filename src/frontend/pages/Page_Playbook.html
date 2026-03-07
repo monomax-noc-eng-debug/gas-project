@@ -9,9 +9,9 @@
         <i class="fas fa-book text-sm md:text-base"></i>
       </div>
       <div>
-        <h2 class="font-bold text-xs md:text-sm text-base-content whitespace-nowrap">คู่มือการทำงาน</h2>
-        <p class="text-[9px] md:text-[10px] font-bold text-base-content/50 uppercase tracking-widest">ลองอ่านดูนะ
-          จะได้รู้</p>
+        <h2 class="font-bold text-xs md:text-sm text-base-content whitespace-nowrap">คู่มือปฏิบัติงาน</h2>
+        <p class="text-[9px] md:text-[10px] font-bold text-base-content/50 uppercase tracking-widest">
+          รวบรวมขั้นตอนและวิธีการทำงาน</p>
       </div>
     </div>
 
@@ -56,7 +56,8 @@
 
     <div class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10 bg-base-100 border-r border-base-200 relative">
       <div class="flex flex-wrap items-center justify-between mb-6 gap-3">
-        <span id="pb-view-category" class="px-4 py-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest border border-primary/20 shadow-sm">หมวดหมู่</span>
+        <span id="pb-view-category"
+          class="px-4 py-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest border border-primary/20 shadow-sm">หมวดหมู่</span>
 
         <button id="pb-view-edit-btn" onclick="" class="btn btn-sm btn-outline btn-primary gap-2 rounded-xl text-xs">
           <i class="fas fa-edit"></i> แก้ไขข้อมูลนี้
@@ -103,9 +104,11 @@
           </div>
           <div class="space-y-2 text-xs opacity-95">
             <div class="flex items-center gap-2"><i class="fas fa-user-edit w-4"></i>
-              <span id="pb-view-update-by" class="font-bold">-</span></div>
+              <span id="pb-view-update-by" class="font-bold">-</span>
+            </div>
             <div class="flex items-center gap-2"><i class="fas fa-clock w-4"></i>
-              <span id="pb-view-update-date" class="font-bold">-</span></div>
+              <span id="pb-view-update-date" class="font-bold">-</span>
+            </div>
           </div>
         </div>
       </div>
@@ -155,7 +158,8 @@
           <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">โหมดจัดการข้อมูล</p>
         </div>
       </div>
-      <button type="button" onclick="document.getElementById('playbook-editor-modal').close();" class="btn btn-sm btn-circle btn-ghost text-slate-400 hover:text-error hover:bg-error/10">
+      <button type="button" onclick="document.getElementById('playbook-editor-modal').close();"
+        class="btn btn-sm btn-circle btn-ghost text-slate-400 hover:text-error hover:bg-error/10">
         <i class="fas fa-times"></i>
       </button>
     </div>
@@ -165,38 +169,55 @@
       <div class="card bg-white shadow-sm border border-slate-200">
         <div class="card-body p-5 md:p-6">
           <h4 class="text-sm font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">
-            <i class="fas fa-info-circle text-primary mr-2"></i> ข้อมูลทั่วไป</h4>
+            <i class="fas fa-info-circle text-primary mr-2"></i> ข้อมูลทั่วไป
+          </h4>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input type="hidden" id="pb-form-id" />
             <div id="pb-cover-preview" class="hidden"></div>
 
             <div class="form-control md:col-span-2">
-              <label class="label pt-0"><span class="label-text text-[10px] font-black text-slate-500 uppercase tracking-wider">หัวข้อ <span class="text-error">*</span></span></label>
-              <input type="text" id="pb-form-title" class="input input-bordered w-full focus:border-primary text-sm font-bold bg-slate-50 focus:bg-white transition-colors" placeholder="ระบุหัวข้อที่ต้องการ..." />
+              <label class="label pt-0"><span
+                  class="label-text text-[10px] font-black text-slate-500 uppercase tracking-wider">หัวข้อ <span
+                    class="text-error">*</span></span></label>
+              <input type="text" id="pb-form-title"
+                class="input input-bordered w-full focus:border-primary text-sm font-bold bg-slate-50 focus:bg-white transition-colors"
+                placeholder="ระบุหัวข้อที่ต้องการ..." />
             </div>
 
             <div class="form-control">
-              <label class="label pt-0"><span class="label-text text-[10px] font-black text-slate-500 uppercase tracking-wider">หมวดหมู่</span></label>
-              <select id="pb-form-category" class="select select-bordered w-full focus:border-primary text-sm bg-slate-50 focus:bg-white"></select>
+              <label class="label pt-0"><span
+                  class="label-text text-[10px] font-black text-slate-500 uppercase tracking-wider">หมวดหมู่</span></label>
+              <select id="pb-form-category"
+                class="select select-bordered w-full focus:border-primary text-sm bg-slate-50 focus:bg-white"></select>
             </div>
 
             <div class="form-control">
-              <label class="label pt-0"><span class="label-text text-[10px] font-black text-slate-500 uppercase tracking-wider">ผู้จัดทำ</span></label>
-              <select id="pb-form-creator" class="select select-bordered w-full focus:border-primary text-sm bg-slate-50 focus:bg-white"></select>
+              <label class="label pt-0"><span
+                  class="label-text text-[10px] font-black text-slate-500 uppercase tracking-wider">ผู้จัดทำ</span></label>
+              <select id="pb-form-creator"
+                class="select select-bordered w-full focus:border-primary text-sm bg-slate-50 focus:bg-white"></select>
             </div>
 
             <div class="form-control md:col-span-2">
-              <label class="label pt-0"><span class="label-text text-[10px] font-black text-slate-500 uppercase tracking-wider">เนื้อหาโดยละเอียด</span></label>
-              <textarea id="pb-form-fulldetail" class="textarea textarea-bordered w-full h-32 leading-relaxed focus:border-primary text-sm bg-slate-50 focus:bg-white" placeholder="ระบุเนื้อหาหลักหรือคำอธิบายแบบยาวที่นี่..."></textarea>
+              <label class="label pt-0"><span
+                  class="label-text text-[10px] font-black text-slate-500 uppercase tracking-wider">เนื้อหาโดยละเอียด</span></label>
+              <textarea id="pb-form-fulldetail"
+                class="textarea textarea-bordered w-full h-32 leading-relaxed focus:border-primary text-sm bg-slate-50 focus:bg-white"
+                placeholder="ระบุเนื้อหาหลักหรือคำอธิบายแบบยาวที่นี่..."></textarea>
             </div>
 
             <div class="form-control">
-              <label class="label pt-0"><span class="label-text text-[10px] font-black text-slate-500 uppercase tracking-wider">ลิงก์อ้างอิง</span></label>
-              <input type="text" id="pb-form-link" class="input input-bordered w-full font-mono text-xs focus:border-primary bg-slate-50 focus:bg-white" placeholder="https://..." />
+              <label class="label pt-0"><span
+                  class="label-text text-[10px] font-black text-slate-500 uppercase tracking-wider">ลิงก์อ้างอิง</span></label>
+              <input type="text" id="pb-form-link"
+                class="input input-bordered w-full font-mono text-xs focus:border-primary bg-slate-50 focus:bg-white"
+                placeholder="https://..." />
             </div>
             <div class="form-control">
-              <label class="label pt-0"><span class="label-text text-[10px] font-black text-primary uppercase tracking-wider">ผู้ร้องขอการอัปเดต</span></label>
-              <select id="pb-form-update-by" class="select select-bordered w-full bg-primary/5 focus:border-primary text-xs border-primary/30"></select>
+              <label class="label pt-0"><span
+                  class="label-text text-[10px] font-black text-primary uppercase tracking-wider">ผู้ร้องขอการอัปเดต</span></label>
+              <select id="pb-form-update-by"
+                class="select select-bordered w-full bg-primary/5 focus:border-primary text-xs border-primary/30"></select>
             </div>
           </div>
         </div>
@@ -205,27 +226,33 @@
       <div class="card bg-white shadow-sm border border-slate-200">
         <div class="card-body p-5 md:p-6">
           <h4 class="text-sm font-black text-slate-800 mb-4 border-b border-slate-100 pb-2">
-            <i class="fas fa-image text-secondary mr-2"></i> หน้าปกและขั้นตอนการปฏิบัติงาน</h4>
+            <i class="fas fa-image text-secondary mr-2"></i> หน้าปกและขั้นตอนการปฏิบัติงาน
+          </h4>
 
           <div class="form-control mb-6">
             <div
               class="relative group cursor-pointer border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-primary transition-all rounded-2xl p-6 flex flex-col items-center justify-center min-h-[120px]">
-              <i class="fas fa-cloud-upload-alt text-3xl text-slate-300 group-hover:text-primary mb-2 transition-colors"></i>
+              <i
+                class="fas fa-cloud-upload-alt text-3xl text-slate-300 group-hover:text-primary mb-2 transition-colors"></i>
               <p class="text-xs font-bold text-slate-500 group-hover:text-primary uppercase tracking-widest">
                 คลิกอัปโหลดหน้าปก</p>
-              <input type="file" id="pb-form-cover" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" onchange="PlaybookManager.handleCoverImage(this)" />
+              <input type="file" id="pb-form-cover" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer"
+                onchange="PlaybookManager.handleCoverImage(this)" />
               <div id="pb-form-cover-preview"
                 class="absolute inset-2 bg-white rounded-xl overflow-hidden hidden shadow-sm border border-slate-200">
                 <img src="" class="w-full h-full object-contain bg-slate-50" />
-                <button type="button" onclick="document.getElementById('pb-form-cover-preview').classList.add('hidden'); document.getElementById('pb-form-cover').value='';"
-                   class="absolute top-2 right-2 btn btn-circle btn-xs btn-error text-white shadow-md"><i class="fas fa-times text-[10px]"></i></button>
+                <button type="button"
+                  onclick="document.getElementById('pb-form-cover-preview').classList.add('hidden'); document.getElementById('pb-form-cover').value='';"
+                  class="absolute top-2 right-2 btn btn-circle btn-xs btn-error text-white shadow-md"><i
+                    class="fas fa-times text-[10px]"></i></button>
               </div>
             </div>
           </div>
 
           <div id="pb-editor-steps" class="space-y-4 mb-2"></div>
 
-          <button type="button" onclick="PlaybookManager.addStepRow()" class="btn btn-outline btn-block border-dashed border-slate-300 text-slate-500 hover:text-primary hover:border-primary hover:bg-primary/5 mt-4 rounded-xl text-xs h-10 min-h-0">
+          <button type="button" onclick="PlaybookManager.addStepRow()"
+            class="btn btn-outline btn-block border-dashed border-slate-300 text-slate-500 hover:text-primary hover:border-primary hover:bg-primary/5 mt-4 rounded-xl text-xs h-10 min-h-0">
             <i class="fas fa-plus-circle"></i> เพิ่มขั้นตอน
           </button>
         </div>
@@ -236,7 +263,8 @@
           <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
             <h4 class="text-sm font-black text-slate-800"><i class="fas fa-address-book text-accent mr-2"></i>
               รายชื่อผู้ติดต่อ</h4>
-            <button type="button" onclick="PlaybookManager.addContactRow()" class="btn btn-xs btn-ghost text-accent hover:bg-accent/10 rounded-lg">
+            <button type="button" onclick="PlaybookManager.addContactRow()"
+              class="btn btn-xs btn-ghost text-accent hover:bg-accent/10 rounded-lg">
               <i class="fas fa-plus"></i> เพิ่ม
             </button>
           </div>
@@ -248,11 +276,14 @@
 
     <div class="p-5 border-t border-slate-200 bg-white flex items-center justify-between shrink-0 z-10">
       <div>
-        <button id="btn-delete-playbook" type="button" onclick="PlaybookManager.deletePlaybook()" class="btn btn-sm md:btn-md px-6 btn-error btn-outline hover:!text-white font-bold rounded-xl hidden">ลบข้อมูล</button>
+        <button id="btn-delete-playbook" type="button" onclick="PlaybookManager.deletePlaybook()"
+          class="btn btn-sm md:btn-md px-6 btn-error btn-outline hover:!text-white font-bold rounded-xl hidden">ลบข้อมูล</button>
       </div>
       <div class="flex gap-2 md:gap-3">
-        <button type="button" onclick="document.getElementById('playbook-editor-modal').close();" class="btn btn-sm md:btn-md px-6 btn-ghost text-slate-500 font-bold rounded-xl hidden sm:flex">ยกเลิก</button>
-        <button type="button" onclick="PlaybookManager.savePlaybook()" class="btn btn-sm md:btn-md px-8 md:px-10 btn-primary text-white rounded-xl font-black shadow-lg shadow-primary/30 hover:-translate-y-0.5 transition-transform">
+        <button type="button" onclick="document.getElementById('playbook-editor-modal').close();"
+          class="btn btn-sm md:btn-md px-6 btn-ghost text-slate-500 font-bold rounded-xl hidden sm:flex">ยกเลิก</button>
+        <button type="button" onclick="PlaybookManager.savePlaybook()"
+          class="btn btn-sm md:btn-md px-8 md:px-10 btn-primary text-white rounded-xl font-black shadow-lg shadow-primary/30 hover:-translate-y-0.5 transition-transform">
           <i class="fas fa-save mr-1.5"></i> บันทึกข้อมูล
         </button>
       </div>

@@ -11,13 +11,13 @@
     const btn = document.getElementById('btn-fetch-tickets');
     const container = document.getElementById('ticket-selector-container');
     const list = document.getElementById('ticket-selection-list');
-    
+
     container.classList.remove('hidden');
 
     // 1. Check Cache
     const now = Date.now();
     if (!forceRefresh && _ticketCache && (now - _ticketCacheTime < CACHE_DURATION)) {
-      console.log("📂 Using Ticket Cache");
+      Logger.log("📂 Using Ticket Cache");
       renderTicketSelectionList(_ticketCache);
       return;
     }
@@ -28,10 +28,10 @@
     const today = new Date();
     const dateStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
 
-    google.script.run.withSuccessHandler(function(res) {
+    google.script.run.withSuccessHandler(function (res) {
       if (btn) btn.disabled = false;
       const resp = typeof res === 'string' ? JSON.parse(res) : res;
-      
+
       if (resp && resp.success) {
         _ticketCache = resp;
         _ticketCacheTime = Date.now();
@@ -46,7 +46,7 @@
     const list = document.getElementById('ticket-selection-list');
 
     // กรองเฉพาะ PENDING หรือ BACKLOG เท่านั้น
-    _reportTickets = (resp.list || []).filter(t => 
+    _reportTickets = (resp.list || []).filter(t =>
       t.tag === 'BACKLOG' || String(t.status || "").toUpperCase() === 'PENDING'
     );
 
@@ -59,7 +59,7 @@
     _reportTickets.forEach((t, idx) => {
       const isBacklog = t.tag === 'BACKLOG';
       const statusClass = isBacklog ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-amber-50 text-amber-600 border-amber-100';
-      
+
       // ✨ แก้ไขส่วนแสดงผล HTML ตรงนี้ เพื่อแก้ปัญหาข้อความล้น
       html += `
         <label class="flex items-start gap-3 p-2 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 hover:shadow-sm transition-all cursor-pointer group w-full overflow-hidden">
@@ -90,10 +90,10 @@
     const list = document.getElementById('ticket-selection-list');
     const checkboxes = list.querySelectorAll('input[type="checkbox"]:checked');
     const summaryArea = document.getElementById('ho_ticket_summary');
-    
+
     if (checkboxes.length === 0) {
-       document.getElementById('ticket-selector-container').classList.add('hidden');
-       return;
+      document.getElementById('ticket-selector-container').classList.add('hidden');
+      return;
     }
 
     let selectedText = summaryArea.value.trim();
@@ -102,8 +102,8 @@
     checkboxes.forEach(ck => {
       const idx = ck.getAttribute('data-idx');
       const t = _reportTickets[idx];
-      let icon = '•'; 
-      
+      let icon = '•';
+
       const line = `${icon} [${t.id}] ${t.detail}`;
       if (!selectedText.includes(t.id)) { // เช็คจาก ID เพื่อไม่ให้ซ้ำ
         selectedText += line + '\n';
@@ -112,7 +112,7 @@
 
     summaryArea.value = selectedText.trim();
     document.getElementById('ticket-selector-container').classList.add('hidden');
-    
+
     Swal.fire({
       icon: 'success',
       title: 'เพิ่มรายการแล้ว',
@@ -125,7 +125,7 @@
 
   let currentTeamMembers = [];
   let handoverItems = [];
-  let filteredItems = []; 
+  let filteredItems = [];
   let _hoCurrentPage = 1;
   let _hoItemsPerPage = 15;
   let handoverTags = [];
@@ -144,7 +144,7 @@
         // ✨ ตรวจจับเวลา Drawer พับเก็บ เพื่อล้างแถบสีที่คลิกค้างไว้
         const drawerToggle = document.getElementById('drawer-handover-toggle');
         if (drawerToggle) {
-          drawerToggle.addEventListener('change', function(e) {
+          drawerToggle.addEventListener('change', function (e) {
             if (!e.target.checked) {
               selectedHandoverId = null; // รีเซ็ต ID
               document.querySelectorAll('#ho_list_container > tr').forEach(row => {
@@ -156,7 +156,7 @@
         }
       },
       onShow: function () {
-        console.log('📄 HandoverManager: onShow');
+        Logger.log('📄 HandoverManager: onShow');
         try {
           loadHandovers();
         } catch (e) {
@@ -173,7 +173,7 @@
   function loadHandoversWithBtn() {
     const btn = document.getElementById('btn-load-handovers');
     if (btn) btn.classList.add('is-loading');
-    _isHandoverDataLoaded = false; 
+    _isHandoverDataLoaded = false;
     loadHandovers(false, function () {
       if (btn) btn.classList.remove('is-loading');
       UIManager.showToast("อัปเดตข้อมูลส่งกะแล้ว", "success");
@@ -182,7 +182,7 @@
 
   function loadHandovers(keepSelection = false, callback = null) {
     if (_isHandoverDataLoaded) {
-      console.log("🚚 Handover Cache Hit");
+      Logger.log("🚚 Handover Cache Hit");
       if (callback) callback();
       filterHandovers(keepSelection);
       return;
@@ -190,7 +190,7 @@
 
     const listContainer = document.getElementById('ho_list_container');
     if (!callback && listContainer) {
-      showTableSkeleton(); 
+      showTableSkeleton();
     }
 
     google.script.run
@@ -248,7 +248,7 @@
 
         return textMatched && statusMatched && typeMatched && tagMatched;
       });
-      
+
       _hoCurrentPage = 1;
       renderHandoverCurrentPage();
 
@@ -418,7 +418,7 @@
     } catch (e) {
       values = jsonStr ? [jsonStr] : [];
     }
-    
+
     if (values.length === 0) {
       addDynamicRow(containerId, placeholderStr, type);
     } else {
@@ -453,7 +453,7 @@
     if (items.length === 0) {
       container.innerHTML = `<tr><td colspan="8" class="text-center py-10 text-xs text-gray-400 font-medium whitespace-nowrap">ไม่พบข้อมูลรายงานสำหรับกะนี้</td></tr>`;
       if (emptyState) emptyState.classList.remove('hidden');
-      _hoItemsPerPage = 15; 
+      _hoItemsPerPage = 15;
       return;
     }
     if (emptyState) emptyState.classList.add('hidden');
@@ -669,7 +669,7 @@
     if (subtitleEl) subtitleEl.innerText = 'ID: ' + item.id;
 
     document.getElementById('ho_detail_topic').innerText = item.topic || '-';
-    
+
     // Ticket Summary Display
     const ticketWrap = document.getElementById('ho_detail_ticket_wrap');
     const ticketSum = document.getElementById('ho_detail_ticket_summary');
@@ -677,12 +677,12 @@
       const rawSummary = item.ticketSummary || '';
       if (rawSummary.trim() !== '') {
         ticketWrap.classList.remove('hidden');
-        
+
         const lines = rawSummary.split('\n');
         const htmlLines = lines.map(line => {
           const trimmed = line.trim();
           if (!trimmed) return '';
-          
+
           const ticketMatch = trimmed.match(/^•\s*\[(.*?)\]\s*(.*)$/);
           if (ticketMatch) {
             const id = ticketMatch[1];
@@ -698,13 +698,13 @@
           }
           return `<div class="py-1 text-slate-500 italic flex items-center gap-2"><i class="fas fa-chevron-right text-[8px] opacity-30"></i> ${trimmed}</div>`;
         }).join('');
-        
+
         ticketSum.innerHTML = `<div class="space-y-1">${htmlLines}</div>`;
       } else {
         ticketWrap.classList.add('hidden');
       }
     }
-    
+
     document.getElementById('ho_detail_time_text').innerText = new Date(item.timestamp).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
     document.getElementById('ho_detail_creator_text').innerText = item.creator || 'Unknown';
     const statusEl = document.getElementById('ho_detail_status');
@@ -735,15 +735,15 @@
     tagsContainer.innerHTML = (Array.isArray(item.tags) && item.tags.length > 0)
       ? item.tags.map(t => `<span class="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg shadow-sm">${t}</span>`).join('')
       : '';
-    
+
     let detailsArr = [];
-    try { 
+    try {
       let parsed = JSON.parse(item.detail);
       detailsArr = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
-    } catch (e) { 
+    } catch (e) {
       detailsArr = item.detail ? [item.detail] : [];
     }
-    
+
     const timelineContainer = document.getElementById('ho_detail_timeline');
     timelineContainer.innerHTML = detailsArr.length > 0
       ? detailsArr.map((txt, idx) => {
@@ -757,12 +757,12 @@
             </div>`;
       }).join('')
       : '<span class="text-sm text-gray-400 italic">- ไม่มีข้อมูล -</span>';
-    
+
     let contactsArr = [];
-    try { 
+    try {
       let parsed = JSON.parse(item.contact);
       contactsArr = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
-    } catch (e) { 
+    } catch (e) {
       contactsArr = item.contact ? [item.contact] : [];
     }
 
@@ -787,9 +787,9 @@
         </div>`;
       }).join('');
     } else { contactWrap.classList.add('hidden'); }
-    
+
     renderAcknowledgeSection(item);
-    
+
     const btnResolve = document.getElementById('btn_quick_resolve');
     if (btnResolve) {
       if (item.status !== 'Succeed') { btnResolve.classList.remove('hidden'); btnResolve.classList.add('flex'); }
@@ -863,31 +863,31 @@
     isAcknowledging = true;
 
     const originalHtml = btnObj.innerHTML;
-    
+
     btnObj.classList.add('pointer-events-none', 'opacity-80');
     btnObj.querySelector('div:first-child').innerHTML = '<span class="loading loading-spinner loading-xs"></span>';
-    
+
     google.script.run
       .withSuccessHandler(function (res) {
         isAcknowledging = false;
         btnObj.classList.remove('pointer-events-none', 'opacity-80');
-        
+
         try {
           const response = typeof res === 'string' ? JSON.parse(res) : res;
           if (response.success) {
             UIManager.showToast(response.data.message || "บันทึกสำเร็จ", "success");
-            
+
             const itemIdx = handoverItems.findIndex(i => i.id === id);
             if (itemIdx !== -1) {
               handoverItems[itemIdx].acknowledged = response.data.acknowledged;
               handoverItems[itemIdx].status = response.data.status;
-              
+
               const filteredItem = filteredItems.find(i => i.id === id);
               if (filteredItem) {
                 filteredItem.acknowledged = response.data.acknowledged;
                 filteredItem.status = response.data.status;
               }
-              
+
               renderHandoverCurrentPage();
               renderDetailData(handoverItems[itemIdx]);
             }
@@ -931,18 +931,18 @@
     document.getElementById('ho_date_input').value = `${yyyy}-${mm}-${dd}`;
     document.getElementById('ho_time_input').value = String(nowLocal.getHours()).padStart(2, '0') + ":" + String(nowLocal.getMinutes()).padStart(2, '0');
     document.getElementById('ho_modal_shift_select').value = "Auto";
-    
+
     // จัดการส่วน Ticket Summary
     document.getElementById('ho_ticket_summary').value = '';
     document.getElementById('ticket-selector-container').classList.add('hidden');
     document.getElementById('ticket-selection-list').innerHTML = '';
-    
+
     // ✨ บังคับหุบแท็บ Ticket เสมอเวลาสร้างรายการใหม่
     const ticketCollapse = document.getElementById('ho_ticket_collapse');
     if (ticketCollapse) {
-        ticketCollapse.open = false; 
+      ticketCollapse.open = false;
     }
-    
+
     fetchTicketsForHandover();
 
     document.getElementById('ho_modal_time_controls').classList.add('hidden');
@@ -993,15 +993,15 @@
       document.getElementById('ho_time_input').value = String(itemDate.getHours()).padStart(2, '0') + ":" + String(itemDate.getMinutes()).padStart(2, '0');
     }
     document.getElementById('ho_modal_shift_select').value = item.shift || 'Auto';
-    
+
     // จัดการส่วน Ticket Summary
     document.getElementById('ho_ticket_summary').value = item.ticketSummary || '';
     document.getElementById('ticket-selector-container').classList.add('hidden');
-    
+
     // ✨ เช็คว่ามีข้อมูล Ticket ไหม ถ้ามีให้กางออก ถ้าไม่มีให้หุบไว้
     const ticketCollapse = document.getElementById('ho_ticket_collapse');
     if (ticketCollapse) {
-       ticketCollapse.open = (item.ticketSummary && item.ticketSummary.trim() !== '');
+      ticketCollapse.open = (item.ticketSummary && item.ticketSummary.trim() !== '');
     }
 
     document.getElementById('ho_modal_time_controls').classList.remove('hidden');
@@ -1046,7 +1046,7 @@
 
   function closeDrawer() {
     document.getElementById('drawer-handover-toggle').checked = false;
-    
+
     // ✨ เสริมให้ชัวร์ว่าล้างสีออกเวลากดปิดผ่านปุ่มด้วย
     selectedHandoverId = null;
     document.querySelectorAll('#ho_list_container > tr').forEach(row => {
@@ -1063,10 +1063,10 @@
         google.script.run.withSuccessHandler(function (res) {
           const resp = typeof res === 'string' ? JSON.parse(res) : res;
           if (resp && resp.success === false) return Swal.fire({ icon: 'error', title: 'ไม่สามารถลบได้', text: resp.message || resp.error });
-          
+
           // ✨ สั่งปิด Drawer ทันทีเมื่อลบสำเร็จ
           closeDrawer();
-          
+
           Swal.fire({ icon: 'success', title: 'ลบเรียบร้อย', timer: 1500, showConfirmButton: false });
           _isHandoverDataLoaded = false;
           showTableSkeleton();
@@ -1106,15 +1106,15 @@
       shift: shiftVal
     };
     if (!data.topic || detailJSON === '[]') { Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบ', text: 'กรุณาระบุหัวข้อและรายละเอียดอย่างน้อย 1 ขั้นตอน', timer: 2000, showConfirmButton: false }); return; }
-    
+
     const btnText = document.getElementById('submit-ho-text');
     const btnSpinner = document.getElementById('submit-ho-spinner');
     const btn = document.getElementById('btn_submit_ho');
-    
+
     if (btnText) btnText.classList.replace('opacity-100', 'opacity-0');
     if (btnSpinner) btnSpinner.classList.replace('opacity-0', 'opacity-100');
     btn.disabled = true;
-    
+
     google.script.run.withSuccessHandler(function (res) {
       if (btnText) btnText.classList.replace('opacity-0', 'opacity-100');
       if (btnSpinner) btnSpinner.classList.replace('opacity-100', 'opacity-0');
@@ -1126,7 +1126,7 @@
       }
       closeFormDrawer();
       Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', timer: 1500, showConfirmButton: false });
-      
+
       _isHandoverDataLoaded = false;
       showTableSkeleton();
       loadHandovers(!!data.id);

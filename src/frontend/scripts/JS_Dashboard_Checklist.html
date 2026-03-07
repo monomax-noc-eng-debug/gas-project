@@ -1,0 +1,230 @@
+<script>
+  /**
+   * JS_Dashboard_Checklist.html
+   * แยกส่วนการทำงานของ Checklist ออกมาจาก JS_Dashboard หลัก
+   */
+  const DashboardChecklist = (function () {
+    let _currentChecklistMatchId = null;
+    let _currentChecklistData = [];
+    let _checklistStaffOptions = null;
+
+    const getEl = (id) => document.getElementById(id);
+
+    const escapeHTML = (str) => {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    const showToastInModal = (msg, type, modalId) => {
+      const targetEl = getEl(modalId);
+      Swal.fire({
+        toast: true,
+        position: "bottom-end",
+        showConfirmButton: false,
+        timer: 3000,
+        icon: type,
+        title: msg,
+        target: targetEl || "body",
+        customClass: { container: "z-[999999]" },
+      });
+    };
+
+    return {
+      openChecklistModal: function (itemJsonRaw, btnElement) {
+        if (btnElement) {
+          btnElement.disabled = true;
+          btnElement.classList.add("is-loading");
+        }
+
+        var fetchPromises = [];
+        if (!_checklistStaffOptions) {
+          fetchPromises.push(Server.call({ func: "apiGetAllSettings", silent: true }));
+        } else {
+          fetchPromises.push(Promise.resolve({ cachedStaff: true }));
+        }
+
+        // ขอข้อมูล Checklist Template โดยใช้ Cache จาก ChecklistSettings ก่อน เพื่อความรวดเร็ว
+        if (typeof ChecklistSettings !== 'undefined' && typeof ChecklistSettings.isLoaded === 'function' && ChecklistSettings.isLoaded()) {
+          fetchPromises.push(Promise.resolve({ success: true, data: { checklistTasks: ChecklistSettings.getTasks() } }));
+        } else {
+          fetchPromises.push(Server.call({ func: "apiGetChecklistTemplate", silent: true }));
+        }
+
+        Promise.all(fetchPromises).then(results => {
+          if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.classList.remove("is-loading");
+          }
+
+          var staffRes = results[0];
+          var clRes = results[1];
+
+          if (!staffRes.cachedStaff) {
+            const config = staffRes.data || {};
+            const staffUsers = config.staffUsers || [];
+            _checklistStaffOptions = staffUsers.length > 0
+              ? staffUsers.filter(u => String(u.role).toLowerCase().includes('responsibility') || String(u.role).toLowerCase().includes('leader'))
+              : (config.staff || []).map(s => ({ name: s }));
+          }
+
+          var serverDefaultTasks = [];
+          if (clRes && clRes.success && clRes.data && clRes.data.checklistTasks) {
+            serverDefaultTasks = clRes.data.checklistTasks;
+          }
+
+          DashboardChecklist._openChecklistModalInner(itemJsonRaw, serverDefaultTasks);
+        }).catch(err => {
+          console.error(err);
+          if (btnElement) {
+            btnElement.disabled = false;
+            btnElement.classList.remove("is-loading");
+          }
+          DashboardChecklist._openChecklistModalInner(itemJsonRaw, []);
+        });
+      },
+
+      _openChecklistModalInner: function (itemJsonRaw, serverDefaultTasks) {
+        try {
+          var item = JSON.parse(decodeURIComponent(itemJsonRaw));
+          _currentChecklistMatchId = item.id;
+
+          var home = item.home || "?";
+          var away = item.away || "?";
+          getEl("cl-match-title").innerText = home + " vs " + away;
+          getEl("cl-match-time").innerText = item.time || "--:--";
+
+          var defaultTasks = (serverDefaultTasks && serverDefaultTasks.length > 0)
+            ? serverDefaultTasks
+            : ((typeof ChecklistSettings !== 'undefined' && typeof ChecklistSettings.getTasks === 'function') ? ChecklistSettings.getTasks() : []);
+
+          if (defaultTasks.length === 0 && item.checklist && Array.isArray(item.checklist) && item.checklist.length > 0) {
+            _currentChecklistData = JSON.parse(JSON.stringify(item.checklist));
+          } else {
+            _currentChecklistData = defaultTasks.map(function (t) {
+              var titleStr = typeof t === 'string' ? t : (t.title || t);
+              var existingTask = null;
+
+              if (item.checklist && Array.isArray(item.checklist)) {
+                existingTask = item.checklist.find(function (x) { return x.title === titleStr; });
+              }
+              if (existingTask) {
+                return JSON.parse(JSON.stringify(existingTask));
+              }
+              return {
+                id: String(Date.now() + Math.floor(Math.random() * 1000)),
+                title: titleStr,
+                status: false,
+                checker: '',
+                remark: ''
+              };
+            });
+
+            if (item.checklist && Array.isArray(item.checklist)) {
+              item.checklist.forEach(function (existingItem) {
+                var found = _currentChecklistData.find(function (x) { return x.title === existingItem.title; });
+                if (!found) {
+                  _currentChecklistData.push(JSON.parse(JSON.stringify(existingItem)));
+                }
+              });
+            }
+          }
+
+          DashboardChecklist.renderChecklistTable();
+          getEl("modal-checklist-match").showModal();
+        } catch (e) { console.error("Open Checklist Error", e); }
+      },
+
+      renderChecklistTable: function () {
+        var tbody = getEl("cl-match-tbody");
+        var empty = getEl("cl-match-empty");
+
+        if (!_currentChecklistData || _currentChecklistData.length === 0) {
+          tbody.innerHTML = "";
+          empty.classList.remove("hidden");
+          return;
+        }
+
+        empty.classList.add("hidden");
+        var html = "";
+        _currentChecklistData.forEach((task, index) => {
+          html += `
+              <tr class="hover">
+                <td class="text-center font-mono text-[10px] text-slate-400">${index + 1}</td>
+                <td class="font-medium text-[11px] text-slate-700" style="white-space:normal; overflow-wrap:anywhere;">${escapeHTML(task.title)}</td>
+                <td class="text-center">
+                  <input type="checkbox" class="checkbox checkbox-sm checkbox-warning" 
+                     ${task.status ? 'checked' : ''} 
+                     onchange="DashboardChecklist.updateChecklistField(${index}, 'status', this.checked)">
+                </td>
+                <td>
+                  <select class="select select-xs select-bordered w-full text-[11px] bg-slate-50 focus:bg-white focus:border-warning" 
+                     onchange="DashboardChecklist.updateChecklistField(${index}, 'checker', this.value)">
+                     <option value="">-- ระบุชื่อ --</option>
+                     ${(_checklistStaffOptions || []).map(u =>
+            `<option value="${escapeHTML(u.name)}" ${task.checker === u.name ? 'selected' : ''}>${escapeHTML(u.name)}</option>`
+          ).join('')}
+                     ${task.checker && !(_checklistStaffOptions || []).some(u => u.name === task.checker)
+              ? `<option value="${escapeHTML(task.checker)}" selected>${escapeHTML(task.checker)} (เดิม)</option>`
+              : ''}
+                  </select>
+                </td>
+                <td>
+                  <input type="text" class="input input-xs input-bordered w-full text-[11px] bg-slate-50 focus:bg-white focus:border-warning" 
+                     value="${escapeHTML(task.remark || '')}" placeholder="..."
+                     onchange="DashboardChecklist.updateChecklistField(${index}, 'remark', this.value)">
+                </td>
+              </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+      },
+
+      updateChecklistField: function (index, field, value) {
+        if (_currentChecklistData[index]) {
+          _currentChecklistData[index][field] = value;
+        }
+      },
+
+      saveChecklist: async function () {
+        if (!_currentChecklistMatchId) return;
+
+        var btn = getEl("btn-save-checklist");
+        if (btn) {
+          btn.disabled = true;
+          btn.classList.add("is-loading");
+        }
+
+        var payload = {
+          id: _currentChecklistMatchId,
+          checklist: _currentChecklistData
+        };
+
+        try {
+          var res = await Server.call({ func: "apiSaveChecklist", retryable: false }, payload);
+          if (res.success) {
+            showToastInModal("บันทึก Checklist เรียบร้อย", "success", "modal-checklist-match");
+            var refreshPromise = Dashboard.loadWorkList(true);
+            if (refreshPromise && refreshPromise.then) {
+              await refreshPromise;
+            }
+            getEl("modal-checklist-match").close();
+          } else {
+            showToastInModal(res.message || "บันทึกไม่สำเร็จ", "error", "modal-checklist-match");
+          }
+        } catch (err) {
+          showToastInModal("เซิร์ฟเวอร์ไม่ตอบสนอง", "error", "modal-checklist-match");
+        } finally {
+          if (btn) {
+            btn.classList.remove("is-loading");
+            btn.disabled = false;
+          }
+        }
+      },
+    };
+  })();
+</script>

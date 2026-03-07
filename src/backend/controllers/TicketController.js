@@ -153,6 +153,12 @@ const TicketController = (() => {
             };
           });
 
+        // ✨ Server-Side Pagination (Approach A)
+        // จำกัดแค่ 500 รายการล่าสุดเพื่อลดภาระหน้าเว็บ แต่ยังให้ Search ทำงาน Instant ได้
+        if (cleanData.length > 500) {
+          cleanData = cleanData.slice(-500);
+        }
+
         return Response.success(cleanData);
       } catch (e) {
         return Response.error("getTickets Failed: " + e.toString());
@@ -160,6 +166,9 @@ const TicketController = (() => {
     },
 
     createTicket: function (form) {
+      // ── Validation ────────────────────────────────────────────────────
+      if (!form || typeof form !== 'object') return Response.error('createTicket: Payload missing');
+      if (!form.subject || String(form.subject).trim() === '') return Response.error('createTicket: Field "subject" is required');
       const lock = LockService.getScriptLock();
       try {
         if (lock.tryLock(10000)) {
@@ -318,6 +327,9 @@ const TicketController = (() => {
     },
 
     updateTicket: function (form) {
+      // ── Validation ────────────────────────────────────────────────────
+      if (!form || typeof form !== 'object') return Response.error('updateTicket: Payload missing');
+      if (!form.id || String(form.id).trim() === '') return Response.error('updateTicket: Field "id" is required');
       const lock = LockService.getScriptLock();
       try {
         if (lock.tryLock(10000)) {
@@ -415,6 +427,8 @@ const TicketController = (() => {
     },
 
     deleteTicket: function (id) {
+      // ── Validation ────────────────────────────────────────────────────
+      if (id === undefined || id === null || String(id).trim() === '') return Response.error('deleteTicket: ID is required');
       const lock = LockService.getScriptLock();
       try {
         if (lock.tryLock(5000)) {
@@ -462,320 +476,19 @@ const TicketController = (() => {
 
 
 
+    // ── Delegated to TicketImportController ──────────────────────────
     importTicket: function (data) {
-      const lock = LockService.getScriptLock();
-      try {
-        if (lock.tryLock(10000)) {
-          const sheet = _getTicketSheet();
-          const rawData = sheet.getDataRange().getValues();
-          const headers = rawData[0];
-
-          const idCol = _findColIndex(headers, ["Ticket Number", "ID"]);
-          const noCol = _findColIndex(headers, ["No.", "ลำดับ"]);
-          const checkCol = _findColIndex(headers, [
-            "Short Description & Subject",
-            "Subject",
-            "หัวข้อ",
-          ]);
-
-          if (idCol > -1 && rawData.length > 1) {
-            const ids = rawData
-              .slice(1)
-              .map((row) => String(row[idCol]).trim());
-            if (ids.includes(data.id))
-              return { success: false, message: "Duplicate ID" };
-          }
-
-          let insertRowIndex = -1;
-          let existingNo = null;
-
-          if (checkCol > -1) {
-            const emptyIdx = rawData.findIndex(
-              (row, i) => i > 0 && String(row[checkCol]).trim() === "",
-            );
-            if (emptyIdx !== -1) {
-              insertRowIndex = emptyIdx + 1;
-              if (noCol > -1) existingNo = rawData[emptyIdx][noCol];
-            }
-          }
-
-          let newRow = [];
-          if (insertRowIndex > -1) {
-            newRow = [...rawData[insertRowIndex - 1]];
-          } else {
-            newRow = new Array(headers.length).fill("");
-          }
-
-          const setRowVal = (keys, val) => {
-            const idx = _findColIndex(headers, keys);
-            if (idx > -1) newRow[idx] = val;
-          };
-
-          const today = new Date();
-          let importDate = today;
-          if (data.date) {
-            const t = data.time || "00:00";
-            importDate = new Date(`${data.date}T${t}:00`);
-          }
-
-          if (!(insertRowIndex > -1 && existingNo)) {
-            setRowVal(["No.", "ลำดับ"], rawData.length);
-          }
-
-          setRowVal(["Date", "วันที่แจ้ง"], importDate);
-          setRowVal(["Ticket Number", "ID"], data.id);
-          setRowVal(["Ticket Type", "Type"], data.type || "Request");
-          setRowVal(["Ticket Status", "Status"], data.status || "Draft");
-          setRowVal(["Severity", "ความรุนแรง"], data.severity || "Normal");
-          setRowVal(["Category", "หมวดหมู่"], data.category || "General");
-          setRowVal(["Sub Category", "หมวดหมู่ย่อย"], data.subCategory || "-");
-          setRowVal(
-            ["Short Description & Subject", "Subject", "หัวข้อ"],
-            data.subject,
-          );
-          setRowVal(["Detail", "รายละเอียด"], data.detail);
-          setRowVal(["Created Date", "Created"], today);
-          setRowVal(["Remark", "หมายเหตุ"], `Thread ID: ${data.threadId}`);
-
-          let targetRow = -1;
-          if (insertRowIndex > -1) {
-            sheet
-              .getRange(insertRowIndex, 1, 1, newRow.length)
-              .setValues([newRow]);
-            targetRow = insertRowIndex;
-          } else {
-            sheet.appendRow(newRow);
-            targetRow = sheet.getLastRow();
-          }
-
-          const dateCol = _findColIndex(headers, ["Date", "วันที่แจ้ง"]);
-          if (dateCol > -1)
-            _setCellFormat(sheet, targetRow, dateCol, "dd/MM/yyyy");
-          const createdCol = _findColIndex(headers, [
-            "Created Date",
-            "Created",
-          ]);
-          if (createdCol > -1)
-            _setCellFormat(sheet, targetRow, createdCol, "dd/MM/yyyy HH:mm:ss");
-
-          const ticketIdConfig =
-            typeof CONFIG !== "undefined" ? CONFIG.TICKET_ID : "";
-          const tabName =
-            typeof CONFIG !== "undefined" && CONFIG.TICKET_TAB
-              ? CONFIG.TICKET_TAB
-              : TABLE_NAME;
-          CacheService.getScriptCache().remove(
-            `SHEET_DATA_${ticketIdConfig}_${tabName}`,
-          );
-
-          return { success: true, id: data.id };
-        } else {
-          return { success: false, message: "System Busy" };
-        }
-      } catch (e) {
-        return { success: false, message: e.message };
-      } finally {
-        lock.releaseLock();
-      }
+      return TicketImportController.importTicket(data);
     },
 
+    // ── Delegated to TicketEmailController ───────────────────────────
     createTicketAndDraft: function (payload) {
-      const { ticket, email } = payload;
-      let ticketId = ticket.id ? String(ticket.id).trim().toUpperCase() : null;
-      let existingThreadId = null;
-      let isUpdate = false;
-
-      let draft;
-      let draftId = "";
-      let threadId = "";
-
-      try {
-        // 🚀 STEP 1: อ่านข้อมูล Sheet แค่รอบเดียวเพื่อเช็คว่าเป็นงานใหม่หรือเก่า และดึง Thread ID เดิม
-        const sheet = _getTicketSheet();
-        const data = sheet.getDataRange().getValues();
-        const headers = data[0];
-        const idCol = _findColIndex(headers, ["Ticket Number", "ID"]);
-        const remarkCol = _findColIndex(headers, ["Remark", "หมายเหตุ"]);
-
-        if (ticketId && idCol > -1) {
-          for (let i = data.length - 1; i >= 1; i--) {
-            if (String(data[i][idCol]).trim().toUpperCase() === ticketId) {
-              isUpdate = true;
-              if (remarkCol > -1) {
-                const remark = String(data[i][remarkCol]);
-                const match = remark.match(/\[Thread ID:\s*([a-zA-Z0-9_-]+)\]/);
-                if (match && match[1]) existingThreadId = match[1];
-              }
-              break;
-            }
-          }
-        }
-
-        const recipient = (email.to || "").trim();
-
-        // 🚀 STEP 2: ไปสร้าง Draft ใน Gmail ให้เสร็จก่อน (เพื่อเอา ID)
-        if (recipient || existingThreadId) {
-          if (existingThreadId) {
-            try {
-              const thread = GmailApp.getThreadById(existingThreadId);
-              if (thread) {
-                draft = thread.createDraftReplyAll("", {
-                  htmlBody: email.bodyHtml || "",
-                  cc: (email.cc || "").trim(),
-                });
-                threadId = existingThreadId;
-              }
-            } catch (e) {
-              console.warn(
-                "Cannot find existing thread, fallback to new email",
-                e,
-              );
-            }
-          }
-
-          if (!draft) {
-            draft = GmailApp.createDraft(
-              recipient,
-              email.subject || "(No Subject)",
-              "",
-              { htmlBody: email.bodyHtml || "", cc: (email.cc || "").trim() },
-            );
-            try {
-              threadId = draft.getMessage().getThread().getId();
-            } catch (e) { }
-          }
-
-          try {
-            draftId = draft.getMessage().getId();
-          } catch (err) {
-            draftId = draft.getId();
-          }
-        }
-
-        // 🚀 STEP 3: ถ้าได้ Thread ID ใหม่มา ให้จับยัดใส่ Remark เตรียมไว้เลย
-        if (threadId && !existingThreadId) {
-          const currentRemark = ticket.remark || "";
-          if (!currentRemark.includes(threadId)) {
-            ticket.remark = currentRemark
-              ? `${currentRemark}\n[Thread ID: ${threadId}]`
-              : `[Thread ID: ${threadId}]`;
-          }
-        }
-
-        // 🚀 STEP 4: ทำการเซฟลง Sheet แค่รอบเดียว (1 DB Hit!) ประหยัดเวลาไปได้มหาศาล
-        let resVal;
-        if (isUpdate) {
-          resVal = TicketController.updateTicket(ticket);
-        } else {
-          resVal = TicketController.createTicket(ticket);
-        }
-
-        let resObj = typeof resVal === "string" ? JSON.parse(resVal) : resVal;
-
-        if (!resObj.success) {
-          return {
-            success: false,
-            message: resObj.message || "Failed to save ticket",
-            ticketId: ticketId,
-          };
-        }
-
-        if (resObj.data && resObj.data.id) ticketId = resObj.data.id;
-
-        return {
-          success: true,
-          message: draftId
-            ? existingThreadId
-              ? "Ticket saved & Draft Reply created"
-              : "Ticket saved & New Draft created"
-            : "Ticket saved (No Draft)",
-          draftId: draftId,
-          draftUrl: draftId
-            ? `https://mail.google.com/mail/u/0/#drafts/${draftId}`
-            : null,
-          threadId: threadId,
-          ticketId: ticketId,
-        };
-      } catch (e) {
-        console.error("createTicketAndDraft Error", e);
-        return {
-          success: false,
-          message: "System Error: " + e.message,
-          ticketId: ticketId,
-        };
-      }
+      return TicketEmailController.createTicketAndDraft(payload);
     },
 
+    // ── Delegated to TicketEmailController ───────────────────────────
     getThreadIdMap: function () {
-      try {
-        const sheet = _getTicketSheet();
-        const data = sheet.getDataRange().getValues();
-        if (data.length < 2) return {};
-        const headers = data[0];
-        const idCol = _findColIndex(headers, ["Ticket Number", "ID"]);
-        const remarkCol = _findColIndex(headers, ["Remark", "หมายเหตุ"]);
-
-        if (idCol === -1 || remarkCol === -1) return {};
-
-        const map = {};
-        for (let i = 1; i < data.length; i++) {
-          const tid = String(data[i][idCol]).trim();
-          const remark = String(data[i][remarkCol]);
-          if (!tid) continue;
-
-          const match = remark.match(/\[Thread ID:\s*([a-zA-Z0-9]+)\]/);
-          if (match && match[1]) {
-            map[match[1]] = tid;
-          }
-        }
-        return map;
-      } catch (e) {
-        console.warn("getThreadIdMap Error", e);
-        return {};
-      }
-    },
-
-    // 🚀 เพิ่มฟังก์ชันใหม่ รวมการอ่าน Sheet รอบเดียวให้ GmailService ใช้
-    getTicketMappings: function () {
-      try {
-        const tabName = typeof CONFIG !== "undefined" && CONFIG.TICKET_TAB ? CONFIG.TICKET_TAB : TABLE_NAME;
-        const ticketIdConfig = typeof CONFIG !== "undefined" ? CONFIG.TICKET_ID : "";
-
-        let data = [];
-        try {
-          data = SheetService.getAll(tabName, 300, ticketIdConfig);
-        } catch (e) {
-          const sheet = _getTicketSheet();
-          data = sheet.getDataRange().getValues();
-        }
-
-        const mappings = { ids: [], threadMap: {} };
-        if (!data || data.length < 2) return mappings;
-
-        const headers = data[0];
-        const idCol = _findColIndex(headers, ["Ticket Number", "ID"]);
-        const remarkCol = _findColIndex(headers, ["Remark", "หมายเหตุ"]);
-
-        if (idCol === -1) return mappings;
-
-        for (let i = 1; i < data.length; i++) {
-          const tid = String(data[i][idCol]).trim().toUpperCase();
-          if (!tid) continue;
-          mappings.ids.push(tid);
-
-          if (remarkCol > -1) {
-            const remark = String(data[i][remarkCol]);
-            const match = remark.match(/\[Thread ID:\s*([a-zA-Z0-9]+)\]/);
-            if (match && match[1]) {
-              mappings.threadMap[match[1]] = tid;
-            }
-          }
-        }
-        return mappings;
-      } catch (e) {
-        console.warn("getTicketMappings Error", e);
-        return { ids: [], threadMap: {} };
-      }
+      return TicketEmailController.getThreadIdMap();
     },
 
     updateTicketIdOnly: function (oldId, newSvrId) {
@@ -839,47 +552,9 @@ const TicketController = (() => {
       return { success: false, message: "System Busy" };
     },
 
+    // ── Delegated to TicketEmailController ───────────────────────────
     appendThreadIdToRemark: function (ticketId, threadId) {
-      const lock = LockService.getScriptLock();
-      if (lock.tryLock(5000)) {
-        try {
-          const sheet = _getTicketSheet();
-          const data = sheet.getDataRange().getValues();
-          const headers = data[0];
-          const idCol = _findColIndex(headers, ["Ticket Number", "ID"]);
-          const remarkCol = _findColIndex(headers, ["Remark", "หมายเหตุ"]);
-
-          if (idCol === -1 || remarkCol === -1) return;
-
-          // 🚀 Bottom-Up Search
-          for (let i = data.length - 1; i >= 1; i--) {
-            if (String(data[i][idCol]).trim() === String(ticketId).trim()) {
-              const currentRemark = String(data[i][remarkCol]);
-              if (!currentRemark.includes(threadId)) {
-                const newRemark = currentRemark
-                  ? `${currentRemark}\n[Thread ID: ${threadId}]`
-                  : `[Thread ID: ${threadId}]`;
-                sheet.getRange(i + 1, remarkCol + 1).setValue(newRemark);
-
-                const ticketIdConfig =
-                  typeof CONFIG !== "undefined" ? CONFIG.TICKET_ID : "";
-                const tabName =
-                  typeof CONFIG !== "undefined" && CONFIG.TICKET_TAB
-                    ? CONFIG.TICKET_TAB
-                    : TABLE_NAME;
-                CacheService.getScriptCache().remove(
-                  `SHEET_DATA_${ticketIdConfig}_${tabName}`,
-                );
-              }
-              break;
-            }
-          }
-        } catch (e) {
-          console.error("appendThreadIdToRemark Failed", e);
-        } finally {
-          lock.releaseLock();
-        }
-      }
+      return TicketEmailController.appendThreadIdToRemark(ticketId, threadId);
     },
 
     getAllTicketIds: function () {
@@ -900,122 +575,9 @@ const TicketController = (() => {
 
 
 
-    // ✨ [NEW] นำเข้าข้อมูลแบบรวดเดียว (Batch) เพื่อลดการเรียก Google Sheets API
+    // ── Delegated to TicketImportController ──────────────────────────
     importBatchTickets: function (dataArray) {
-      if (!dataArray || dataArray.length === 0)
-        return { success: true, count: 0 };
-
-      const lock = LockService.getScriptLock();
-      try {
-        // ให้เวลารอ Lock นานขึ้นนิดนึงสำหรับการทำ Batch
-        if (lock.tryLock(15000)) {
-          const sheet = _getTicketSheet();
-          const rawData = sheet.getDataRange().getValues();
-          const headers = rawData[0];
-
-          const idCol = _findColIndex(headers, ["Ticket Number", "ID"]);
-          const noCol = _findColIndex(headers, ["No.", "ลำดับ"]);
-          const dateCol = _findColIndex(headers, ["Date", "วันที่แจ้ง"]);
-          const createdCol = _findColIndex(headers, [
-            "Created Date",
-            "Created",
-          ]);
-
-          let existingIds = [];
-          if (idCol > -1 && rawData.length > 1) {
-            existingIds = rawData
-              .slice(1)
-              .map((row) => String(row[idCol]).trim().toUpperCase());
-          }
-
-          const newRows = [];
-          const today = new Date();
-          let currentTotalRows = rawData.length;
-          let addedCount = 0;
-
-          // 1. เตรียมข้อมูลทุกแถวไว้ใน Memory
-          dataArray.forEach((data) => {
-            const ticketId = String(data.id).trim().toUpperCase();
-
-            // ข้ามถ้ารหัสซ้ำ
-            if (existingIds.includes(ticketId)) return;
-
-            let newRow = new Array(headers.length).fill("");
-            const setRowVal = (keys, val) => {
-              const idx = _findColIndex(headers, keys);
-              if (idx > -1) newRow[idx] = val;
-            };
-
-            let importDate = today;
-            if (data.date) {
-              const t = data.time || "00:00";
-              importDate = new Date(`${data.date}T${t}:00`);
-            }
-
-            setRowVal(["No.", "ลำดับ"], currentTotalRows + newRows.length);
-            setRowVal(["Date", "วันที่แจ้ง"], importDate);
-            setRowVal(["Ticket Number", "ID"], data.id);
-            setRowVal(["Ticket Type", "Type"], data.type || "Request");
-            setRowVal(["Ticket Status", "Status"], data.status || "Draft");
-            setRowVal(["Severity", "ความรุนแรง"], data.severity || "Normal");
-            setRowVal(["Category", "หมวดหมู่"], data.category || "General");
-            setRowVal(
-              ["Sub Category", "หมวดหมู่ย่อย"],
-              data.subCategory || "-",
-            );
-            setRowVal(
-              ["Short Description & Subject", "Subject", "หัวข้อ"],
-              data.subject,
-            );
-            setRowVal(["Detail", "รายละเอียด"], data.detail);
-            setRowVal(["Created Date", "Created"], today);
-            setRowVal(["Remark", "หมายเหตุ"], `Thread ID: ${data.threadId}`);
-
-            newRows.push(newRow);
-            existingIds.push(ticketId); // ป้องกันข้อมูลซ้ำกันเองใน Batch
-            addedCount++;
-          });
-
-          // 2. เขียนลง Sheet รวดเดียว! (เร็วกว่าเดิม 10-20 เท่า)
-          if (newRows.length > 0) {
-            const startRow = currentTotalRows + 1;
-            sheet
-              .getRange(startRow, 1, newRows.length, headers.length)
-              .setValues(newRows);
-
-            // Format วันที่ทีเดียว
-            if (dateCol > -1) {
-              sheet
-                .getRange(startRow, dateCol + 1, newRows.length, 1)
-                .setNumberFormat("dd/MM/yyyy");
-            }
-            if (createdCol > -1) {
-              sheet
-                .getRange(startRow, createdCol + 1, newRows.length, 1)
-                .setNumberFormat("dd/MM/yyyy HH:mm:ss");
-            }
-
-            // เคลียร์ Cache
-            const ticketIdConfig =
-              typeof CONFIG !== "undefined" ? CONFIG.TICKET_ID : "";
-            const tabName =
-              typeof CONFIG !== "undefined" && CONFIG.TICKET_TAB
-                ? CONFIG.TICKET_TAB
-                : TABLE_NAME;
-            CacheService.getScriptCache().remove(
-              `SHEET_DATA_${ticketIdConfig}_${tabName}`,
-            );
-          }
-
-          return { success: true, count: addedCount };
-        } else {
-          return { success: false, message: "System Busy (Timeout)" };
-        }
-      } catch (e) {
-        return { success: false, message: e.message };
-      } finally {
-        lock.releaseLock();
-      }
+      return TicketImportController.importBatchTickets(dataArray);
     },
   };
 })();

@@ -177,8 +177,19 @@ const MatchController = (() => {
     // =================================================================
     // 📋 GET WORK LIST (Dashboard Data)
     // =================================================================
-    apiGetWorkList: function (forceRefresh) {
+    apiGetWorkList: function (opts) {
       try {
+        // opts can be boolean (legacy forceRefresh) or object { forceRefresh, filterDate }
+        var forceRefresh = false;
+        var filterDate = null; // 'YYYY-MM-DD' – filter to ±1 day window
+
+        if (typeof opts === 'boolean') {
+          forceRefresh = opts;
+        } else if (opts && typeof opts === 'object') {
+          forceRefresh = !!opts.forceRefresh;
+          filterDate = opts.filterDate || null;
+        }
+
         const rawData = SheetService.getAll(
           getSheetName(),
           600,
@@ -221,7 +232,23 @@ const MatchController = (() => {
         if (idx.time === -1) idx.time = getIdx(["Time", "เวลา"]);
         if (idx.status === -1) idx.status = getIdx(["Status", "สถานะ"]);
 
-        const matches = rawData.slice(1).map((row, i) => {
+        // ── Server-Side Date Window Filter (Phase 4 Perf) ────────────
+        // If filterDate supplied, only process rows within ±1 day window
+        var dataRows = rawData.slice(1);
+        if (filterDate && idx.date > -1) {
+          const refDate = new Date(filterDate);
+          const minD = new Date(refDate); minD.setDate(minD.getDate() - 1);
+          const maxD = new Date(refDate); maxD.setDate(maxD.getDate() + 1);
+          const minStr = _parseDate(minD);
+          const maxStr = _parseDate(maxD);
+          dataRows = dataRows.filter(row => {
+            const d = _parseDate(row[idx.date]);
+            return d && d >= minStr && d <= maxStr;
+          });
+        }
+        // ─────────────────────────────────────────────────
+
+        const matches = dataRows.map((row, i) => {
           const dateStr = _parseDate(row[idx.date]);
           let rowId = idx.id > -1 && row[idx.id] ? row[idx.id] : "";
           if (!rowId && dateStr) {
@@ -291,6 +318,8 @@ const MatchController = (() => {
     // =================================================================
     apiCreateWorkItem: function (data) {
       try {
+        if (!data || typeof data !== 'object') return Response.error('apiCreateWorkItem: Payload missing');
+        if (!data.date) return Response.error('apiCreateWorkItem: Field "date" is required');
         const newId = "M" + Date.now();
         const matchDate = data.date ? new Date(data.date) : new Date();
         const tz =
@@ -438,7 +467,8 @@ const MatchController = (() => {
     // =================================================================
     apiUpdateWorkItem: function (data) {
       try {
-        if (!data.id) return Response.error("Missing ID");
+        if (!data || typeof data !== 'object') return Response.error('apiUpdateWorkItem: Payload missing');
+        if (!data.id) return Response.error('apiUpdateWorkItem: Field "id" is required');
         const sheetName = getSheetName();
         const dbId = getDbId();
         const headers = SheetService.getAll(sheetName, 0, dbId)[0];
@@ -540,7 +570,9 @@ const MatchController = (() => {
     // =================================================================
     apiSaveChecklist: function (data) {
       try {
-        if (!data.id) return Response.error("Missing ID");
+        if (!data || typeof data !== 'object') return Response.error('apiSaveChecklist: Payload missing');
+        if (!data.id) return Response.error('apiSaveChecklist: Field "id" is required');
+        if (!Array.isArray(data.checklist)) return Response.error('apiSaveChecklist: "checklist" must be an array');
         const sheetName = getSheetName();
         const dbId = getDbId();
         const headers = SheetService.getAll(sheetName, 0, dbId)[0];

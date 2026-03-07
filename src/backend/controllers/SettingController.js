@@ -253,6 +253,10 @@ const SettingController = (() => {
     },
 
     apiSaveAllSettings: function (payload) {
+      // ── Validation ────────────────────────────────────────────────────
+      if (!payload || typeof payload !== 'object') {
+        return Response.error('apiSaveAllSettings: Payload is missing or invalid');
+      }
       const lock = LockService.getScriptLock();
       try {
         if (lock.tryLock(30000)) {
@@ -338,6 +342,13 @@ const SettingController = (() => {
     },
 
     apiSaveChecklist: function (payload) {
+      // ── Validation ────────────────────────────────────────────────────
+      if (!payload || typeof payload !== 'object') {
+        return Response.error('apiSaveChecklist: Payload is missing or invalid');
+      }
+      if (!Array.isArray(payload.checklistTasks)) {
+        return Response.error('apiSaveChecklist: checklistTasks must be an array');
+      }
       const lock = LockService.getScriptLock();
       try {
         if (lock.tryLock(30000)) {

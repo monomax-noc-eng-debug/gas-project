@@ -178,7 +178,7 @@
       },
 
       onShow: function () {
-        console.log('📄 Dashboard: onShow');
+        Logger.log('📄 Dashboard: onShow');
         try {
           if (_pickers.main) _pickers.main.setDate(_currentDate, true);
           if (!_isLoaded) {
@@ -267,7 +267,7 @@
           tbody.innerHTML = skeletonHtml;
         }
 
-        Server.call({ func: "apiGetWorkList", silent: true }, forceRefresh)
+        return Server.call({ func: "apiGetWorkList", silent: true }, forceRefresh)
           .then(function (res) {
             if (res && res.success) {
               _allWorkData = res.data || [];
@@ -324,7 +324,7 @@
 
         var html = "";
         data.forEach(function (item, index) {
-          console.log("Rendering item:", item.home, "vs", item.away, item);
+
           var isDone = item.status === "DONE";
           var now = new Date();
           var matchTimeStr = item.date + "T" + item.time + ":00";
@@ -373,10 +373,10 @@
           }
 
           actionWidget +=
-            "<button onclick=\"Dashboard.openChecklistModal('" +
+            "<button onclick=\"DashboardChecklist.openChecklistModal('" +
             itemJson +
             '\', this)" class="btn btn-xs bg-teal-50 border border-teal-200 text-teal-600 hover:bg-teal-500 hover:text-white hover:border-teal-500 shadow-sm tooltip tooltip-left" data-tip="รายการตรวจสอบ (Checklist)">' +
-            '<i class="fas fa-clipboard-check"></i></button>';
+            '<span class="loading loading-spinner loading-xs"></span><i class="fas fa-clipboard-check"></i></button>';
 
           actionWidget +=
             "<button onclick=\"Dashboard.openEditModal('" +
@@ -788,10 +788,10 @@
 
         getEl("import-date-picker").value = toInputDate(now);
         if (_lastCalendarFetchDate !== toInputDate(now)) {
-          this.fetchCalendarEvents();
+          DashboardCalendar.fetchCalendarEvents();
         } else {
           var list = getEl("calendar-picker-list");
-          if (!list || list.children.length === 0) this.fetchCalendarEvents();
+          if (!list || list.children.length === 0) DashboardCalendar.fetchCalendarEvents();
         }
 
         getEl("modal-add-work").showModal();
@@ -1091,270 +1091,13 @@
         });
       },
 
-      // --- Other Helpers ---
-      fetchCalendarEvents: function () {
-        var dateVal =
-          getEl("import-date-picker").value || getEl("input-date").value;
-        if (!dateVal) return;
-        var loader = getEl("cal-loader");
-        var list = getEl("calendar-picker-list");
-        loader.classList.remove("hidden");
-        list.innerHTML = "";
+      // Calendar Fetch Logic moved to JS_Dashboard_Calendar.html
 
-        Server.call({ func: "apiGetCalendarEvents", silent: true }, dateVal)
-          .then((res) => {
-            loader.classList.add("hidden");
-            if (res && res.success) {
-              Dashboard.renderImportList(res.data);
-              _lastCalendarFetchDate = dateVal;
-            } else
-              list.innerHTML =
-                '<div class="text-error text-center text-xs p-4">' +
-                (res ? res.error || res.message || "No Data" : "No Data") +
-                "</div>";
-          })
-          .catch((err) => {
-            loader.classList.add("hidden");
-            list.innerHTML =
-              '<div class="text-error text-center text-xs p-4">Connection failed</div>';
-          });
-      },
-
-      renderImportList: function (events) {
-        var list = getEl("calendar-picker-list");
-        if (!events || events.length === 0) {
-          list.innerHTML =
-            '<div class="text-center text-xs text-base-content/40 py-6">ไม่พบรายการแข่งขัน</div>';
-          return;
-        }
-
-        // ✨ NEW: กรองข้อมูลที่ซ้ำกับที่มีอยู่แล้วใน _allWorkData ของวันที่เลือก
-        var curDateStr = getEl("import-date-picker").value || toInputDate(_currentDate);
-        var existingKeys = new Set();
-        _allWorkData
-          .filter(item => item.date === curDateStr)
-          .forEach(item => {
-            // สร้าง key สำหรับระบุความซ้ำ (Home vs Away)
-            var key = (item.home || "").trim().toLowerCase() + "|" + (item.away || "").trim().toLowerCase();
-            existingKeys.add(key);
-          });
-
-        var html = "";
-        var filteredEvents = events.filter(function (evt) {
-          var key = (evt.home || "").trim().toLowerCase() + "|" + (evt.away || "").trim().toLowerCase();
-          return !existingKeys.has(key);
-        });
-
-        if (filteredEvents.length === 0) {
-          list.innerHTML =
-            '<div class="text-center text-xs text-success/60 py-6 px-4 bg-success/5 rounded-xl border border-dashed border-success/20"><i class="fas fa-check-circle mb-1 text-lg block"></i>นำเข้าข้อมูลทั้งหมดที่มีแล้ว</div>';
-          return;
-        }
-
-        filteredEvents.forEach(function (evt) {
-          var evtJson = encodeURIComponent(JSON.stringify(evt));
-          var timeBadgeClass = evt.isPreviousDay
-            ? "badge-error text-white border-none"
-            : "badge-neutral";
-          var timeLabel =
-            evt.time +
-            (evt.isPreviousDay
-              ? '<span class="ml-1 text-[9px] opacity-90 font-normal">(ข้ามวัน)</span>'
-              : "");
-          html +=
-            "<div onclick=\"Dashboard.selectImportEvent('" +
-            evtJson +
-            '\')" class="p-2 bg-white hover:bg-primary/5 border border-base-200 rounded-lg cursor-pointer transition-all hover:shadow-sm group mb-1"><div class="flex items-center gap-3"><div class="badge ' +
-            timeBadgeClass +
-            ' font-mono font-bold h-6 whitespace-nowrap">' +
-            timeLabel +
-            '</div><div class="flex-1 min-w-0"><div class="text-[10px] font-bold text-primary/70 uppercase tracking-wider truncate">' +
-            (evt.league || "Unknown") +
-            '</div><div class="text-sm font-bold text-base-content/80 truncate group-hover:text-primary transition-colors">' +
-            evt.home +
-            ' <span class="text-xs text-base-content/40 font-normal px-1">vs</span> ' +
-            evt.away +
-            '</div></div><i class="fas fa-plus-circle text-base-content/10 group-hover:text-primary text-xl transition-colors"></i></div></div>';
-        });
-        list.innerHTML = html;
-      },
-
-      selectImportEvent: function (evtEncoded) {
-        try {
-          var evt = JSON.parse(decodeURIComponent(evtEncoded));
-          getEl("input-time").value = evt.time;
-          getEl("input-league").value = evt.league;
-          getEl("input-home").value = evt.home;
-          getEl("input-away").value = evt.away;
-          getEl("input-channel").value = evt.channel || "N/A";
-          var importDate = getEl("import-date-picker")
-            ? getEl("import-date-picker").value
-            : "";
-          if (importDate) getEl("input-date").value = importDate;
-          showToastInModal(
-            "นำเข้าข้อมูลเรียบร้อย",
-            "success",
-            "modal-add-work",
-          );
-          this.checkFormInput();
-          this.calcPlanStart(); // ✨ สั่งคำนวณ Plan Start ตอนนำเข้าข้อมูลเสร็จ
-        } catch (e) {
-          console.error(e);
-        }
-      },
-
-      // ==========================================
-      // ✅ CHECKLIST MODAL LOGIC
-      // ==========================================
-      openChecklistModal: function (itemJsonRaw, btnElement) {
-        var defaultHtml = '<i class="fas fa-clipboard-check"></i>';
-        var loadingHtml = '<i class="fas fa-spinner fa-spin"></i>';
-
-        if (btnElement) {
-          btnElement.disabled = true;
-          btnElement.innerHTML = loadingHtml;
-        }
-
-        if (!_checklistStaffOptions) {
-          Server.call({ func: "apiGetAllSettings", silent: true }).then(res => {
-            if (btnElement) {
-              btnElement.disabled = false;
-              btnElement.innerHTML = defaultHtml;
-            }
-            const config = res.data || {};
-            const staffUsers = config.staffUsers || [];
-            _checklistStaffOptions = staffUsers.length > 0
-              ? staffUsers.filter(u => String(u.role).toLowerCase().includes('responsibility') || String(u.role).toLowerCase().includes('leader'))
-              : (config.staff || []).map(s => ({ name: s }));
-            Dashboard._openChecklistModalInner(itemJsonRaw);
-          }).catch(err => {
-            if (btnElement) {
-              btnElement.disabled = false;
-              btnElement.innerHTML = defaultHtml;
-            }
-            console.error(err);
-            _checklistStaffOptions = [];
-            Dashboard._openChecklistModalInner(itemJsonRaw);
-          });
-        } else {
-          if (btnElement) {
-            btnElement.disabled = false;
-            btnElement.innerHTML = defaultHtml;
-          }
-          Dashboard._openChecklistModalInner(itemJsonRaw);
-        }
-      },
-
-      _openChecklistModalInner: function (itemJsonRaw) {
-        try {
-          var item = JSON.parse(decodeURIComponent(itemJsonRaw));
-          _currentChecklistMatchId = item.id;
-
-          var home = item.home || "?";
-          var away = item.away || "?";
-          getEl("cl-match-title").innerText = home + " vs " + away;
-          getEl("cl-match-time").innerText = item.time || "--:--";
-
-          if (item.checklist && Array.isArray(item.checklist) && item.checklist.length > 0) {
-            _currentChecklistData = JSON.parse(JSON.stringify(item.checklist));
-          } else {
-            var defaultTasks = (typeof ChecklistSettings !== 'undefined' && typeof ChecklistSettings.getTasks === 'function')
-              ? ChecklistSettings.getTasks() : [];
-            _currentChecklistData = defaultTasks.map(function (t) {
-              return {
-                id: String(Date.now() + Math.floor(Math.random() * 1000)),
-                title: typeof t === 'string' ? t : (t.title || t),
-                status: false,
-                checker: '',
-                remark: ''
-              };
-            });
-          }
-
-          Dashboard.renderChecklistTable();
-          getEl("modal-checklist-match").showModal();
-        } catch (e) { console.error("Open Checklist Error", e); }
-      },
-
-      renderChecklistTable: function () {
-        var tbody = getEl("cl-match-tbody");
-        var empty = getEl("cl-match-empty");
-
-        if (!_currentChecklistData || _currentChecklistData.length === 0) {
-          tbody.innerHTML = "";
-          empty.classList.remove("hidden");
-          return;
-        }
-
-        empty.classList.add("hidden");
-        var html = "";
-        _currentChecklistData.forEach((task, index) => {
-          html += `
-              <tr class="hover">
-                <td class="text-center font-mono text-[10px] text-slate-400">${index + 1}</td>
-                <td class="font-medium text-[11px] text-slate-700" style="white-space:normal; overflow-wrap:anywhere;">${escapeHTML(task.title)}</td>
-                <td class="text-center">
-                  <input type="checkbox" class="checkbox checkbox-sm checkbox-warning" 
-                     ${task.status ? 'checked' : ''} 
-                     onchange="Dashboard.updateChecklistField(${index}, 'status', this.checked)">
-                </td>
-                <td>
-                  <select class="select select-xs select-bordered w-full text-[11px] bg-slate-50 focus:bg-white focus:border-warning" 
-                     onchange="Dashboard.updateChecklistField(${index}, 'checker', this.value)">
-                     <option value="">-- ระบุชื่อ --</option>
-                     ${(_checklistStaffOptions || []).map(u =>
-            `<option value="${escapeHTML(u.name)}" ${task.checker === u.name ? 'selected' : ''}>${escapeHTML(u.name)}</option>`
-          ).join('')}
-                     ${task.checker && !(_checklistStaffOptions || []).some(u => u.name === task.checker)
-              ? `<option value="${escapeHTML(task.checker)}" selected>${escapeHTML(task.checker)} (เดิม)</option>`
-              : ''}
-                  </select>
-                </td>
-                <td>
-                  <input type="text" class="input input-xs input-bordered w-full text-[11px] bg-slate-50 focus:bg-white focus:border-warning" 
-                     value="${escapeHTML(task.remark || '')}" placeholder="..."
-                     onchange="Dashboard.updateChecklistField(${index}, 'remark', this.value)">
-                </td>
-              </tr>
-            `;
-        });
-        tbody.innerHTML = html;
-      },
-
-      updateChecklistField: function (index, field, value) {
-        if (_currentChecklistData[index]) {
-          _currentChecklistData[index][field] = value;
-        }
-      },
-
-      saveChecklist: function () {
-        if (!_currentChecklistMatchId) return;
-
-        var btnIcon = getEl("icon-save-checklist");
-        var btnSpin = getEl("spinner-save-checklist");
-        if (btnIcon) btnIcon.classList.add("hidden");
-        if (btnSpin) btnSpin.classList.remove("hidden");
-
-        var payload = {
-          id: _currentChecklistMatchId,
-          checklist: _currentChecklistData
-        };
-
-        Server.call({ func: "apiSaveChecklist", retryable: false }, payload).then(res => {
-          if (res.success) {
-            showToastInModal("บันทึก Checklist เรียบร้อย", "success", "modal-checklist-match");
-            getEl("modal-checklist-match").close();
-            Dashboard.loadWorkList(true); // force refresh main table
-          } else {
-            showToastInModal(res.message || "บันทึกไม่สำเร็จ", "error", "modal-checklist-match");
-          }
-        }).catch(err => {
-          showToastInModal("เซิิร์ฟเวอร์ไม่ตอบสนอง", "error", "modal-checklist-match");
-        }).finally(() => {
-          if (btnIcon) btnIcon.classList.remove("hidden");
-          if (btnSpin) btnSpin.classList.add("hidden");
-        });
-      },
+      // Checklist logic has been moved to JS_Dashboard_Checklist.html
+      // Calendar Fetch Logic moved to JS_Dashboard_Calendar.html
+      // Accessors for external modules:
+      getAllWorkData: function () { return _allWorkData; },
+      setLastCalendarFetchDate: function (val) { _lastCalendarFetchDate = val; }
     };
   })();
 </script>

@@ -1,5 +1,16 @@
 <script>
   // ----------------------------------------------------------------------
+  // 0. LOGGER: Debug toggleable console wrapper
+  // ----------------------------------------------------------------------
+  // To enable debug logs in browser DevTools, type: window.__DEBUG = true
+  var Logger = {
+    log: function () { if (window.__DEBUG) console.log.apply(console, arguments); },
+    warn: function () { if (window.__DEBUG) console.warn.apply(console, arguments); },
+    error: function () { console.error.apply(console, arguments); },
+    table: function () { if (window.__DEBUG) console.table.apply(console, arguments); },
+  };
+
+  // ----------------------------------------------------------------------
   // 1. ROUTER: Page Switching with Lifecycle Hooks
   // ----------------------------------------------------------------------
   var Router = {
@@ -9,7 +20,7 @@
 
     register: function (pageId, controller) {
       this._controllers[pageId] = controller;
-      console.log("✅ Router: Registered controller for", pageId);
+      Logger.log("✅ Router: Registered controller for", pageId);
     },
 
     /**
@@ -18,23 +29,23 @@
      */
     checkPageIntegrity: function (pageId) {
       var issues = [];
-      
+
       // 1. ตรวจสอบว่ามี HTML Element หรือไม่
       var target = document.getElementById(pageId);
       if (!target) {
         issues.push("❌ HTML element not found: #" + pageId);
       }
-      
+
       // 2. ตรวจสอบว่ามี Controller register หรือไม่
       if (!this._controllers[pageId]) {
         issues.push("⚠️ Controller not registered for: " + pageId);
       }
-      
+
       // 3. ตรวจสอบว่า Controller มี onShow method หรือไม่
       if (this._controllers[pageId] && typeof this._controllers[pageId].onShow !== "function") {
         issues.push("⚠️ Controller missing onShow() method: " + pageId);
       }
-      
+
       return {
         isReady: issues.length === 0,
         missing: issues
@@ -42,24 +53,24 @@
     },
 
     navigateTo: function (pageId) {
-      console.log("🔄 Router: Navigating to", pageId);
-      
+      Logger.log("🔄 Router: Navigating to", pageId);
+
       // ✨ Integrity Check
       var integrity = this.checkPageIntegrity(pageId);
       if (!integrity.isReady) {
-        console.error("🚨 Page Integrity Check Failed:", pageId);
-        integrity.missing.forEach(function(issue) {
-          console.error(issue);
+        Logger.error("🚨 Page Integrity Check Failed:", pageId);
+        integrity.missing.forEach(function (issue) {
+          Logger.error(issue);
         });
-        
+
         // แสดง Toast แจ้งเตือนผู้ใช้
         if (typeof UIManager !== "undefined") {
           UIManager.showToast("ไม่สามารถเปิดหน้านี้ได้ กรุณาติดต่อผู้ดูแลระบบ", "error");
         }
-        
+
         // Fallback ไป Dashboard ถ้าไม่ใช่ Dashboard อยู่แล้ว
         if (pageId !== 'page-dashboard') {
-          console.warn("⚠️ Falling back to Dashboard");
+          Logger.warn("⚠️ Falling back to Dashboard");
           this.navigateTo('page-dashboard');
         }
         return;
@@ -72,10 +83,10 @@
       if (this._previousPage && this._controllers[this._previousPage]) {
         var prevCtrl = this._controllers[this._previousPage];
         if (typeof prevCtrl.onHide === "function") {
-          try { 
-            prevCtrl.onHide(); 
-          } catch (e) { 
-            console.error("❌ Router: onHide error for", this._previousPage, e); 
+          try {
+            prevCtrl.onHide();
+          } catch (e) {
+            Logger.error("❌ Router: onHide error for", this._previousPage, e);
           }
         }
       }
@@ -112,11 +123,11 @@
       if (this._controllers[pageId]) {
         var ctrl = this._controllers[pageId];
         if (typeof ctrl.onShow === "function") {
-          try { 
-            ctrl.onShow(); 
-            console.log("✅ Router: onShow executed for", pageId);
-          } catch (e) { 
-            console.error("❌ Router: onShow error for", pageId, e);
+          try {
+            ctrl.onShow();
+            Logger.log("✅ Router: onShow executed for", pageId);
+          } catch (e) {
+            Logger.error("❌ Router: onShow error for", pageId, e);
             // แสดง Error ให้ผู้ใช้เห็น
             if (typeof UIManager !== "undefined") {
               UIManager.showToast("เกิดข้อผิดพลาดในการโหลดหน้า: " + e.message, "error");
@@ -134,11 +145,11 @@
      * ตรวจสอบความพร้อมของทุกหน้าในระบบ (สำหรับ Debug)
      */
     diagnoseAll: function () {
-      console.log("🔍 Router Diagnostic Report:");
+      Logger.log("🔍 Router Diagnostic Report:");
       var allPages = document.querySelectorAll(".page-section");
       var report = [];
-      
-      allPages.forEach(function(page) {
+
+      allPages.forEach(function (page) {
         var pageId = page.id;
         var integrity = Router.checkPageIntegrity(pageId);
         report.push({
@@ -147,8 +158,8 @@
           issues: integrity.missing
         });
       });
-      
-      console.table(report);
+
+      Logger.table(report);
       return report;
     }
   };
@@ -198,11 +209,11 @@
             })
             .withFailureHandler(function (err) {
               if (currentTry < options.retries) {
-                console.warn("Retrying... (" + (currentTry + 1) + "/" + options.retries + ")");
+                Logger.warn("Retrying... (" + (currentTry + 1) + "/" + options.retries + ")");
                 setTimeout(function () { attempt(currentTry + 1); }, 1500);
               } else {
                 if (!options.silent) UIManager.hideLoading();
-                console.error("Server Error:", err);
+                Logger.error("Server Error:", err);
                 if (typeof UIManager !== "undefined") UIManager.showToast(err.message, "error");
                 reject(err);
               }

@@ -1,12 +1,5 @@
 <script>
-  // บังคับให้ SweetAlert อยู่บนสุดเสมอ
-  (function() {
-    var style = document.createElement('style');
-    style.innerHTML = '.swal2-container { z-index: 99999 !important; }';
-    document.head.appendChild(style);
-  })();
 
-  console.log("Loading JS_Playbook script...");
 
   var PlaybookManager = (function () {
     var playbooks = [];
@@ -158,29 +151,36 @@
         card.className = "group relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-500 flex flex-col h-[360px] overflow-hidden cursor-pointer";
         card.onclick = function () { PlaybookManager.openViewModal(pb); };
 
-        var coverImg = (pb.Cover_Image && pb.Cover_Image.indexOf('http') === 0) ? pb.Cover_Image : 'https://placehold.co/600x400?text=ไม่มีรูปภาพ';
+        var hasImage = (pb.Cover_Image && pb.Cover_Image.indexOf('http') === 0);
         var updatedAt = pb.Updated_At ? dayjs(pb.Updated_At).format('DD/MM/YYYY HH:mm') : '-';
         var updatedBy = getValidName(pb.Update_By_Name || pb.Updated_By || pb.Creator);
         var category = pb.Category || 'ทั่วไป';
         var title = pb.Title || 'ไม่มีชื่อ';
         var summary = pb.Full_Detail ? pb.Full_Detail.substring(0, 100) + "..." : 'ไม่มีรายละเอียด';
 
-        card.innerHTML = 
-          '<div class="relative h-44 w-full overflow-hidden shrink-0 bg-slate-50">' +
-            '<div class="absolute top-3 left-3 z-20"><span class="px-2.5 py-1 rounded-lg bg-slate-900/60 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest border border-white/10">' + category + '</span></div>' +
-            '<div class="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10"></div>' +
-            '<img src="' + coverImg + '" referrerpolicy="no-referrer" alt="หน้าปก" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" onerror="this.src=\'https://placehold.co/600x400?text=ไม่สามารถโหลดรูปได้\'" />' +
+        var imgOrPlaceholderHTML = hasImage
+          ? '<img src="' + pb.Cover_Image + '" referrerpolicy="no-referrer" alt="หน้าปก" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" onerror="this.src=\'https://placehold.co/600x400?text=ไม่สามารถโหลดรูปได้\'" />'
+          : '<div class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-indigo-50/50 to-slate-100 text-indigo-300 group-hover:scale-110 transition-transform duration-700">' +
+          '<i class="fas fa-book-reader text-5xl mb-3 opacity-40"></i>' +
+          '<span class="text-[9px] font-black uppercase tracking-widest opacity-40">' + category + '</span>' +
+          '</div>';
+
+        card.innerHTML =
+          '<div class="relative h-44 w-full overflow-hidden shrink-0 bg-slate-50 border-b border-slate-100/50">' +
+          '<div class="absolute top-3 left-3 z-20"><span class="px-2.5 py-1 rounded-lg bg-slate-900/60 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest border border-white/10 shadow-sm">' + category + '</span></div>' +
+          '<div class="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10"></div>' +
+          imgOrPlaceholderHTML +
           '</div>' +
           '<div class="p-5 flex flex-col flex-1 relative bg-white">' +
-             '<h3 class="text-sm font-extrabold text-slate-800 line-clamp-2 leading-relaxed mb-2">' + title + '</h3>' +
-             '<p class="text-[11px] text-slate-500 font-medium line-clamp-2 mb-4 leading-relaxed">' + summary + '</p>' +
-             '<div class="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">' +
-                '<div class="flex items-center gap-1.5 text-slate-400"><i class="far fa-clock text-[10px]"></i><span class="text-[10px] font-bold">' + updatedAt + '</span></div>' +
-                '<div class="flex items-center gap-2">' +
-                   '<div class="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 overflow-hidden"><i class="fas fa-user text-[9px]"></i></div>' +
-                   '<span class="text-[10px] font-black text-indigo-600 tracking-tight line-clamp-1 max-w-[80px]">' + updatedBy + '</span>' +
-                '</div>' +
-             '</div>' +
+          '<h3 class="text-sm font-extrabold text-slate-800 line-clamp-2 leading-relaxed mb-2">' + title + '</h3>' +
+          '<p class="text-[11px] text-slate-500 font-medium line-clamp-2 mb-4 leading-relaxed">' + summary + '</p>' +
+          '<div class="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">' +
+          '<div class="flex items-center gap-1.5 text-slate-400"><i class="far fa-clock text-[10px]"></i><span class="text-[10px] font-bold">' + updatedAt + '</span></div>' +
+          '<div class="flex items-center gap-2">' +
+          '<div class="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 overflow-hidden"><i class="fas fa-user text-[9px]"></i></div>' +
+          '<span class="text-[10px] font-black text-indigo-600 tracking-tight line-clamp-1 max-w-[80px]">' + updatedBy + '</span>' +
+          '</div>' +
+          '</div>' +
           '</div>';
         grid.appendChild(card);
       });
@@ -305,7 +305,7 @@
 
     return {
       init: function () {
-        console.log("PlaybookManager Init OK");
+        Logger.log("PlaybookManager Init OK");
         if (typeof Router !== "undefined") {
           Router.register("page-playbook", this);
         }
@@ -347,19 +347,19 @@
         document.getElementById("pb-view-title").textContent = pb.Title || '-';
         document.getElementById("pb-view-category").textContent = pb.Category || '-';
         document.getElementById("pb-view-fulldetail").textContent = pb.Full_Detail || '-';
-        if(document.getElementById("pb-view-id")) document.getElementById("pb-view-id").textContent = pb.ID || '-';
+        if (document.getElementById("pb-view-id")) document.getElementById("pb-view-id").textContent = pb.ID || '-';
 
         var editBtn = document.getElementById("pb-view-edit-btn");
-        if(editBtn) {
-          editBtn.onclick = function() {
+        if (editBtn) {
+          editBtn.onclick = function () {
             var vModal = document.getElementById('playbook-view-modal');
-            if(vModal) vModal.close();
+            if (vModal) vModal.close();
             PlaybookManager.openEditorModal(pb.ID);
           };
         }
 
         var histories = parseJSONSafe(pb.History_JSON);
-        
+
         var latestNote = "";
         var latestBy = "ไม่ระบุ";
         var latestDate = pb.Updated_At ? dayjs(pb.Updated_At).format('DD/MM/YYYY HH:mm') : "-";
@@ -372,8 +372,8 @@
 
         var elUpBy = document.getElementById("pb-view-update-by");
         var elUpDate = document.getElementById("pb-view-update-date");
-        if(elUpBy) elUpBy.textContent = "ผู้ร้องขอ: " + latestBy; 
-        if(elUpDate) elUpDate.textContent = "เวลา: " + latestDate;
+        if (elUpBy) elUpBy.textContent = "ผู้ร้องขอ: " + latestBy;
+        if (elUpDate) elUpDate.textContent = "เวลา: " + latestDate;
 
         var linkBtn = document.getElementById("pb-view-link");
         if (pb.External_Link && pb.External_Link.trim() !== "") {
@@ -390,33 +390,33 @@
         if (pb.Cover_Image && pb.Cover_Image.indexOf('http') === 0) {
           imgEl.src = pb.Cover_Image;
           imgEl.setAttribute('referrerpolicy', 'no-referrer');
-          if(imgContainer) imgContainer.classList.remove("hidden");
+          if (imgContainer) imgContainer.classList.remove("hidden");
         } else {
-          if(imgContainer) imgContainer.classList.add("hidden");
+          if (imgContainer) imgContainer.classList.add("hidden");
         }
 
         var stepContainer = document.getElementById("pb-view-stepper");
         var steps = parseJSONSafe(pb.Steps_JSON);
         var stepHtml = "";
-        
+
         steps.forEach(function (step, idx) {
-          var descHtml = step.description ? 
+          var descHtml = step.description ?
             '<div class="text-xs text-slate-600 leading-relaxed whitespace-pre-line mt-2">' + getSafeStr(step.description) + '</div>' : '';
-          var imgHtml = (step.image && step.image.length > 50) ? 
+          var imgHtml = (step.image && step.image.length > 50) ?
             '<div class="mt-3"><img src="' + step.image + '" referrerpolicy="no-referrer" class="rounded-xl shadow-sm border border-slate-200 max-w-full md:max-w-xs h-auto object-cover" /></div>' : '';
-          var copyHtml = step.copyText ? 
+          var copyHtml = step.copyText ?
             '<div class="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center justify-between gap-3">' +
-              '<code class="text-[10px] text-slate-600 font-mono break-all line-clamp-2">' + getSafeStr(step.copyText) + '</code>' +
-              '<button type="button" onclick="PlaybookManager.copyStepText(\'' + encodeURIComponent(getSafeStr(step.copyText)) + '\')" class="btn btn-xs btn-primary btn-outline shrink-0 bg-white shadow-sm text-[9px]">คัดลอก</button>' +
+            '<code class="text-[10px] text-slate-600 font-mono break-all line-clamp-2">' + getSafeStr(step.copyText) + '</code>' +
+            '<button type="button" onclick="PlaybookManager.copyStepText(\'' + encodeURIComponent(getSafeStr(step.copyText)) + '\')" class="btn btn-xs btn-primary btn-outline shrink-0 bg-white shadow-sm text-[9px]">คัดลอก</button>' +
             '</div>' : '';
 
-          stepHtml += 
+          stepHtml +=
             '<div class="flex items-start gap-3 w-full relative mb-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">' +
-              '<div class="shrink-0"><div class="bg-primary text-white px-2.5 py-1 rounded-md text-[9px] font-black tracking-widest shadow-sm">ขั้นตอนที่ ' + (idx + 1) + '</div></div>' +
-              '<div class="flex-1 min-w-0">' +
-                '<h5 class="text-sm font-bold text-slate-800 leading-tight">' + getSafeStr(step.title) + '</h5>' +
-                descHtml + copyHtml + imgHtml +
-              '</div>' +
+            '<div class="shrink-0"><div class="bg-primary text-white px-2.5 py-1 rounded-md text-[9px] font-black tracking-widest shadow-sm">ขั้นตอนที่ ' + (idx + 1) + '</div></div>' +
+            '<div class="flex-1 min-w-0">' +
+            '<h5 class="text-sm font-bold text-slate-800 leading-tight">' + getSafeStr(step.title) + '</h5>' +
+            descHtml + copyHtml + imgHtml +
+            '</div>' +
             '</div>';
         });
         stepContainer.innerHTML = stepHtml || '<div class="text-slate-400 text-xs italic py-2">ไม่มีข้อมูลขั้นตอน</div>';
@@ -425,42 +425,42 @@
         var contacts = parseJSONSafe(pb.Contacts_JSON);
         var contactHtml = "";
         contacts.forEach(function (c) {
-          contactHtml += 
+          contactHtml +=
             '<div class="bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm">' +
-              '<div class="font-black text-indigo-600 text-[10px] uppercase tracking-wider mb-1.5">' + getSafeStr(c.name) + '</div>' +
-              (c.phone ? '<div class="text-[10px] text-slate-500 flex items-center gap-1.5 mb-1"><i class="fas fa-phone-alt text-slate-300"></i> ' + getSafeStr(c.phone) + '</div>' : '') +
-              (c.email ? '<div class="text-[10px] text-slate-500 flex items-center gap-1.5"><i class="fas fa-envelope text-slate-300"></i> ' + getSafeStr(c.email) + '</div>' : '') +
-              (c.link ? '<a href="' + getSafeStr(c.link) + '" target="_blank" class="mt-2 w-full btn btn-xs btn-outline btn-indigo rounded-lg h-6 text-[9px]"><i class="fas fa-link"></i> ลิงก์</a>' : '') +
+            '<div class="font-black text-indigo-600 text-[10px] uppercase tracking-wider mb-1.5">' + getSafeStr(c.name) + '</div>' +
+            (c.phone ? '<div class="text-[10px] text-slate-500 flex items-center gap-1.5 mb-1"><i class="fas fa-phone-alt text-slate-300"></i> ' + getSafeStr(c.phone) + '</div>' : '') +
+            (c.email ? '<div class="text-[10px] text-slate-500 flex items-center gap-1.5"><i class="fas fa-envelope text-slate-300"></i> ' + getSafeStr(c.email) + '</div>' : '') +
+            (c.link ? '<a href="' + getSafeStr(c.link) + '" target="_blank" class="mt-2 w-full btn btn-xs btn-outline btn-indigo rounded-lg h-6 text-[9px]"><i class="fas fa-link"></i> ลิงก์</a>' : '') +
             '</div>';
         });
         contactContainer.innerHTML = contactHtml || '<p class="text-[10px] text-slate-400 italic">ไม่มีข้อมูลผู้ติดต่อ</p>';
 
         var historyContainer = document.getElementById("pb-view-history-container");
         var historyList = document.getElementById("pb-view-history-list");
-        
-        if (histories && histories.length > 0) {
-          if(historyContainer) historyContainer.classList.remove("hidden");
-          var logHtml = histories.map(function(l, index) {
-              var actionNote = l.note || "แก้ไขข้อมูล";
-              var date = l.date ? dayjs(l.date).format('DD/MM/YYYY HH:mm') : "-";
-              var displayName = getValidName(l.by || l.update_by_name); 
-              var snapshotData = encodeURIComponent(JSON.stringify(l));
 
-              return '<div class="flex items-start gap-2.5 p-3 rounded-xl bg-white border border-slate-100 mb-2 shadow-sm">' +
-                  '<div class="flex-none mt-1"><div class="w-1.5 h-1.5 rounded-full ' + (index === 0 ? 'bg-primary animate-pulse' : 'bg-slate-300') + '"></div></div>' +
-                  '<div class="flex-grow min-w-0">' +
-                    '<div class="flex justify-between items-center mb-1"><span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">ครั้งที่ ' + (histories.length - index) + '</span><span class="text-[8px] text-slate-400">' + date + '</span></div>' +
-                    '<p class="text-[11px] text-slate-600 leading-relaxed font-medium break-words mb-1.5 line-clamp-2">' + actionNote + '</p>' +
-                    '<div class="flex items-center justify-between border-t border-slate-100 pt-1.5 mt-1">' +
-                      '<div class="text-[9px] text-slate-400 font-bold">โดย: ' + displayName + '</div>' +
-                      '<button type="button" onclick="PlaybookManager.viewOldVersion(\'' + snapshotData + '\')" class="btn btn-xs btn-ghost text-primary text-[9px] font-bold px-1.5 h-auto min-h-0"><i class="fas fa-history"></i> เนื้อหาเดิม</button>' +
-                    '</div>' +
-                  '</div>' +
-                '</div>';
+        if (histories && histories.length > 0) {
+          if (historyContainer) historyContainer.classList.remove("hidden");
+          var logHtml = histories.map(function (l, index) {
+            var actionNote = l.note || "แก้ไขข้อมูล";
+            var date = l.date ? dayjs(l.date).format('DD/MM/YYYY HH:mm') : "-";
+            var displayName = getValidName(l.by || l.update_by_name);
+            var snapshotData = encodeURIComponent(JSON.stringify(l));
+
+            return '<div class="flex items-start gap-2.5 p-3 rounded-xl bg-white border border-slate-100 mb-2 shadow-sm">' +
+              '<div class="flex-none mt-1"><div class="w-1.5 h-1.5 rounded-full ' + (index === 0 ? 'bg-primary animate-pulse' : 'bg-slate-300') + '"></div></div>' +
+              '<div class="flex-grow min-w-0">' +
+              '<div class="flex justify-between items-center mb-1"><span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">ครั้งที่ ' + (histories.length - index) + '</span><span class="text-[8px] text-slate-400">' + date + '</span></div>' +
+              '<p class="text-[11px] text-slate-600 leading-relaxed font-medium break-words mb-1.5 line-clamp-2">' + actionNote + '</p>' +
+              '<div class="flex items-center justify-between border-t border-slate-100 pt-1.5 mt-1">' +
+              '<div class="text-[9px] text-slate-400 font-bold">โดย: ' + displayName + '</div>' +
+              '<button type="button" onclick="PlaybookManager.viewOldVersion(\'' + snapshotData + '\')" class="btn btn-xs btn-ghost text-primary text-[9px] font-bold px-1.5 h-auto min-h-0"><i class="fas fa-history"></i> เนื้อหาเดิม</button>' +
+              '</div>' +
+              '</div>' +
+              '</div>';
           }).join('');
-          if(historyList) historyList.innerHTML = logHtml;
+          if (historyList) historyList.innerHTML = logHtml;
         } else {
-          if(historyContainer) historyContainer.classList.add("hidden");
+          if (historyContainer) historyContainer.classList.add("hidden");
         }
 
         var modal = document.getElementById("playbook-view-modal");
@@ -469,18 +469,18 @@
 
       openEditorModal: function (editId) {
         document.getElementById("pb-form-cover").value = "";
-        
+
         var cp = document.getElementById("pb-form-cover-preview");
-        if(cp) {
-            cp.classList.add("hidden");
-            cp.querySelector("img").src = ""; 
+        if (cp) {
+          cp.classList.add("hidden");
+          cp.querySelector("img").src = "";
         }
 
         var delBtn = document.getElementById("btn-delete-playbook");
 
         if (editId) {
           document.getElementById("pb-editor-header").textContent = 'แก้ไขข้อมูล';
-          if(delBtn) delBtn.classList.remove("hidden");
+          if (delBtn) delBtn.classList.remove("hidden");
 
           var pb = playbooks.find(function (p) { return p.ID === editId; });
           if (pb) {
@@ -490,15 +490,15 @@
             document.getElementById("pb-form-creator").value = pb.Creator || "";
             document.getElementById("pb-form-link").value = pb.External_Link || "";
             document.getElementById("pb-form-fulldetail").value = pb.Full_Detail || "";
-            
+
             var formUpdateBy = document.getElementById("pb-form-update-by");
             if (formUpdateBy) formUpdateBy.value = pb.Update_By_Name || pb.Updated_By || "";
 
             if (pb.Cover_Image && pb.Cover_Image.indexOf('http') === 0) {
-               if(cp) {
-                 cp.classList.remove("hidden");
-                 cp.querySelector("img").src = pb.Cover_Image;
-               }
+              if (cp) {
+                cp.classList.remove("hidden");
+                cp.querySelector("img").src = pb.Cover_Image;
+              }
             }
 
             editorSteps = parseJSONSafe(pb.Steps_JSON);
@@ -506,7 +506,7 @@
           }
         } else {
           document.getElementById("pb-editor-header").textContent = 'สร้างข้อมูลใหม่';
-          if(delBtn) delBtn.classList.add("hidden"); 
+          if (delBtn) delBtn.classList.add("hidden");
 
           document.getElementById("pb-form-id").value = "";
           document.getElementById("pb-form-title").value = "";
@@ -514,8 +514,8 @@
           document.getElementById("pb-form-creator").value = "";
           document.getElementById("pb-form-link").value = "";
           document.getElementById("pb-form-fulldetail").value = "";
-          if(document.getElementById("pb-form-update-by")) document.getElementById("pb-form-update-by").value = "";
-          
+          if (document.getElementById("pb-form-update-by")) document.getElementById("pb-form-update-by").value = "";
+
           editorSteps = [];
           editorContacts = [];
         }
@@ -531,26 +531,26 @@
         try {
           var data = JSON.parse(decodeURIComponent(encodedData));
           var steps = parseJSONSafe(data.steps);
-          
+
           var stepHtml = "";
-          steps.forEach(function(s, i) {
-             stepHtml += '<div style="text-align: left; margin-bottom: 15px; border-left: 3px solid #6366f1; padding-left: 12px; background: #fdfdfd; padding: 10px; border-radius: 0 8px 8px 0;">' +
-              '<div style="font-size: 10px; font-weight: 800; color: #6366f1; letter-spacing: 1px;">ขั้นตอนที่ ' + (i+1) + '</div>' +
+          steps.forEach(function (s, i) {
+            stepHtml += '<div style="text-align: left; margin-bottom: 15px; border-left: 3px solid #6366f1; padding-left: 12px; background: #fdfdfd; padding: 10px; border-radius: 0 8px 8px 0;">' +
+              '<div style="font-size: 10px; font-weight: 800; color: #6366f1; letter-spacing: 1px;">ขั้นตอนที่ ' + (i + 1) + '</div>' +
               '<div style="font-weight: bold; font-size: 13px; color: #1e293b; margin-top: 2px;">' + (s.title || 'ไม่มีหัวข้อ') + '</div>' +
               '<div style="font-size: 11px; color: #64748b; margin-top: 5px; white-space: pre-line;">' + (s.description || '-') + '</div>' +
-            '</div>';
+              '</div>';
           });
 
           Swal.fire({
             target: getSwalTarget(),
             title: '<div style="font-size: 15px; font-weight: 800;">ข้อมูลเวอร์ชันเดิม (' + dayjs(data.date).format('DD/MM/YYYY HH:mm') + ')</div>',
             html: '<div style="max-height: 500px; overflow-y: auto; text-align: left; font-family: \'Sarabun\', sans-serif; padding-right: 5px;">' +
-                '<div style="background: #eff6ff; padding: 12px; border-radius: 12px; margin-bottom: 20px; border: 1px dashed #bfdbfe;">' +
-                  '<div style="font-size: 10px; font-weight: 800; color: #3b82f6; text-transform: uppercase; margin-bottom: 5px;">เนื้อหาโดยละเอียดเดิม:</div>' +
-                  '<div style="font-size: 12px; color: #1e3a8a; white-space: pre-line; line-height: 1.6;">' + (data.full_detail || 'ไม่มีข้อมูล') + '</div>' +
-                '</div>' +
-                '<div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 12px; padding-left: 5px;">ขั้นตอนการทำงานเดิม:</div>' +
-                (stepHtml || '<div style="text-align:center; color:#ccc; font-size:11px;">ไม่มีข้อมูลขั้นตอน</div>') +
+              '<div style="background: #eff6ff; padding: 12px; border-radius: 12px; margin-bottom: 20px; border: 1px dashed #bfdbfe;">' +
+              '<div style="font-size: 10px; font-weight: 800; color: #3b82f6; text-transform: uppercase; margin-bottom: 5px;">เนื้อหาโดยละเอียดเดิม:</div>' +
+              '<div style="font-size: 12px; color: #1e3a8a; white-space: pre-line; line-height: 1.6;">' + (data.full_detail || 'ไม่มีข้อมูล') + '</div>' +
+              '</div>' +
+              '<div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 12px; padding-left: 5px;">ขั้นตอนการทำงานเดิม:</div>' +
+              (stepHtml || '<div style="text-align:center; color:#ccc; font-size:11px;">ไม่มีข้อมูลขั้นตอน</div>') +
               '</div>',
             width: '600px',
             confirmButtonText: 'ปิดหน้าต่าง',
@@ -565,7 +565,7 @@
       copyStepText: function (encodedText) {
         var text = decodeURIComponent(encodedText);
 
-        var copyFallback = function(txt) {
+        var copyFallback = function (txt) {
           var textArea = document.createElement("textarea");
           textArea.value = txt;
           document.body.appendChild(textArea);
@@ -575,11 +575,11 @@
           showToast("คัดลอกข้อความแล้ว", "success");
         };
 
-        if(navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function() {
-             showToast("คัดลอกข้อความแล้ว", "success");
-          }).catch(function(err) {
-             copyFallback(text);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            showToast("คัดลอกข้อความแล้ว", "success");
+          }).catch(function (err) {
+            copyFallback(text);
           });
         } else {
           copyFallback(text);
@@ -673,10 +673,10 @@
             coverName = coverInput.files[0].name;
           } catch (e) { }
         } else {
-           var cp = document.getElementById("pb-form-cover-preview");
-           if (cp && cp.classList.contains("hidden")) {
-               coverBase64 = "REMOVED"; 
-           }
+          var cp = document.getElementById("pb-form-cover-preview");
+          if (cp && cp.classList.contains("hidden")) {
+            coverBase64 = "REMOVED";
+          }
         }
 
         var payload = {
@@ -701,7 +701,7 @@
 
           if (res && res.success) {
             var modal = document.getElementById("playbook-editor-modal");
-            if(modal) modal.close();
+            if (modal) modal.close();
             showToast("บันทึกสำเร็จ!", "success");
             this.loadData();
           } else {
@@ -718,9 +718,9 @@
       deletePlaybook: async function () {
         var id = document.getElementById("pb-form-id").value;
         if (!id) return;
-        
+
         var confirmRes = await Swal.fire({
-          target: getSwalTarget(), 
+          target: getSwalTarget(),
           title: 'ยืนยันการลบ',
           text: "คุณต้องการลบข้อมูลรหัส " + id + " ใช่หรือไม่?\n(ข้อมูลจะไม่สามารถกู้คืนได้)",
           icon: 'warning',
@@ -740,7 +740,7 @@
 
           if (res && res.success) {
             var modal = document.getElementById("playbook-editor-modal");
-            if(modal) modal.close();
+            if (modal) modal.close();
             showToast("ลบข้อมูลสำเร็จ", "success");
             this.loadData();
           } else {
