@@ -142,14 +142,17 @@
 
           let iframeDisplayHtml = `<iframe src="${vendor.link}" class="absolute inset-0 w-full h-full border-none z-10 bg-white" loading="lazy"></iframe>`;
 
-          if (vendor.name.toLowerCase().includes('aws') || vendor.name.toLowerCase().includes('tencent') || vendor.name.toLowerCase().includes('unleash')) {
+          if (vendor.name.toLowerCase().includes('aws') ||
+            vendor.name.toLowerCase().includes('tencent') ||
+            vendor.name.toLowerCase().includes('unleash') ||
+            vendor.name.toLowerCase().includes('ntt')) {
             iframeDisplayHtml = `
                 <div class="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-20 p-6 text-center">
                    <div class="w-16 h-16 rounded-full bg-slate-200/50 flex items-center justify-center mb-4">
                       <i class="fas fa-lock text-2xl text-slate-400"></i>
                    </div>
                    <h4 class="font-bold text-slate-700 mb-2">แสดงตัวอย่างหน้าเว็บไม่ได้</h4>
-                   <p class="text-xs text-slate-500 max-w-sm leading-relaxed">เว็บไซต์นี้มีระบบรักษาความปลอดภัย (CSP) ป้องกันการนำไปฝังในหน้าจออื่น<br>กรุณากดปุ่ม <b>"เปิดเว็บไซต์หลัก"</b> เพื่อดูข้อมูล</p>
+                   <p class="text-xs text-slate-500 max-w-sm leading-relaxed">เว็บไซต์นี้มีระบบรักษาความปลอดภัย (CSP) ป้องกันการนำไปฝังในหน้าจออื่น<br>หรือต้อง Login ก่อนเข้าใช้งาน กรุณากดปุ่ม <b>"เปิดเว็บไซต์หลัก"</b> เพื่อดูข้อมูล</p>
                 </div>
              `;
           }

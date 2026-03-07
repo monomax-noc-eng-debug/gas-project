@@ -128,7 +128,95 @@ const VendorStatusController = {
         return { name: "AWS (Asia Pacific)", status: "Fetch Error", color: "gray", message: "ไม่สามารถดึงข้อมูล RSS ได้", link: "https://health.aws.amazon.com/health/status?path=open-issues" };
       }
 
-      // 4. ฟังก์ชันเช็ค API Health / เช็คเว็บธรรมดา
+      // 4. ฟังก์ชันเช็ค NTT Portal (Login + Scrape)
+      function fetchNttStatus() {
+        const loginUrl = "https://portal.ntt.co.th/auth/login";
+        const statusUrl = "https://portal.ntt.co.th/RealTimeStatus";
+        const props = PropertiesService.getScriptProperties();
+
+        // One-time setup: บันทึก User/Pass ลง Script Properties เพื่อความปลอดภัย
+        let identity = props.getProperty('NTT_USER') || "admin@monostreaming";
+        let password = props.getProperty('NTT_PASS') || "bP7h7G#85zk";
+
+        if (!props.getProperty('NTT_USER')) {
+          props.setProperties({ 'NTT_USER': identity, 'NTT_PASS': password });
+        }
+
+        try {
+          // 1. Login Phase (POST)
+          const loginPayload = {
+            "identity": identity,
+            "password": password,
+            "submit": "Log in"
+          };
+
+          const loginResponse = UrlFetchApp.fetch(loginUrl, {
+            method: "post",
+            payload: loginPayload,
+            followRedirects: false, // เราต้องการจับ Cookie ก่อนโดน redirect
+            muteHttpExceptions: true
+          });
+
+          let cookie = "";
+          const headers = loginResponse.getAllHeaders();
+          if (headers['Set-Cookie']) {
+            const setCookie = Array.isArray(headers['Set-Cookie']) ? headers['Set-Cookie'] : [headers['Set-Cookie']];
+            cookie = setCookie.map(c => c.split(';')[0]).join('; ');
+          }
+
+          if (!cookie) {
+            return { name: "NTT Portal", status: "Login Error", color: "red", message: "ไม่สามารถขอ Session Cookie ได้ (Login Failed)", link: loginUrl };
+          }
+
+          // 2. Fetch Status Phase (GET with Cookie)
+          const statusResponse = UrlFetchApp.fetch("https://portal.ntt.co.th/RealTimeStatus/curl_hostlist", {
+            method: "get",
+            headers: { "Cookie": cookie },
+            muteHttpExceptions: true
+          });
+
+          const json = JSON.parse(statusResponse.getContentText());
+
+          // 3. Parsing (จาก JSON ที่ได้จาก XHR /curl_hostlist)
+          const hostUp = (json.count && json.count.up !== undefined) ? parseInt(json.count.up) : null;
+          const serviceOk = (json.count_service && json.count_service.ok && json.count_service.ok.count !== undefined)
+            ? parseInt(json.count_service.ok.count) : null;
+
+          if (hostUp === null || serviceOk === null) {
+            return { name: "NTT Portal", status: "Parse Error", color: "yellow", message: "เข้าสู่ระบบได้แต่ API ไม่ส่งข้อมูล Summary กลับมา", link: statusUrl };
+          }
+
+          let status = "Operational";
+          let color = "green";
+          let message = `Host UP: ${hostUp}/2, Service OK: ${serviceOk}/12`;
+
+          // ตรวจสอบตามเงื่อนไข: Host ต้องเป็น 2 และ Service ต้องเป็น 12
+          if (hostUp < 2 || serviceOk < 12) {
+            status = (hostUp === 0) ? "Critical Outage" : "Degraded Performance";
+            color = (hostUp === 0) ? "red" : "yellow";
+            message = `พบความผิดปกติ! Host UP: ${hostUp} (เป้าหมาย 2), Service OK: ${serviceOk} (เป้าหมาย 12)`;
+          }
+
+          return {
+            name: "NTT Portal",
+            status: status,
+            color: color,
+            message: message,
+            link: statusUrl
+          };
+
+        } catch (e) {
+          return {
+            name: "NTT Portal",
+            status: "Fetch Error",
+            color: "gray",
+            message: "เกิดข้อผิดพลาดในการดึงข้อมูล: " + e.message,
+            link: statusUrl
+          };
+        }
+      }
+
+      // 5. ฟังก์ชันเช็ค API Health / เช็คเว็บธรรมดา
       function fetchHtmlStatus(name, url) {
         try {
           const start = Date.now();
@@ -188,7 +276,8 @@ const VendorStatusController = {
       statuses.push(fetchAwsRss());
       statuses.push(fetchHtmlStatus("Tencent Cloud", "https://status.tencentcloud.com/"));
 
-      // 🟢 เพิ่ม Unleash MTH CDN ตรงนี้ครับ!
+      // 🟢 เพิ่ม NTT Portal และ Unleash
+      statuses.push(fetchNttStatus());
       statuses.push(fetchHtmlStatus("Unleash Health", "https://unleash.mthcdn.com/health"));
 
       // เซฟข้อมูลพร้อมประทับเวลาล่าสุดก่อนส่งกลับ (เพื่อทำ Persistent Cache)
