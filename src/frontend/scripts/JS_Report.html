@@ -176,6 +176,7 @@
           self.fetchTickets(),
           self.fetchMatches(force),
           self.fetchStartImages(),
+          self.checkNttStatusAuto(),
           (function () { if (force) _isHandoverLoaded = false; return self.loadHandoverTopics(force); })()
         ])
           .then(function () {
@@ -959,17 +960,37 @@
         });
       },
 
-      // ✨ ฟังก์ชันเปิดหน้าต่างเช็คระบบ NTT
+      // ✨ ฟังก์ชันนำทางไปยังหน้า Vendor Status เพื่อดูรายละเอียด NTT Dashboard
       openNTTStatus: function () {
-        var url = "https://portal.ntt.co.th/RealTimeStatus";
-        var popupWidth = 1200;
-        var popupHeight = 800;
-        var left = (window.screen.width - popupWidth) / 2;
-        var top = (window.screen.height - popupHeight) / 2;
-        var windowFeatures = 'width=' + popupWidth + ',height=' + popupHeight +
-          ',top=' + top + ',left=' + left +
-          ',resizable=yes,scrollbars=yes,status=no,menubar=no,toolbar=no,location=no';
-        window.open(url, "NTT_Status_Window", windowFeatures);
+        if (typeof Router !== 'undefined') {
+          Router.navigateTo('page-vendor-status');
+        }
+      },
+
+      // ✨ ฟังก์ชันเช็คสถานะ NTT อัตโนมัติ (ไม่ต้องกด)
+      checkNttStatusAuto: function () {
+        const spin = el('spin-ntt');
+        const icon = el('icon-ntt');
+        if (spin) spin.classList.remove('hidden');
+        if (icon) icon.classList.add('hidden');
+
+        return Server.call({ func: "getVendorStatuses", silent: true })
+          .then(res => {
+            if (res && res.success) {
+              // ค้นหาข้อมูล NTT Dashboard (ชื่อต้องตรงกับที่แก้ใน Controller)
+              const ntt = res.data.find(v => v.name === "NTT Dashboard");
+              if (ntt) {
+                this.setNttStatus(ntt.color === 'green' ? 'เรียบร้อย' : 'มีปัญหา');
+              }
+            }
+          })
+          .catch(err => {
+            console.error("Auto NTT Check Error:", err);
+          })
+          .finally(() => {
+            if (spin) spin.classList.add('hidden');
+            if (icon) icon.classList.remove('hidden');
+          });
       },
 
       // ✨ ฟังก์ชันตั้งค่าสถานะ NTT และเปลี่ยนสีปุ่ม
@@ -1000,11 +1021,6 @@
             btnMain.classList.add("bg-slate-100", "text-slate-500", "border-slate-300", "hover:bg-slate-200");
             textSpan.innerText = "รอตรวจสอบ";
           }
-        }
-
-        var modal = document.getElementById('ntt_check_modal');
-        if (modal && typeof modal.close === 'function') {
-          modal.close();
         }
       },
 

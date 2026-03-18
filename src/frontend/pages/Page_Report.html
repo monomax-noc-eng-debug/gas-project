@@ -57,11 +57,11 @@
 
             <div class="hidden md:block w-px h-6 bg-slate-200 mx-0.5"></div>
 
-            <button type="button" id="btn-ntt-status-main"
-                onclick="document.getElementById('ntt_check_modal').showModal()"
+            <button type="button" id="btn-ntt-status-main" onclick="ReportManager.openNTTStatus()"
                 class="btn btn-xs bg-slate-100 text-slate-500 border border-slate-300 hover:bg-slate-200 h-7 min-h-0 px-3 gap-1.5 transition-all shadow-sm"
-                title="กดเพื่อตรวจสอบสถานะ NTT">
-                <i class="fas fa-network-wired text-[10px]"></i>
+                title="คลิกเพื่อดูรายละเอียดใน Vendor Dashboard">
+                <span id="spin-ntt" class="loading loading-spinner loading-xs hidden"></span>
+                <i id="icon-ntt" class="fas fa-network-wired text-[10px]"></i>
                 <span class="text-[10px] font-bold hidden lg:inline">NTT Dashboard:</span>
                 <span id="ntt-status-text" class="text-[10px] font-black tracking-wide">รอตรวจสอบ</span>
             </button>
@@ -484,49 +484,6 @@
                 <button class="btn btn-sm btn-success text-white shadow-sm gap-2" onclick="ReportManager.confirmSend()">
                     <i class="fas fa-check"></i> ยืนยันส่ง
                 </button>
-            </div>
-        </div>
-        <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
-
-    <dialog id="ntt_check_modal" class="modal modal-bottom sm:modal-middle">
-        <div class="modal-box p-0 rounded-2xl max-w-sm overflow-hidden bg-white shadow-2xl">
-            <div class="bg-blue-600 text-white px-5 py-4 font-bold flex justify-between items-center">
-                <span class="flex items-center gap-2">
-                    <i class="fas fa-search"></i> ตรวจสอบสถานะ NTT
-                </span>
-                <button onclick="document.getElementById('ntt_check_modal').close()"
-                    class="btn btn-xs btn-circle btn-ghost text-white opacity-70 hover:opacity-100">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-
-            <div class="p-6 flex flex-col items-center gap-4 bg-blue-50/30">
-                <button onclick="ReportManager.openNTTStatus()"
-                    class="btn btn-block btn-outline border-blue-300 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 shadow-sm gap-2">
-                    <i class="fas fa-external-link-alt"></i> เปิดหน้าต่าง NTT Dashboard
-                </button>
-
-                <div class="divider text-[10px] text-slate-400 my-1">หลังจากตรวจสอบแล้ว กรุณาเลือกสถานะ</div>
-
-                <div class="grid grid-cols-2 gap-3 w-full">
-                    <button onclick="ReportManager.setNttStatus('เรียบร้อย')"
-                        class="btn btn-success text-white shadow-sm gap-2 h-12 min-h-0">
-                        <i class="fas fa-check-circle text-lg"></i>
-                        <div class="flex flex-col items-start leading-none text-left">
-                            <span class="text-xs font-bold">ปกติ</span>
-                            <span class="text-[9px] opacity-80 font-normal">(Normal)</span>
-                        </div>
-                    </button>
-                    <button onclick="ReportManager.setNttStatus('มีปัญหา')"
-                        class="btn btn-error text-white shadow-sm gap-2 h-12 min-h-0">
-                        <i class="fas fa-exclamation-triangle text-lg"></i>
-                        <div class="flex flex-col items-start leading-none text-left">
-                            <span class="text-xs font-bold">มีปัญหา</span>
-                            <span class="text-[9px] opacity-80 font-normal">(Issue)</span>
-                        </div>
-                    </button>
-                </div>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop"><button>close</button></form>

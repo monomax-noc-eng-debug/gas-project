@@ -2,29 +2,134 @@
  * ดึงข้อมูลสถานะและรายละเอียดเหตุการณ์จาก API, Web Scraping และ RSS Feed
  */
 const VendorStatusController = {
+  // -------------------------------------------------------------
+  // 🔔 Helper Function: ส่งแจ้งเตือนเข้า Google Chat (แบบ Card เน้นสี)
+  // -------------------------------------------------------------
+  sendChatAlert: function (vendorName, color, message, link) {
+    const props = PropertiesService.getScriptProperties();
+    const webhookUrl = props.getProperty("CHAT_WEBHOOK_MAIN");
+
+    if (!webhookUrl) return;
+
+    let titleColor = "#10b981"; // Green
+    let statusLabel = "Resolved (ทำงานปกติ)";
+
+    if (color === "red") {
+      titleColor = "#ef4444"; // Red
+      statusLabel = "Outage (ระบบขัดข้อง)";
+    } else if (color === "yellow") {
+      titleColor = "#f59e0b"; // Yellow
+      statusLabel = "Degraded (ระบบล่าช้า/เฝ้าระวัง)";
+    }
+
+    const payload = {
+      "cardsV2": [
+        {
+          "cardId": "vendorAlertCard",
+          "card": {
+            "header": {
+              "title": "Vendor Status Update",
+              "subtitle": "NOC Monitoring System"
+            },
+            "sections": [
+              {
+                "widgets": [
+                  {
+                    "decoratedText": {
+                      "topLabel": "System / Vendor",
+                      "text": `<b>${vendorName}</b>`
+                    }
+                  },
+                  {
+                    "decoratedText": {
+                      "topLabel": "Current Status",
+                      "text": `<font color="${titleColor}"><b>${statusLabel}</b></font>`
+                    }
+                  },
+                  {
+                    "decoratedText": {
+                      "topLabel": "Incident Details",
+                      "text": message,
+                      "wrapText": true
+                    }
+                  },
+                  {
+                    "buttonList": {
+                      "buttons": [
+                        {
+                          "text": "ตรวจสอบหน้าเว็บ",
+                          "color": {
+                            "red": 0.9,
+                            "green": 0.95,
+                            "blue": 1.0,
+                            "alpha": 1.0
+                          },
+                          "onClick": {
+                            "openLink": {
+                              "url": link
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    };
+
+    const options = {
+      "method": "post",
+      "contentType": "application/json",
+      "payload": JSON.stringify(payload),
+      "muteHttpExceptions": true
+    };
+
+    try {
+      UrlFetchApp.fetch(webhookUrl, options);
+    } catch (e) {
+      console.error("Failed to send Google Chat Alert:", e);
+    }
+  },
+
   getVendorStatuses: function (isForce) {
     try {
       const props = PropertiesService.getScriptProperties();
 
-      // ถ้าระบบไม่ได้บังคับโหลดยิงใหม่ และ มีของเดิมที่เซฟไว้ แถมเวลายังไม่เกิน 2 นาที (120000ms) ให้ใช้ของเดิม
-      if (!isForce) {
-        const lastUpdate = props.getProperty("VENDOR_LAST_UPDATE_TIME");
-        const cachedData = props.getProperty("VENDOR_STATUS_DATA");
+      const lastUpdate = props.getProperty("VENDOR_LAST_UPDATE_TIME");
+      const cachedData = props.getProperty("VENDOR_STATUS_DATA");
 
-        if (lastUpdate && cachedData) {
-          const timeDiff = Date.now() - parseInt(lastUpdate, 10);
-          if (timeDiff < 120000) { // < 2 minutes
-            return { success: true, data: JSON.parse(cachedData) };
-          }
+      if (!isForce && lastUpdate && cachedData) {
+        const timeDiff = Date.now() - parseInt(lastUpdate, 10);
+        if (timeDiff < 120000) {
+          return { success: true, data: JSON.parse(cachedData) };
         }
+      }
+
+      let oldStatusMap = {};
+      if (cachedData) {
+        try {
+          const oldArr = JSON.parse(cachedData);
+          oldArr.forEach(v => oldStatusMap[v.name] = v.color);
+        } catch (e) { }
       }
 
       const statuses = [];
 
-      // 1. ดึง API มาตรฐาน (Mux, Akamai)
-      function fetchRealStatus(name, apiUrl, webUrl) {
+      const requests = [
+        { url: "https://status.mux.com/api/v2/summary.json", muteHttpExceptions: true },
+        { url: "https://www.akamaistatus.com/api/v2/summary.json", muteHttpExceptions: true },
+        { url: "https://statusgatorstatus.com/", muteHttpExceptions: true },
+        { url: "https://status.aws.amazon.com/rss/all.rss", muteHttpExceptions: true }
+      ];
+
+      const responses = UrlFetchApp.fetchAll(requests);
+
+      function parseRealStatus(name, response, webUrl) {
         try {
-          const response = UrlFetchApp.fetch(apiUrl, { muteHttpExceptions: true });
           if (response.getResponseCode() === 200) {
             const data = JSON.parse(response.getContentText());
             const indicator = data.status.indicator || "none";
@@ -39,123 +144,89 @@ const VendorStatusController = {
             let statusText = "Operational";
 
             if (indicator === "minor" || indicator === "degraded") {
-              color = "yellow";
-              statusText = "Degraded";
+              color = "yellow"; statusText = "Degraded";
             } else if (indicator === "major" || indicator === "critical") {
-              color = "red";
-              statusText = "Outage";
+              color = "red"; statusText = "Outage";
             }
 
-            return {
-              name: name,
-              status: statusText,
-              color: color,
-              message: issueMessage || "ระบบทำงานปกติ",
-              link: webUrl
-            };
+            return { name: name, status: statusText, color: color, message: issueMessage || "ระบบทำงานปกติ", link: webUrl, type: "Official API" };
           }
         } catch (e) { }
-        return { name: name, status: "Fetch Error", color: "red", message: "ไม่สามารถดึงข้อมูล API ได้", link: webUrl };
+        return { name: name, status: "Fetch Error", color: "red", message: "ไม่สามารถดึงข้อมูล API ได้", link: webUrl, type: "Official API" };
       }
 
-      // 2. ดึง Web Scraper สำหรับ StatusGator
-      function fetchStatusGatorScrape(name, url) {
-        try {
-          const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-          if (response.getResponseCode() === 200) {
-            const html = response.getContentText().toLowerCase();
-            let status = "Operational"; let color = "green"; let message = "ระบบทำงานปกติ";
+      statuses.push(parseRealStatus("Mux", responses[0], "https://status.mux.com/"));
+      statuses.push(parseRealStatus("Akamai", responses[1], "https://www.akamaistatus.com/"));
 
-            if (html.includes("all systems are operational") || html.includes("operational")) {
-              message = "All systems are operational (แสกนจากหน้าเว็บ)";
-            } else if (html.includes("major outage") || html.includes("critical")) {
-              status = "Outage"; color = "red"; message = "พบปัญหาระบบขัดข้อง (แสกนจากหน้าเว็บ)";
-            } else if (html.includes("degraded") || html.includes("partial")) {
-              status = "Degraded"; color = "yellow"; message = "พบปัญหาการทำงานบางส่วน (Degraded)";
-            }
-            return { name: name, status: status, color: color, message: message, link: url };
+      try {
+        const sgResponse = responses[2];
+        if (sgResponse.getResponseCode() === 200) {
+          const html = sgResponse.getContentText().toLowerCase();
+          let status = "Operational"; let color = "green"; let message = "ระบบทำงานปกติ";
+
+          if (html.includes("all systems are operational") || html.includes("operational")) {
+            message = "All systems are operational";
+          } else if (html.includes("major outage") || html.includes("critical")) {
+            status = "Outage"; color = "red"; message = "พบปัญหาระบบขัดข้อง";
+          } else if (html.includes("degraded") || html.includes("partial")) {
+            status = "Degraded"; color = "yellow"; message = "พบปัญหาการทำงานบางส่วน";
           }
-        } catch (e) { }
-        return { name: name, status: "Fetch Error", color: "gray", message: "ไม่สามารถเข้าถึงหน้าเว็บได้", link: url };
+          statuses.push({ name: "StatusGator", status: status, color: color, message: message, link: "https://statusgatorstatus.com/", type: "Web Scraping" });
+        } else {
+          statuses.push({ name: "StatusGator", status: "Fetch Error", color: "gray", message: "ไม่สามารถเข้าถึงหน้าเว็บได้", link: "https://statusgatorstatus.com/", type: "Web Scraping" });
+        }
+      } catch (e) {
+        statuses.push({ name: "StatusGator", status: "Fetch Error", color: "gray", message: "เกิดข้อผิดพลาดในการดึงข้อมูล", link: "https://statusgatorstatus.com/", type: "Web Scraping" });
       }
 
-      // 3. ดึง AWS RSS พร้อมกรองเฉพาะ Asia Pacific & Global
-      function fetchAwsRss() {
-        const url = "https://status.aws.amazon.com/rss/all.rss";
-        const webLink = "https://health.aws.amazon.com/health/status?path=open-issues";
+      try {
+        const awsResponse = responses[3];
+        if (awsResponse.getResponseCode() === 200) {
+          const xml = awsResponse.getContentText();
+          const document = XmlService.parse(xml);
+          const channel = document.getRootElement().getChild('channel');
+          const items = channel.getChildren('item');
 
-        try {
-          const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-          if (response.getResponseCode() === 200) {
-            const xml = response.getContentText();
-            const document = XmlService.parse(xml);
-            const channel = document.getRootElement().getChild('channel');
-            const items = channel.getChildren('item');
+          let status = "Operational"; let color = "green"; let message = "ระบบทำงานปกติ (Asia Pacific)";
+          const apacRegex = /ap-(east|south|northeast|southeast)-\d|asia pacific|singapore|sydney|tokyo|seoul|mumbai|osaka|hong kong|jakarta|melbourne|hyderabad|bangkok|global/i;
 
-            let status = "Operational";
-            let color = "green";
-            let message = "ระบบทำงานปกติ (เฉพาะโซน Asia Pacific)";
-
-            // 🎯 คีย์เวิร์ดดักจับโซน APAC และระบบ Global ส่วนกลาง
-            const apacRegex = /ap-(east|south|northeast|southeast)-\d|asia pacific|singapore|sydney|tokyo|seoul|mumbai|osaka|hong kong|jakarta|melbourne|hyderabad|bangkok|global/i;
-
-            let foundApacItem = null;
-            for (let i = 0; i < items.length; i++) {
-              let t = items[i].getChild('title').getText();
-
-              // ✨ เช็คเฉพาะหัวข้อ (title) เท่านั้น
-              if (apacRegex.test(t)) {
-                foundApacItem = items[i];
-                break;
-              }
-            }
-
-            if (foundApacItem) {
-              const title = foundApacItem.getChild('title').getText();
-              if (title.includes("[RESOLVED]")) {
-                message = `แก้ไขแล้ว: ${title.replace(/\[.*?\]\s*/g, '').trim()}`;
-              } else if (title.includes("[INFORMATIONAL]")) {
-                message = `แจ้งเตือน: ${title.replace(/\[.*?\]\s*/g, '').trim()}`;
-              } else {
-                status = "Degraded";
-                color = "yellow";
-                message = `พบปัญหา: ${title.replace(/\[.*?\]\s*/g, '').trim()}`;
-              }
-            }
-            return { name: "AWS (Asia Pacific)", status: status, color: color, message: message, link: webLink };
+          let foundApacItem = null;
+          for (let i = 0; i < items.length; i++) {
+            let t = items[i].getChild('title').getText();
+            if (apacRegex.test(t)) { foundApacItem = items[i]; break; }
           }
-        } catch (e) { }
-        return { name: "AWS (Asia Pacific)", status: "Fetch Error", color: "gray", message: "ไม่สามารถดึงข้อมูล RSS ได้", link: "https://health.aws.amazon.com/health/status?path=open-issues" };
+
+          if (foundApacItem) {
+            const title = foundApacItem.getChild('title').getText();
+            if (title.includes("[RESOLVED]")) {
+              message = `แก้ไขแล้ว: ${title.replace(/\[.*?\]\s*/g, '').trim()}`;
+            } else if (title.includes("[INFORMATIONAL]")) {
+              message = `แจ้งเตือน: ${title.replace(/\[.*?\]\s*/g, '').trim()}`;
+            } else {
+              status = "Degraded"; color = "yellow"; message = `พบปัญหา: ${title.replace(/\[.*?\]\s*/g, '').trim()}`;
+            }
+          }
+          statuses.push({ name: "AWS (Asia Pacific)", status: status, color: color, message: message, link: "https://health.aws.amazon.com/health/status?path=open-issues", type: "RSS Feed" });
+        } else {
+          statuses.push({ name: "AWS (Asia Pacific)", status: "Fetch Error", color: "gray", message: "ไม่สามารถดึงข้อมูล RSS ได้", link: "https://health.aws.amazon.com/health/status?path=open-issues", type: "RSS Feed" });
+        }
+      } catch (e) {
+        statuses.push({ name: "AWS (Asia Pacific)", status: "Fetch Error", color: "gray", message: "เกิดข้อผิดพลาดในการดึงข้อมูล RSS", link: "https://health.aws.amazon.com/health/status?path=open-issues", type: "RSS Feed" });
       }
 
-      // 4. ฟังก์ชันเช็ค NTT Portal (Login + Scrape)
       function fetchNttStatus() {
         const loginUrl = "https://portal.ntt.co.th/auth/login";
         const statusUrl = "https://portal.ntt.co.th/RealTimeStatus";
-        const props = PropertiesService.getScriptProperties();
+        const identity = props.getProperty('NTT_USER');
+        const password = props.getProperty('NTT_PASS');
 
-        // One-time setup: บันทึก User/Pass ลง Script Properties เพื่อความปลอดภัย
-        let identity = props.getProperty('NTT_USER') || "admin@monostreaming";
-        let password = props.getProperty('NTT_PASS') || "bP7h7G#85zk";
-
-        if (!props.getProperty('NTT_USER')) {
-          props.setProperties({ 'NTT_USER': identity, 'NTT_PASS': password });
+        if (!identity || !password) {
+          return { name: "NTT Dashboard", status: "Config Error", color: "gray", message: "ยังไม่ได้ตั้งค่ารหัสผ่าน", link: loginUrl, type: "JSON API" };
         }
 
         try {
-          // 1. Login Phase (POST)
-          const loginPayload = {
-            "identity": identity,
-            "password": password,
-            "submit": "Log in"
-          };
-
-          const loginResponse = UrlFetchApp.fetch(loginUrl, {
-            method: "post",
-            payload: loginPayload,
-            followRedirects: false, // เราต้องการจับ Cookie ก่อนโดน redirect
-            muteHttpExceptions: true
-          });
+          const loginPayload = { "identity": identity, "password": password, "submit": "Log in" };
+          const loginResponse = UrlFetchApp.fetch(loginUrl, { method: "post", payload: loginPayload, followRedirects: false, muteHttpExceptions: true });
 
           let cookie = "";
           const headers = loginResponse.getAllHeaders();
@@ -164,123 +235,114 @@ const VendorStatusController = {
             cookie = setCookie.map(c => c.split(';')[0]).join('; ');
           }
 
-          if (!cookie) {
-            return { name: "NTT Portal", status: "Login Error", color: "red", message: "ไม่สามารถขอ Session Cookie ได้ (Login Failed)", link: loginUrl };
-          }
+          if (!cookie) return { name: "NTT Dashboard", status: "Login Error", color: "red", message: "เข้าสู่ระบบไม่สำเร็จ", link: loginUrl, type: "JSON API" };
 
-          // 2. Fetch Status Phase (GET with Cookie)
-          const statusResponse = UrlFetchApp.fetch("https://portal.ntt.co.th/RealTimeStatus/curl_hostlist", {
-            method: "get",
-            headers: { "Cookie": cookie },
-            muteHttpExceptions: true
-          });
-
+          const statusResponse = UrlFetchApp.fetch("https://portal.ntt.co.th/RealTimeStatus/curl_hostlist", { method: "get", headers: { "Cookie": cookie }, muteHttpExceptions: true });
           const json = JSON.parse(statusResponse.getContentText());
-
-          // 3. Parsing (จาก JSON ที่ได้จาก XHR /curl_hostlist)
           const hostUp = (json.count && json.count.up !== undefined) ? parseInt(json.count.up) : null;
-          const serviceOk = (json.count_service && json.count_service.ok && json.count_service.ok.count !== undefined)
-            ? parseInt(json.count_service.ok.count) : null;
+          const serviceOk = (json.count_service && json.count_service.ok && json.count_service.ok.count !== undefined) ? parseInt(json.count_service.ok.count) : null;
 
-          if (hostUp === null || serviceOk === null) {
-            return { name: "NTT Portal", status: "Parse Error", color: "yellow", message: "เข้าสู่ระบบได้แต่ API ไม่ส่งข้อมูล Summary กลับมา", link: statusUrl };
-          }
+          if (hostUp === null || serviceOk === null) return { name: "NTT Dashboard", status: "Parse Error", color: "yellow", message: "API ไม่ส่งข้อมูลกลับมา", link: statusUrl, type: "JSON API" };
 
-          let status = "Operational";
-          let color = "green";
-          let message = `Host UP: ${hostUp}/2, Service OK: ${serviceOk}/12`;
-
-          // ตรวจสอบตามเงื่อนไข: Host ต้องเป็น 2 และ Service ต้องเป็น 12
+          let status = "Operational", color = "green", message = `ปกติ (Host UP: ${hostUp}/2, Service OK: ${serviceOk}/12)`;
           if (hostUp < 2 || serviceOk < 12) {
             status = (hostUp === 0) ? "Critical Outage" : "Degraded Performance";
             color = (hostUp === 0) ? "red" : "yellow";
-            message = `พบความผิดปกติ! Host UP: ${hostUp} (เป้าหมาย 2), Service OK: ${serviceOk} (เป้าหมาย 12)`;
+            message = `พบความผิดปกติ (Host UP: ${hostUp}/2, Service OK: ${serviceOk}/12)`;
           }
 
-          return {
-            name: "NTT Portal",
-            status: status,
-            color: color,
-            message: message,
-            link: statusUrl
-          };
-
+          return { name: "NTT Dashboard", status: status, color: color, message: message, link: statusUrl, type: "JSON API" };
         } catch (e) {
-          return {
-            name: "NTT Portal",
-            status: "Fetch Error",
-            color: "gray",
-            message: "เกิดข้อผิดพลาดในการดึงข้อมูล: " + e.message,
-            link: statusUrl
-          };
+          return { name: "NTT Dashboard", status: "Fetch Error", color: "gray", message: "เกิดข้อผิดพลาดในการดึงข้อมูล", link: statusUrl, type: "JSON API" };
         }
       }
+      statuses.push(fetchNttStatus());
 
-      // 5. ฟังก์ชันเช็ค API Health / เช็คเว็บธรรมดา
+      // 🛡️ 1. HTTP Check แบบดั้งเดิม (ยิงรอบเดียวจบ) - สำหรับ Unleash
       function fetchHtmlStatus(name, url) {
         try {
           const start = Date.now();
           const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-          const end = Date.now();
-          const responseTime = (end - start) / 1000; // วินาที
-
+          const responseTime = (Date.now() - start) / 1000;
           const code = response.getResponseCode();
-          const now = new Date();
-          const dateStr = Utilities.formatDate(now, "Asia/Bangkok", "HH:mm");
 
           if (code === 200) {
             if (responseTime > 3) {
-              return {
-                name: name,
-                status: "Degraded",
-                color: "yellow",
-                message: `ตอบสนองช้า (${responseTime.toFixed(2)}s) - ตรวจสอบเมื่อ ${dateStr}`,
-                link: url
-              };
+              return { name: name, status: "Degraded", color: "yellow", message: `เว็บตอบสนองช้า (${responseTime.toFixed(2)} วินาที)`, link: url, type: "HTTP Check" };
             }
-            return {
-              name: name,
-              status: "Operational",
-              color: "green",
-              message: `ปกติ (${responseTime.toFixed(2)}s) - อัปเดตล่าสุด: ${dateStr}`,
-              link: url
-            };
+            return { name: name, status: "Operational", color: "green", message: `ระบบทำงานปกติ`, link: url, type: "HTTP Check" };
           } else {
-            // ถ้ารหัสไม่ใช่ 200 (เช่น 500, 502, 503, 504)
-            return {
-              name: name,
-              status: "Outage",
-              color: "red",
-              message: `พบปัญหาการเชื่อมต่อ (HTTP Status: ${code})`,
-              link: url
-            };
+            return { name: name, status: "Outage", color: "red", message: `พบปัญหาการเชื่อมต่อ (HTTP Status: ${code})`, link: url, type: "HTTP Check" };
           }
         } catch (e) {
-          // ถ้าเว็บล่มจนเข้าไม่ได้เลย (Timeout / Connection Refused)
-          return {
-            name: name,
-            status: "Outage",
-            color: "red",
-            message: "ไม่สามารถเชื่อมต่อได้ (Timeout/Connection Error)",
-            link: url
-          };
+          return { name: name, status: "Outage", color: "red", message: "ไม่สามารถเชื่อมต่อได้ (Timeout)", link: url, type: "HTTP Check" };
         }
       }
 
-      // ------------------------------------------------
-      // รวบรวมข้อมูลทั้งหมด (หาบรรทัดเหล่านี้แล้วเติม Unleash เข้าไปครับ)
-      // ------------------------------------------------
-      statuses.push(fetchRealStatus("Mux", "https://status.mux.com/api/v2/summary.json", "https://status.mux.com/"));
-      statuses.push(fetchRealStatus("Akamai", "https://www.akamaistatus.com/api/v2/summary.json", "https://www.akamaistatus.com/"));
-      statuses.push(fetchStatusGatorScrape("StatusGator", "https://statusgatorstatus.com/"));
-      statuses.push(fetchAwsRss());
-      statuses.push(fetchHtmlStatus("Tencent Cloud", "https://status.tencentcloud.com/"));
+      // 🛡️ 2. HTTP Check แบบมีระบบยิงซ้ำ 2 รอบลดความผิดพลาด - สำหรับ Tencent Cloud
+      function fetchHtmlStatusWithRetry(name, url) {
+        const maxRetries = 2; // ลองยิงสูงสุด 2 ครั้ง
 
-      // 🟢 เพิ่ม NTT Portal และ Unleash
-      statuses.push(fetchNttStatus());
+        for (let i = 0; i < maxRetries; i++) {
+          try {
+            const start = Date.now();
+            const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+            const responseTime = (Date.now() - start) / 1000;
+            const code = response.getResponseCode();
+
+            if (code === 200) {
+              // เพิ่ม Latency ให้ยืดหยุ่นขึ้นสำหรับเซิร์ฟเวอร์ต่างประเทศ (5 วินาที)
+              if (responseTime > 5) {
+                if (i < maxRetries - 1) {
+                  Utilities.sleep(2000); // ถ้าช้า ลองพัก 2 วิแล้วยิงใหม่
+                  continue;
+                }
+                return { name: name, status: "Degraded", color: "yellow", message: `เว็บตอบสนองช้า (${responseTime.toFixed(2)} วินาที)`, link: url, type: "HTTP Check" };
+              }
+              return { name: name, status: "Operational", color: "green", message: `ระบบทำงานปกติ`, link: url, type: "HTTP Check" };
+            } else {
+              // ถ้า HTTP ไม่ใช่ 200 (เช่น 500, 503)
+              if (i < maxRetries - 1) {
+                Utilities.sleep(2000); // พัก 2 วิแล้วลองใหม่
+                continue;
+              }
+              return { name: name, status: "Outage", color: "red", message: `พบปัญหาการเชื่อมต่อ (HTTP Status: ${code})`, link: url, type: "HTTP Check" };
+            }
+          } catch (e) {
+            // ถ้า Timeout หรือยิงไม่เข้าเลย
+            if (i < maxRetries - 1) {
+              Utilities.sleep(2000);
+              continue;
+            }
+            return { name: name, status: "Outage", color: "red", message: "ไม่สามารถเชื่อมต่อได้ (Timeout)", link: url, type: "HTTP Check" };
+          }
+        }
+      }
+
+      // เรียกใช้ฟังก์ชันที่แบ่งไว้ตามความเหมาะสมของ Vendor
+      statuses.push(fetchHtmlStatusWithRetry("Tencent Cloud", "https://status.tencentcloud.com/"));
       statuses.push(fetchHtmlStatus("Unleash Health", "https://unleash.mthcdn.com/health"));
 
-      // เซฟข้อมูลพร้อมประทับเวลาล่าสุดก่อนส่งกลับ (เพื่อทำ Persistent Cache)
+      // -------------------------------------------------------------
+      // 🚨 เช็คและส่งแจ้งเตือน
+      // -------------------------------------------------------------
+      statuses.forEach(v => {
+        if (oldStatusMap[v.name]) {
+          const oldColor = oldStatusMap[v.name];
+
+          // 1. ถ้าเปลี่ยนมาเป็น สีเหลือง (Degraded) หรือ สีแดง (Outage)
+          if ((v.color === 'yellow' || v.color === 'red') && oldColor !== v.color) {
+            VendorStatusController.sendChatAlert(v.name, v.color, v.message, v.link);
+          }
+
+          // 2. ถ้าซ่อมเสร็จ เปลี่ยนกลับมาเป็น สีเขียว (Resolved)
+          if (v.color === 'green' && (oldColor === 'yellow' || oldColor === 'red')) {
+            VendorStatusController.sendChatAlert(v.name, "green", "ระบบกลับมาทำงานเป็นปกติแล้ว", v.link);
+          }
+        }
+      });
+
+      // บันทึก Cache
       props.setProperty("VENDOR_STATUS_DATA", JSON.stringify(statuses));
       props.setProperty("VENDOR_LAST_UPDATE_TIME", Date.now().toString());
 
@@ -298,7 +360,6 @@ const VendorStatusController = {
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
 
-      // 1. ดึง Timeline ของ Mux, Akamai
       const urls = [
         { name: "Mux", url: "https://status.mux.com/api/v2/incidents.json" },
         { name: "Akamai", url: "https://www.akamaistatus.com/api/v2/incidents.json" }
@@ -335,7 +396,6 @@ const VendorStatusController = {
         }
       });
 
-      // 2. ดึง Timeline ของ StatusGator (Scraping)
       try {
         const sgRes = UrlFetchApp.fetch("https://statusgatorstatus.com/", { muteHttpExceptions: true });
         if (sgRes.getResponseCode() === 200) {
@@ -370,7 +430,6 @@ const VendorStatusController = {
         }
       } catch (sgErr) { }
 
-      // 3. แกะประวัติ Timeline ของ AWS จาก RSS Feed (กรองเฉพาะเอเชีย)
       try {
         const awsRes = UrlFetchApp.fetch("https://status.aws.amazon.com/rss/all.rss", { muteHttpExceptions: true });
         if (awsRes.getResponseCode() === 200) {
@@ -386,7 +445,6 @@ const VendorStatusController = {
             const pubDateStr = item.getChild('pubDate').getText();
             const desc = item.getChild('description').getText();
 
-            // ✨ เช็คเฉพาะ title เท่านั้น ป้องกันการหลงไปเจอคำในรายละเอียด
             if (apacRegex.test(title)) {
               const d = new Date(pubDateStr);
               if (!isNaN(d.getTime()) && d >= sevenDaysAgo) {

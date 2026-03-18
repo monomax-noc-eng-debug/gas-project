@@ -26,23 +26,40 @@
 
     // 3. Initialize Controllers & Managers
     try {
-      if (typeof Dashboard !== 'undefined' && Dashboard.init) Dashboard.init();
-      if (typeof ReportManager !== 'undefined' && ReportManager.init) ReportManager.init();
-      if (typeof HandoverManager !== 'undefined' && HandoverManager.init) HandoverManager.init();
-      if (typeof TicketManager !== 'undefined' && TicketManager.init) TicketManager.init();
+      if (typeof Dashboard !== "undefined" && Dashboard.init) Dashboard.init();
+      if (typeof ReportManager !== "undefined" && ReportManager.init)
+        ReportManager.init();
+      if (typeof HandoverManager !== "undefined" && HandoverManager.init)
+        HandoverManager.init();
+      if (typeof TicketManager !== "undefined" && TicketManager.init)
+        TicketManager.init();
 
       // ✨ เพิ่มการ Initialze PlaybookManager สำหรับหน้า Service Playbook ✨
-      if (typeof PlaybookManager !== 'undefined' && PlaybookManager.init) PlaybookManager.init();
+      if (typeof PlaybookManager !== "undefined" && PlaybookManager.init)
+        PlaybookManager.init();
 
-      if (typeof EmailFetchManager !== 'undefined' && EmailFetchManager.init) EmailFetchManager.init();
-      if (typeof EmailSendManager !== 'undefined' && EmailSendManager.init) EmailSendManager.init();
-      if (typeof SysSettings !== 'undefined' && SysSettings.init) SysSettings.init();
-      if (typeof ChecklistSettings !== 'undefined' && ChecklistSettings.init) ChecklistSettings.init();
-      if (typeof UsrSettings !== 'undefined' && UsrSettings.init) UsrSettings.init();
-      if (typeof EmailSettings !== 'undefined' && EmailSettings.init) EmailSettings.init();
-      if (typeof TagSettings !== 'undefined' && TagSettings.init) TagSettings.init();
-      if (typeof HistoryManager !== 'undefined' && HistoryManager.init) HistoryManager.init();
-      if (typeof VendorStatusManager !== 'undefined' && VendorStatusManager.init) VendorStatusManager.init();
+      if (typeof EmailFetchManager !== "undefined" && EmailFetchManager.init)
+        EmailFetchManager.init();
+      if (typeof EmailSendManager !== "undefined" && EmailSendManager.init)
+        EmailSendManager.init();
+      if (typeof SysSettings !== "undefined" && SysSettings.init)
+        SysSettings.init();
+      if (typeof ChecklistSettings !== "undefined" && ChecklistSettings.init)
+        ChecklistSettings.init();
+      if (typeof UsrSettings !== "undefined" && UsrSettings.init)
+        UsrSettings.init();
+      if (typeof EmailSettings !== "undefined" && EmailSettings.init)
+        EmailSettings.init();
+      if (typeof TagSettings !== "undefined" && TagSettings.init)
+        TagSettings.init();
+      if (typeof HistoryManager !== "undefined" && HistoryManager.init)
+        HistoryManager.init();
+      if (
+        typeof VendorStatusManager !== "undefined" &&
+        VendorStatusManager.init
+      )
+        VendorStatusManager.init();
+
 
       if (typeof Store !== "undefined" && Store.init) {
         // รอจนกว่าจะดึงข้อมูล User Settings จาก GAS สำเร็จ
@@ -56,17 +73,17 @@
       ) {
         Router.navigateTo(savedLastPage);
       } else {
-        Router.navigateTo("page-dashboard");
+        Router.navigateTo("page-vendor-status");
       }
     } catch (e) {
       console.error("App Init Failed", e);
-      Router.navigateTo("page-dashboard");
+      Router.navigateTo("page-vendor-status");
     } finally {
       isAppReady = true;
       Logger.log("✅ App is fully ready.");
 
       // ✨ ปิด Global Loader (ที่ฝังไว้ใน HTML) เมื่อข้อมูลจากหลังบ้านโหลดเสร็จ
-      if (typeof hideGlobalLoader === 'function') {
+      if (typeof hideGlobalLoader === "function") {
         hideGlobalLoader();
       }
     }

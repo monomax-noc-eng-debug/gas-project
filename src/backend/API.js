@@ -147,14 +147,14 @@ function apiHandler(request) {
     getVendorStatuses: (d) => VendorStatusController.getVendorStatuses(d),
     getVendorTimelineLogs: () => VendorStatusController.getVendorTimelineLogs(),
 
-    // User Settings (ดึงข้อมูล Profile กลับไปให้ Frontend)
+    // User Settings
     getUserSettings: () => {
       const email = Session.getActiveUser().getEmail();
       return JSON.stringify({
         theme: "light",
         profile: {
           email: email,
-          role: "Guest", // Default role
+          role: "Guest",
         },
       });
     },
@@ -178,4 +178,13 @@ function apiHandler(request) {
     success: false,
     error: "Function not found: " + func,
   });
+}
+
+// =================================================================
+// 🤖 ระบบตรวจสอบอัตโนมัติ 24/7 (ทำงานผ่าน Trigger)
+// =================================================================
+function autoCheckVendorStatus() {
+  console.log("เริ่มรัน Auto Check 24/7...");
+  // สั่งให้เช็คสถานะ และถ้ามีเปลี่ยนสีก็ให้ยิงแชทด้วย (ส่ง true เพื่อบังคับดึงข้อมูลใหม่เสมอ)
+  VendorStatusController.getVendorStatuses(true);
 }

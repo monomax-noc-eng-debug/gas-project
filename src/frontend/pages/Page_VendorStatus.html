@@ -1,7 +1,6 @@
 <div id="page-vendor-status"
   class="page-section hidden w-full h-full relative bg-slate-50 overflow-hidden flex flex-col">
 
-  <!-- 💡 Left Side Info Button -->
   <div class="absolute top-4 left-4 z-50">
     <button onclick="document.getElementById('modal-vendor-info').showModal()"
       class="btn btn-sm btn-circle bg-white/50 backdrop-blur border-none shadow-sm hover:bg-white text-slate-500 hover:text-primary transition-all">
@@ -11,7 +10,9 @@
 
   <div class="absolute top-4 right-4 z-50 flex items-center gap-2">
     <button id="btn-refresh-vendor" onclick="VendorStatusManager.loadData(true)"
-      class="btn btn-sm bg-white/50 backdrop-blur border-none shadow-sm hover:bg-white text-slate-700 rounded-full px-4 transition-all">
+      class="btn btn-sm bg-white/50 backdrop-blur border-none shadow-sm hover:bg-white text-slate-700 rounded-full px-4 transition-all flex items-center gap-2">
+      <span id="vendor-countdown"
+        class="text-[10px] font-mono text-primary/70 font-bold bg-primary/5 px-2 py-0.5 rounded-full border border-primary/10">05:00</span>
       <span id="spin-vendor" class="loading loading-spinner loading-xs text-primary hidden"></span>
       <i id="icon-vendor" class="fas fa-sync-alt text-xs"></i>
       <span class="hidden sm:inline text-xs font-bold tracking-wide">อัปเดตข้อมูล</span>
@@ -39,7 +40,6 @@
 
   </div>
 
-  <!-- ℹ️ Info Modal -->
   <dialog id="modal-vendor-info" class="modal modal-bottom sm:modal-middle">
     <div class="modal-box bg-white max-w-2xl p-0 overflow-hidden rounded-2xl shadow-2xl">
       <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
