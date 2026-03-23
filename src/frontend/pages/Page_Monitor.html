@@ -1,0 +1,205 @@
+<!--
+  FILE: Page_Monitor_Tomcat.html
+  DESCRIPTION: หน้า Dashboard แสดงสถานะ Apache Tomcat (Redesigned)
+-->
+<div id="page-monitor"
+  class="page-section hidden w-full h-full relative bg-slate-50 overflow-hidden flex flex-col">
+
+  <!-- ===== Control Header ===== -->
+  <div class="p-3 pb-0 shrink-0">
+    <div
+      class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-200">
+
+      <!-- Title -->
+      <div class="flex items-center gap-3 px-1">
+        <div
+          class="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-500 shrink-0">
+          <i class="fas fa-desktop"></i>
+        </div>
+        <div>
+          <h1 class="text-sm font-black text-slate-800 tracking-tight leading-none">System Monitor</h1>
+          <p class="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest leading-none">
+            Apache Tomcat & Grafana Dashboard
+          </p>
+        </div>
+      </div>
+
+      <!-- Controls & Filters -->
+      <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar-h pb-1 md:pb-0">
+
+        <!-- Live Status Badge (Tomcat) -->
+        <div id="monitor-status-badge"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-slate-50 shadow-inner shrink-0 transition-none">
+          <span id="monitor-status-dot" class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+          <span id="monitor-status-text" class="text-[10px] font-black tracking-widest text-slate-500">LOADING</span>
+        </div>
+
+        <div class="w-px h-5 bg-slate-200 mx-1 shrink-0"></div>
+
+        <!-- Time Filters -->
+        <div class="flex p-0.5 bg-slate-100/80 rounded-lg border border-slate-200/60 shrink-0">
+          <button onclick="Monitor.setTimeFilter('5m')" id="btn-filter-5m"
+            class="monitor-filter btn btn-xs border-0 h-6 min-h-0 px-2.5 rounded-md text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-transparent shadow-none">5
+            นาที</button>
+          <button onclick="Monitor.setTimeFilter('30m')" id="btn-filter-30m"
+            class="monitor-filter btn btn-xs border-0 h-6 min-h-0 px-2.5 rounded-md text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-transparent shadow-none">30
+            นาที</button>
+          <button onclick="Monitor.setTimeFilter('1h')" id="btn-filter-1h"
+            class="monitor-filter btn btn-xs border-0 h-6 min-h-0 px-2.5 rounded-md text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-transparent shadow-none">1
+            ชม.</button>
+          <button onclick="Monitor.setTimeFilter('4h')" id="btn-filter-4h"
+            class="monitor-filter btn btn-xs border-0 h-6 min-h-0 px-2.5 rounded-md text-[10px] font-bold text-slate-800 bg-white shadow-sm">4
+            ชม.</button>
+        </div>
+
+        <div class="w-px h-5 bg-slate-200 mx-1 shrink-0 hidden sm:block"></div>
+
+        <!-- Refresh Button -->
+        <button id="btn-refresh-monitor" onclick="Monitor.load(true)"
+          class="btn btn-xs btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-400 gap-1.5 px-3 h-7 min-h-0 transition-none flex items-center shrink-0">
+          <span class="loading loading-spinner loading-xs text-slate-500"></span>
+          <i class="fas fa-sync-alt text-[10px] text-primary"></i>
+          <span class="hidden sm:inline text-[10px] font-bold tracking-wide">โหลดใหม่</span>
+        </button>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Main Content Area ===== -->
+  <div class="flex-1 w-full p-3 flex flex-col gap-3 overflow-y-auto custom-scrollbar pb-10">
+
+    <!-- ===== KPI Cards ===== -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+      <!-- Card 1: HTTP Status -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-4 opacity-10 text-emerald-600 text-4xl"><i class="fas fa-check-circle"></i>
+        </div>
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">HTTP Status</p>
+        <div class="flex items-baseline gap-1">
+          <p id="monitor-stat-status" class="text-3xl font-black text-emerald-600 tracking-tight">--</p>
+        </div>
+      </div>
+
+      <!-- Card 2: Last Response -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-4 opacity-10 text-slate-800 text-4xl"><i class="fas fa-stopwatch"></i>
+        </div>
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Response ล่าสุด</p>
+        <div class="flex items-baseline gap-1">
+          <p id="monitor-stat-response" class="text-3xl font-black text-slate-800 tracking-tight">--</p>
+          <span class="text-xs font-bold text-slate-400">ms</span>
+        </div>
+      </div>
+
+      <!-- Card 3: Uptime (4 hr) -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-4 opacity-10 text-emerald-800 text-4xl"><i class="fas fa-shield-check"></i>
+        </div>
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ความเสถียร (4 ชม.)</p>
+        <div class="flex items-baseline gap-1">
+          <p id="monitor-stat-uptime" class="text-3xl font-black text-emerald-600 tracking-tight">--</p>
+          <span class="text-xs font-bold text-slate-400">%</span>
+        </div>
+      </div>
+
+      <!-- Card 4: Avg Response -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-4 opacity-10 text-sky-800 text-4xl"><i class="fas fa-wave-square"></i>
+        </div>
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Response เฉลี่ย</p>
+        <div class="flex items-baseline gap-1">
+          <p id="monitor-stat-avg" class="text-3xl font-black text-slate-800 tracking-tight">--</p>
+          <span class="text-xs font-bold text-slate-400">ms</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== Chart Section : Tomcat ===== -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+          <i class="fas fa-chart-line"></i> Tomcat Response Performance
+        </h2>
+        <p id="monitor-last-updated"
+          class="text-[10px] font-bold text-slate-400">
+          รอการอัปเดต...
+        </p>
+      </div>
+      <div class="relative w-full" style="height: 350px;">
+        <canvas id="monitor-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- ===== Chart Section : Grafana Response Duration ===== -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xs font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
+          <i class="fas fa-bolt"></i> Global Response Durations (s)
+        </h2>
+      </div>
+      <div class="relative w-full" style="height: 350px;">
+        <canvas id="grafana-dur-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- ===== Chart Section : Grafana Error Rates ===== -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
+          <i class="fas fa-exclamation-triangle"></i> Global Error Rates (%)
+        </h2>
+      </div>
+      <div class="relative w-full" style="height: 350px;">
+        <canvas id="grafana-err-chart"></canvas>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!--
+  ===== Scoped Styles =====
+  Status Badge variants using Tailwind palette
+-->
+<style>
+  #monitor-status-badge.badge-loading {
+    border-color: #e2e8f0;
+  }
+
+  #monitor-status-badge.badge-loading #monitor-status-text {
+    color: #64748b;
+  }
+
+  #monitor-status-badge.badge-loading #monitor-status-dot {
+    background: #cbd5e1;
+  }
+
+  #monitor-status-badge.badge-online {
+    border-color: #a7f3d0;
+    background: #f0fdf4;
+  }
+
+  #monitor-status-badge.badge-online #monitor-status-text {
+    color: #059669;
+  }
+
+  #monitor-status-badge.badge-online #monitor-status-dot {
+    background: #10b981;
+  }
+
+  #monitor-status-badge.badge-offline {
+    border-color: #fecdd3;
+    background: #fff1f2;
+  }
+
+  #monitor-status-badge.badge-offline #monitor-status-text {
+    color: #e11d48;
+  }
+
+  #monitor-status-badge.badge-offline #monitor-status-dot {
+    background: #f43f5e;
+  }
+</style>

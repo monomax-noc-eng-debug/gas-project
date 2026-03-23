@@ -1,0 +1,100 @@
+<script>
+  window.MonitorSettings = (() => {
+    let _full = {}; // full config object
+    let _loaded = false;
+    const el = id => document.getElementById(id);
+
+    return {
+      init() {
+        if (typeof Router !== "undefined") {
+          Router.register("page-settings-monitor", this);
+        }
+      },
+
+      onShow() {
+        Logger.log('📄 MonitorSettings: onShow');
+        if (!_loaded) this.loadData();
+      },
+
+      loadData(force) {
+        let btnRefresh = el('btn-refresh-settings-monitor');
+        if (btnRefresh) btnRefresh.classList.add('is-loading');
+
+        // ✨ Switch to Skeleton Loading
+        const skeleton = el('mon-skeleton');
+        const form = el('mon-form-container');
+        if (skeleton) skeleton.classList.remove('hidden');
+        if (form) form.classList.add('hidden');
+
+        Server.call({ func: "apiGetAllSettings", silent: true })
+          .then(r => {
+            if (r.success && r.data) {
+              _full = r.data;
+              const mon = r.data.monitorSettings || {};
+              
+              const setV = (id, val) => { if (el(id)) el(id).value = val; };
+              setV('mon-interval-min', mon.MON_CHECK_INTERVAL_MIN || '5');
+              setV('mon-grafana-interval-sec', mon.MON_GRAFANA_INTERVAL_SEC || '3');
+              setV('mon-throttle-min', mon.MON_ALERT_THROTTLE_MIN || '15');
+              setV('mon-tomcat-throttle-min', mon.MON_TOMCAT_ALERT_THROTTLE_MIN || '60');
+              setV('mon-threshold-elb', mon.MON_THRESHOLD_ELB_SEC || '0.5');
+              setV('mon-threshold-elb-listener', mon.MON_THRESHOLD_ELB_LISTENER_SEC || '0.5');
+              setV('mon-threshold-www5xx', mon.MON_THRESHOLD_WWW_5XX_PCT || '5.0');
+              setV('mon-threshold-vod5xx', mon.MON_THRESHOLD_VOD_5XX_PCT || '5.0');
+              setV('mon-threshold-vod4xx', mon.MON_THRESHOLD_VOD_4XX_PCT || '5.0');
+              
+              _loaded = true;
+              if (force) UIManager.showToast("โหลดสำเร็จ", "success");
+
+              // ✨ Show Form, Hide Skeleton
+              if (skeleton) skeleton.classList.add('hidden');
+              if (form) form.classList.remove('hidden');
+            } else {
+              UIManager.showToast(r.message || "Load Error", "error");
+            }
+          })
+          .catch(e => {
+            UIManager.showToast("Connection Error", "error");
+            // If error, maybe show form anyway or keep skeleton?
+            // Let's hide skeleton so it's not stuck
+            if (skeleton) skeleton.classList.add('hidden');
+          })
+          .finally(() => {
+            if (btnRefresh) btnRefresh.classList.remove('is-loading');
+          });
+      },
+
+      saveAll() {
+        const getV = id => (el(id) || {}).value || '';
+        
+        UIManager.showLoading("กำลังบันทึกตั้งค่า Monitor...");
+        const payload = { 
+          ..._full, 
+          monitorSettings: {
+            MON_CHECK_INTERVAL_MIN: getV('mon-interval-min'),
+            MON_GRAFANA_INTERVAL_SEC: getV('mon-grafana-interval-sec'),
+            MON_ALERT_THROTTLE_MIN: getV('mon-throttle-min'),
+            MON_TOMCAT_ALERT_THROTTLE_MIN: getV('mon-tomcat-throttle-min'),
+            MON_THRESHOLD_ELB_SEC: getV('mon-threshold-elb'),
+            MON_THRESHOLD_ELB_LISTENER_SEC: getV('mon-threshold-elb-listener'),
+            MON_THRESHOLD_WWW_5XX_PCT: getV('mon-threshold-www5xx'),
+            MON_THRESHOLD_VOD_5XX_PCT: getV('mon-threshold-vod5xx'),
+            MON_THRESHOLD_VOD_4XX_PCT: getV('mon-threshold-vod4xx')
+          }
+        };
+
+        Server.call({ func: "apiSaveAllSettings", silent: true }, payload)
+          .then(r => { 
+            if (r.success) {
+              UIManager.showToast("บันทึกตั้งค่า Monitor สำเร็จ", "success");
+              _full = payload; // Update local snapshot
+            } else {
+              UIManager.showToast(r.message || "Save Error", "error");
+            }
+          })
+          .catch(e => UIManager.showToast("Connection Error", "error"))
+          .finally(() => UIManager.hideLoading());
+      }
+    };
+  })();
+</script>

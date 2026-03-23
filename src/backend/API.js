@@ -164,6 +164,9 @@ function apiHandler(request) {
     getRoutineProfiles: () => RoutineProfileController.getRoutineProfiles(),
     deleteRoutineProfile: (d) => RoutineProfileController.deleteRoutineProfile(d.profileName),
     setAutoLoadRoutineProfile: (d) => RoutineProfileController.setAutoLoad(d.profileName, d.isEnabled),
+
+    // Grafana Monitoring
+    getGrafanaChartData: () => getGrafanaChartData(),
   };
 
   if (apiMap[func]) {

@@ -1,0 +1,235 @@
+<div id="page-settings-monitor"
+  class="page-section hidden w-full h-full relative bg-base-200 overflow-hidden flex flex-col p-3 gap-2">
+
+  <!-- Header -->
+  <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-base-300 shrink-0">
+    <div class="flex items-center gap-2">
+      <div class="bg-rose-50 p-1.5 rounded-lg text-rose-500"><i class="fas fa-bell text-sm"></i></div>
+      <div class="hidden sm:block">
+        <h2 class="text-xs font-bold text-gray-800">ตั้งค่า Monitor & Alerts</h2>
+      </div>
+    </div>
+    <div class="flex items-center gap-1.5 ml-auto">
+      <button id="btn-refresh-settings-monitor" onclick="MonitorSettings.loadData(true)"
+        class="btn btn-xs btn-outline border-slate-300 text-slate-600 hover:bg-slate-100 hover:text-slate-800 hover:border-slate-400 gap-1.5 px-3">
+        <span class="loading loading-spinner loading-xs text-slate-500"></span>
+        <i class="fas fa-sync-alt text-[10px]"></i>
+        <span class="hidden sm:inline text-[11px] font-semibold">โหลดใหม่</span>
+      </button>
+      <button id="mon-btn-save" onclick="MonitorSettings.saveAll()"
+        class="btn btn-xs btn-primary text-white shadow-sm gap-1.5 px-3 hover:shadow-md">
+        <i class="fas fa-save text-[10px]"></i>
+        <span class="hidden sm:inline text-[11px] font-semibold">บันทึกตั้งค่า</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Content Card -->
+  <div class="flex-1 bg-white rounded-xl shadow-sm border border-base-200 p-6 overflow-y-auto">
+    
+    <!-- Skeleton Loading -->
+    <div id="mon-skeleton" class="max-w-2xl mx-auto space-y-12">
+      <div class="space-y-4">
+        <div class="flex items-center gap-3 border-b pb-3">
+          <div class="w-10 h-10 bg-slate-100 rounded-lg skeleton"></div>
+          <div class="space-y-2">
+            <div class="h-4 w-32 bg-slate-100 rounded skeleton"></div>
+            <div class="h-3 w-48 bg-slate-50 rounded skeleton"></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div class="space-y-2"><div class="h-3 w-20 bg-slate-100 rounded skeleton"></div><div class="h-10 w-full bg-slate-50 rounded-lg skeleton"></div></div>
+          <div class="space-y-2"><div class="h-3 w-20 bg-slate-100 rounded skeleton"></div><div class="h-10 w-full bg-slate-50 rounded-lg skeleton"></div></div>
+        </div>
+      </div>
+      <div class="space-y-4">
+        <div class="flex items-center gap-3 border-b pb-3">
+          <div class="w-10 h-10 bg-slate-100 rounded-lg skeleton"></div>
+          <div class="space-y-2">
+            <div class="h-4 w-32 bg-slate-100 rounded skeleton"></div>
+            <div class="h-3 w-48 bg-slate-50 rounded skeleton"></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div class="space-y-2"><div class="h-3 w-20 bg-slate-100 rounded skeleton"></div><div class="h-10 w-full bg-slate-50 rounded-lg skeleton"></div></div>
+          <div class="space-y-2"><div class="h-3 w-20 bg-slate-100 rounded skeleton"></div><div class="h-10 w-full bg-slate-50 rounded-lg skeleton"></div></div>
+          <div class="space-y-2"><div class="h-3 w-20 bg-slate-100 rounded skeleton"></div><div class="h-10 w-full bg-slate-50 rounded-lg skeleton"></div></div>
+          <div class="space-y-2"><div class="h-3 w-20 bg-slate-100 rounded skeleton"></div><div class="h-10 w-full bg-slate-50 rounded-lg skeleton"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Form Container (Initially Hidden) -->
+    <div id="mon-form-container" class="hidden max-w-2xl mx-auto space-y-8">
+      
+      <!-- Section 1: General Options -->
+      <div class="space-y-4">
+        <div class="flex items-center gap-3 border-b pb-3">
+          <div class="bg-rose-100 p-2 rounded-lg text-rose-500"><i class="fas fa-cog text-lg"></i></div>
+          <div>
+            <h3 class="font-bold text-gray-800 text-sm">ทั่วไป (General)</h3>
+            <p class="text-[10px] text-gray-400 font-medium tracking-tight">กำหนดความถี่และเงื่อนไขพื้นฐานของการตรวจสอบ</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Tomcat Check Interval -->
+          <div class="form-control">
+            <label class="label pb-1">
+              <span class="label-text font-black text-[10px] uppercase tracking-wider text-slate-500">Tomcat Check Interval</span>
+            </label>
+            <div class="join w-full">
+              <input type="number" id="mon-interval-min" step="1" min="1" class="input input-bordered input-sm join-item w-full font-bold" placeholder="5">
+              <span class="btn btn-sm join-item no-animation bg-slate-50 border-slate-300">min</span>
+            </div>
+            <label class="label py-0">
+              <span class="label-text-alt text-slate-400 italic">ความถี่ตรวจสอบสถานะ Tomcat (192.168.13.13:8080)</span>
+            </label>
+          </div>
+
+          <!-- Grafana Scrape Interval -->
+          <div class="form-control">
+            <label class="label pb-1">
+              <span class="label-text font-black text-[10px] uppercase tracking-wider text-slate-500">Grafana Scrape Interval</span>
+            </label>
+            <div class="join w-full">
+              <input type="number" id="mon-grafana-interval-sec" step="1" min="1" class="input input-bordered input-sm join-item w-full font-bold" placeholder="3">
+              <span class="btn btn-sm join-item no-animation bg-slate-50 border-slate-300">sec</span>
+            </div>
+            <label class="label py-0">
+              <span class="label-text-alt text-slate-400 italic">ความถี่ดึงข้อมูลจาก Grafana Dashboard</span>
+            </label>
+          </div>
+
+          <!-- Alert Cooldown -->
+          <div class="form-control">
+            <label class="label pb-1">
+              <span class="label-text font-black text-[10px] uppercase tracking-wider text-slate-500">Grafana Alert Cooldown</span>
+            </label>
+            <div class="join w-full">
+              <input type="number" id="mon-throttle-min" step="1" min="0" class="input input-bordered input-sm join-item w-full font-bold" placeholder="15">
+              <span class="btn btn-sm join-item no-animation bg-slate-50 border-slate-300">min</span>
+            </div>
+            <label class="label py-0">
+              <span class="label-text-alt text-slate-400 italic">ระยะเวลารอระหว่างการแจ้งเตือน Grafana (Throttling)</span>
+            </label>
+          </div>
+
+          <!-- Tomcat Alert Cooldown -->
+          <div class="form-control">
+            <label class="label pb-1">
+              <span class="label-text font-black text-[10px] uppercase tracking-wider text-slate-500">Tomcat Alert Cooldown</span>
+            </label>
+            <div class="join w-full">
+              <input type="number" id="mon-tomcat-throttle-min" step="1" min="0" class="input input-bordered input-sm join-item w-full font-bold" placeholder="60">
+              <span class="btn btn-sm join-item no-animation bg-slate-50 border-slate-300">min</span>
+            </div>
+            <label class="label py-0">
+              <span class="label-text-alt text-slate-400 italic">ระยะเวลารอระหว่างการแจ้งเตือน Tomcat ใน Google Chat</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Performance Thresholds -->
+      <div class="space-y-4">
+        <div class="flex items-center gap-3 border-b pb-3">
+          <div class="bg-amber-100 p-2 rounded-lg text-amber-500"><i class="fas fa-gauge-high text-lg"></i></div>
+          <div>
+            <h3 class="font-bold text-gray-800 text-sm">เกณฑ์ประสิทธิภาพ (Performance Thresholds)</h3>
+            <p class="text-[10px] text-gray-400 font-medium tracking-tight">กำหนดจุดที่จะเริ่มส่งสัญญาณเตือนภัย (Alerts)</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Response Time Threshold (monomax.me, www.monomax.me) -->
+          <div class="form-control">
+            <label class="label pb-1">
+              <span class="label-text font-black text-[10px] uppercase tracking-wider text-slate-500">Response Time Threshold</span>
+            </label>
+            <div class="join w-full">
+              <input type="number" id="mon-threshold-elb" step="0.1" class="input input-bordered input-sm join-item w-full font-bold" placeholder="0.5">
+              <span class="btn btn-sm join-item no-animation bg-slate-50 border-slate-300">sec</span>
+            </div>
+            <label class="label py-0">
+              <span class="label-text-alt text-slate-400 italic">เกณฑ์เวลาตอบสนองสูงสุด (monomax.me, www.monomax.me)</span>
+            </label>
+          </div>
+
+          <!-- ELB Listener Response Time Threshold -->
+          <div class="form-control">
+            <label class="label pb-1">
+              <span class="label-text font-black text-[10px] uppercase tracking-wider text-slate-500">ELB Listener Response Time</span>
+            </label>
+            <div class="join w-full">
+              <input type="number" id="mon-threshold-elb-listener" step="0.1" class="input input-bordered input-sm join-item w-full font-bold" placeholder="0.5">
+              <span class="btn btn-sm join-item no-animation bg-slate-50 border-slate-300">sec</span>
+            </div>
+            <label class="label py-0">
+              <span class="label-text-alt text-slate-400 italic">เกณฑ์เวลาตอบสนองสูงสุดสำหรับ ELB listener-https</span>
+            </label>
+          </div>
+
+          <!-- WWW-API 5xx Error Rate -->
+          <div class="form-control">
+            <label class="label pb-1">
+              <span class="label-text font-black text-[10px] uppercase tracking-wider text-slate-500">WWW-API 5xx Error Rate</span>
+            </label>
+            <div class="join w-full">
+              <input type="number" id="mon-threshold-www5xx" step="0.1" class="input input-bordered input-sm join-item w-full font-bold" placeholder="5.0">
+              <span class="btn btn-sm join-item no-animation bg-slate-50 border-slate-300">%</span>
+            </div>
+            <label class="label py-0">
+              <span class="label-text-alt text-slate-400 italic">เกณฑ์อัตราความผิดพลาด 5xx ของ WWW-API</span>
+            </label>
+          </div>
+
+          <!-- VOD 5xx Error Rate -->
+          <div class="form-control">
+            <label class="label pb-1">
+              <span class="label-text font-black text-[10px] uppercase tracking-wider text-slate-500">VOD 5xx Error Rate</span>
+            </label>
+            <div class="join w-full">
+              <input type="number" id="mon-threshold-vod5xx" step="0.1" class="input input-bordered input-sm join-item w-full font-bold" placeholder="5.0">
+              <span class="btn btn-sm join-item no-animation bg-slate-50 border-slate-300">%</span>
+            </div>
+            <label class="label py-0">
+              <span class="label-text-alt text-slate-400 italic">เกณฑ์อัตราความผิดพลาด 5xx ของ VOD</span>
+            </label>
+          </div>
+
+          <!-- VOD 4xx Error Rate -->
+          <div class="form-control">
+            <label class="label pb-1">
+              <span class="label-text font-black text-[10px] uppercase tracking-wider text-slate-500">VOD 4xx Error Rate</span>
+            </label>
+            <div class="join w-full">
+              <input type="number" id="mon-threshold-vod4xx" step="0.1" class="input input-bordered input-sm join-item w-full font-bold" placeholder="5.0">
+              <span class="btn btn-sm join-item no-animation bg-slate-50 border-slate-300">%</span>
+            </div>
+            <label class="label py-0">
+              <span class="label-text-alt text-slate-400 italic">เกณฑ์อัตราความผิดพลาด 4xx ของ VOD</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Info Box -->
+      <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 flex gap-4">
+        <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 shrink-0">
+          <i class="fas fa-info-circle"></i>
+        </div>
+        <div>
+          <h4 class="text-sm font-bold text-indigo-900 mb-1">เกี่ยวกับระบบ Monitor Alerts</h4>
+          <p class="text-[11px] text-indigo-700 leading-relaxed mb-1">
+            ค่าเหล่านี้จะถูกใช้เป็นเกณฑ์ตัดสินใจ (Thresholds) อ้างอิงกับข้อมูลที่ Scrape มาจาก Grafana และการเช็คสถานะ Tomcat
+          </p>
+          <p class="text-[11px] text-indigo-600 font-medium">
+            <i class="fas fa-check-circle mr-1 opacity-70"></i> หากมีค่าใดเกินกำหนด ระบบจะส่ง Notification เข้ากลุ่ม LINE/Chat ทันที
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

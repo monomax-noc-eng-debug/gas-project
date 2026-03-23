@@ -1,0 +1,421 @@
+<!--
+  FILE: JS_Monitor_Tomcat.html
+  DESCRIPTION: JavaScript Logic สำหรับหน้า Monitor Tomcat
+  Dependencies: Chart.js (โหลดจาก CDN หรือ Bundle หลัก), Server.call(), Router (ของโปรเจกต์)
+-->
+
+<script>
+// =============================================================================
+// MonitorTomcat Module
+// =============================================================================
+const Monitor = (() => {
+
+  // --------------------------------------------------------------------------
+  // Private State
+  // --------------------------------------------------------------------------
+  let _chart         = null;   // Chart.js instance (Tomcat)
+  let _durChart      = null;   // Grafana Durations
+  let _errChart      = null;   // Grafana Error Rates
+  let _refreshTimer  = null;   // setInterval handle สำหรับ auto-refresh
+  let _rawData       = [];     // ข้อมูลทั้งหมดจากหน้าบ้าน
+  let _currentFilter = '4h';   // ค่าเริ่มต้น 4 ชั่วโมง
+  const REFRESH_MS   = 5 * 60 * 1000; // 5 นาที
+
+  // --------------------------------------------------------------------------
+  // Chart Configuration
+  // --------------------------------------------------------------------------
+  const CHART_COLORS = {
+    online  : '#10b981', // emerald-500
+    offline : '#f43f5e', // rose-500
+    gridLine: '#f1f5f9', // slate-100
+    label   : '#94a3b8', // slate-400
+    line    : '#64748b', // slate-500
+    fillTop : 'rgba(100,116,139,0.08)',
+    fillBot : 'rgba(100,116,139,0.00)',
+  };
+
+  // --------------------------------------------------------------------------
+  // _initChart : สร้างกราฟครั้งแรก หรือ reset ถ้ามีอยู่แล้ว
+  // --------------------------------------------------------------------------
+  function _initChart(labels, values, pointColors) {
+    const ctx = document.getElementById('monitor-chart');
+    if (!ctx) return;
+
+    if (_chart) {
+      _chart.destroy();
+      _chart = null;
+    }
+
+    _chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label           : 'Response Time (ms)',
+          data            : values,
+          borderColor     : CHART_COLORS.line,
+          borderWidth     : 1.5,
+          pointRadius     : 3,
+          pointBackgroundColor : pointColors,
+          pointBorderWidth: 0,
+          tension         : 0,   // เส้นตรง ไม่โค้ง
+          fill            : true,
+          backgroundColor : (ctx) => {
+            const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, ctx.chart.height);
+            gradient.addColorStop(0, CHART_COLORS.fillTop);
+            gradient.addColorStop(1, CHART_COLORS.fillBot);
+            return gradient;
+          },
+        }]
+      },
+      options: {
+        animation    : false,          // ปิด animation อย่างเด็ดขาด
+        responsive   : true,
+        maintainAspectRatio: false,
+        interaction  : { mode: 'index', intersect: false },
+        plugins: {
+          legend : { display: false },
+          tooltip: {
+            backgroundColor: '#1e293b',
+            titleColor     : '#94a3b8',
+            bodyColor      : '#f8fafc',
+            borderColor    : '#334155',
+            borderWidth    : 1,
+            padding        : 10,
+            callbacks: {
+              title : (items) => items[0].label,
+              label : (item) => {
+                const val = item.raw;
+                return val === null ? ' OFFLINE' : ` ${val} ms`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              color    : CHART_COLORS.label,
+              font     : { size: 10 },
+              maxTicksLimit: 12,
+              maxRotation: 0,
+            },
+            grid: { display: false },
+            border: { color: '#e2e8f0' }
+          },
+          y: {
+            beginAtZero : false,
+            ticks: {
+              color    : CHART_COLORS.label,
+              font     : { size: 10 },
+              callback : (v) => v === null ? '' : `${v}`
+            },
+            grid: {
+              color       : CHART_COLORS.gridLine,
+              drawBorder  : false,
+            },
+            border: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // _updateBadge : อัปเดต Status Badge (Tomcat)
+  // --------------------------------------------------------------------------
+  function _updateBadge(isOnline, responseTime) {
+    const badge    = document.getElementById('monitor-status-badge');
+    const textEl   = document.getElementById('monitor-status-text');
+    if (!badge || !textEl) return;
+
+    badge.className = ''; // reset classes
+    badge.classList.add('flex', 'items-center', 'gap-2', 'px-3', 'py-1.5', 'rounded', 'border', 'text-xs', 'font-semibold', 'tracking-widest', 'select-none');
+
+    if (isOnline) {
+      badge.classList.add('badge-online');
+      textEl.textContent = responseTime != null ? `NORMAL  ${responseTime} ms` : 'NORMAL';
+    } else {
+      badge.classList.add('badge-offline');
+      textEl.textContent = 'OFFLINE';
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // _updateStats : อัปเดต Stat Cards
+  // --------------------------------------------------------------------------
+  function _updateStats(data) {
+    const last       = data[data.length - 1];
+    const onlineRows = data.filter(d => d.isOnline);
+
+    // HTTP Status
+    const statusEl = document.getElementById('monitor-stat-status');
+    if (statusEl) {
+      const statusCode = last?.statusCode || '--';
+      statusEl.textContent = statusCode;
+      // เปลี่ยนสีตาม status code
+      statusEl.className = 'text-3xl font-black tracking-tight';
+      if (statusCode == 200) {
+        statusEl.classList.add('text-emerald-600');
+      } else if (statusCode >= 500) {
+        statusEl.classList.add('text-rose-600');
+      } else if (statusCode >= 400) {
+        statusEl.classList.add('text-amber-600');
+      } else {
+        statusEl.classList.add('text-slate-600');
+      }
+    }
+
+    // Last Response
+    const respEl = document.getElementById('monitor-stat-response');
+    if (respEl) respEl.textContent = last?.isOnline ? last.responseTime : '--';
+
+    // Uptime %
+    const uptimeEl = document.getElementById('monitor-stat-uptime');
+    if (uptimeEl) {
+      const pct = data.length > 0 ? ((onlineRows.length / data.length) * 100).toFixed(1) : '--';
+      uptimeEl.textContent = pct;
+    }
+
+    // Avg Response
+    const avgEl = document.getElementById('monitor-stat-avg');
+    if (avgEl) {
+      if (onlineRows.length === 0) {
+        avgEl.textContent = '--';
+      } else {
+        const avg = onlineRows.reduce((s, d) => s + (d.responseTime || 0), 0) / onlineRows.length;
+        avgEl.textContent = Math.round(avg);
+      }
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // setTimeFilter : เปลี่ยนช่วงเวลาที่แสดงผล
+  // --------------------------------------------------------------------------
+  function setTimeFilter(filter) {
+    if (_currentFilter === filter) return;
+    _currentFilter = filter;
+    
+    // อัปเดต UI ปุ่ม
+    document.querySelectorAll('.monitor-filter').forEach(btn => {
+      btn.classList.remove('text-slate-800', 'bg-white', 'shadow-sm');
+      btn.classList.add('text-slate-500', 'bg-transparent');
+    });
+    
+    const activeBtn = document.getElementById(`btn-filter-${filter}`);
+    if (activeBtn) {
+      activeBtn.classList.remove('text-slate-500', 'bg-transparent');
+      activeBtn.classList.add('text-slate-800', 'bg-white', 'shadow-sm');
+    }
+
+    // เรนเดอร์ใหม่ด้วยข้อมูลที่มีอยู่
+    _render(_rawData);
+  }
+
+  // --------------------------------------------------------------------------
+  // _filterData : กรองข้อมูลตามระยะเวลาที่เลือก (ถอยหลังจากจุดล่าสุด)
+  // --------------------------------------------------------------------------
+  function _filterData(data) {
+    if (!data || data.length === 0) return [];
+    
+    // เวลาของรายการล่าสุด (สมมติว่าเป็นเวลาปัจจุบันสุดของชุดข้อมูล)
+    const latestTime = new Date(data[data.length - 1].timestamp).getTime();
+    
+    let msToKeep = 4 * 60 * 60 * 1000; // 4h default
+    if (_currentFilter === '5m')  msToKeep = 5 * 60 * 1000;
+    if (_currentFilter === '30m') msToKeep = 30 * 60 * 1000;
+    if (_currentFilter === '1h')  msToKeep = 60 * 60 * 1000;
+
+    const cutoffTime = latestTime - msToKeep;
+    return data.filter(d => new Date(d.timestamp).getTime() >= cutoffTime);
+  }
+
+  // --------------------------------------------------------------------------
+  // _render : กรอง > วาดกราฟ > อัปเดต UI จาก raw data
+  // --------------------------------------------------------------------------
+  function _render(rawData) {
+    // กรองข้อมูลเฉพาะช่วงเวลาที่เลือก
+    const data = _filterData(rawData);
+
+    if (!data || data.length === 0) {
+      _initChart(['No data'], [null], [CHART_COLORS.label]);
+      _updateStats([]);
+      return;
+    }
+
+    const labels      = data.map(d => _formatTime(d.timestamp));
+    const values      = data.map(d => d.isOnline ? (d.responseTime ?? 0) : null);
+    const pointColors = data.map(d => d.isOnline ? CHART_COLORS.online : CHART_COLORS.offline);
+
+    _initChart(labels, values, pointColors);
+
+    // badge ใช้ข้อมูล raw ล่าสุดเสมอ (ไม่ขึ้นกับ filter)
+    const lastRaw = rawData[rawData.length - 1];
+    _updateBadge(lastRaw?.isOnline, lastRaw?.responseTime);
+    
+    _updateStats(data);
+
+    const lastUpdatedEl = document.getElementById('monitor-last-updated');
+    if (lastUpdatedEl) {
+      lastUpdatedEl.textContent = `อัปเดต: ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // _formatTime : แปลง ISO timestamp เป็น HH:MM
+  // --------------------------------------------------------------------------
+  function _formatTime(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return iso;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // load (Public) : ดึงข้อมูลจาก GAS แล้ว render
+  // --------------------------------------------------------------------------
+  function load(isManual = false) {
+    // ถ้ากด Request แบบ Manual ให้แสดง loading spinner
+    const btnRefresh = document.getElementById('btn-refresh-monitor');
+    if (btnRefresh) {
+      const spinner = btnRefresh.querySelector('.loading');
+      const icon = btnRefresh.querySelector('i');
+      if (spinner) spinner.classList.add('is-loading');
+      if (icon) icon.classList.add('hidden');
+    }
+
+    Server.call({ func: 'getTomcatLogs', silent: true })
+      .then(res => {
+        // ซ่อน loading spinner
+        if (btnRefresh) {
+          const spinner = btnRefresh.querySelector('.loading');
+          const icon = btnRefresh.querySelector('i');
+          if (spinner) spinner.classList.remove('is-loading');
+          if (icon) icon.classList.remove('hidden');
+        }
+
+        if (res?.success && Array.isArray(res.data)) {
+          _rawData = res.data; // เก็บข้อมูลทั้งหมดไว้
+          _render(_rawData);
+        }
+        
+        // --- Fetch Grafana Chart Data ---
+        return Server.call({ func: 'getGrafanaChartData', silent: true });
+      })
+      .then(res => {
+        if (res?.success) {
+          _renderGrafanaCharts(res);
+        }
+      })
+      .catch(err => {
+        // ซ่อน loading spinner กรณี error
+        if (btnRefresh) {
+          const spinner = btnRefresh.querySelector('.loading');
+          const icon = btnRefresh.querySelector('i');
+          if (spinner) spinner.classList.remove('is-loading');
+          if (icon) icon.classList.remove('hidden');
+        }
+        console.error('[Monitor] load error:', err);
+      });
+  }
+
+  function _renderGrafanaCharts(res) {
+    const durCtx = document.getElementById('grafana-dur-chart');
+    const errCtx = document.getElementById('grafana-err-chart');
+    if (!durCtx || !errCtx) return;
+
+    if (_durChart) _durChart.destroy();
+    if (_errChart) _errChart.destroy();
+
+    // Chart Options Common
+    const commonOpts = {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 9 } } } },
+      scales: { 
+        x: { ticks: { font: { size: 9 }, color: CHART_COLORS.label, maxTicksLimit: 14 }, grid: { display: false } },
+        y: { ticks: { font: { size: 9 }, color: CHART_COLORS.label }, grid: { color: CHART_COLORS.gridLine } }
+      }
+    };
+
+    // Duration Chart (Line)
+    _durChart = new Chart(durCtx, {
+      type: 'line',
+      data: {
+        labels: res.labels,
+        datasets: [
+          { label: 'monomax.me', data: res.durMono, borderColor: '#f43f5e', borderWidth: 1.5, radius: 0, tension: 0.1 },
+          { label: 'www.monomax.me', data: res.durWWW, borderColor: '#6366f1', borderWidth: 1.5, radius: 0, tension: 0.1 },
+          { label: 'ELB Listener', data: res.durELB, borderColor: '#10b981', borderWidth: 1.5, radius: 0, tension: 0.1 }
+        ]
+      },
+      options: commonOpts
+    });
+
+    // Error Rate Chart (Line Area)
+    _errChart = new Chart(errCtx, {
+      type: 'line',
+      data: {
+        labels: res.labels,
+        datasets: [
+          { label: 'WWW-API 5xx', data: res.errWWW, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, borderWidth: 1.5, radius: 0 },
+          { label: 'VOD 5xx', data: res.errVOD, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, borderWidth: 1.5, radius: 0 },
+          { label: 'VOD 4xx', data: res.errVOD4xx, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, borderWidth: 1.5, radius: 0 }
+        ]
+      },
+      options: commonOpts
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // init (Public) : เรียกตอนหน้าถูก mount
+  // --------------------------------------------------------------------------
+  function init() {
+    // Set badge to loading state
+    const badge = document.getElementById('monitor-status-badge');
+    if (badge) {
+      badge.className = '';
+      badge.classList.add('flex', 'items-center', 'gap-2', 'px-3', 'py-1.5', 'rounded', 'border', 'text-xs', 'font-semibold', 'tracking-widest', 'select-none', 'badge-loading');
+      const textEl = document.getElementById('monitor-status-text');
+      if (textEl) textEl.textContent = 'LOADING';
+    }
+
+    load();
+
+    // Auto-refresh ทุก 5 นาที
+    if (_refreshTimer) clearInterval(_refreshTimer);
+    _refreshTimer = setInterval(load, REFRESH_MS);
+  }
+
+  // --------------------------------------------------------------------------
+  // destroy (Public) : เรียกตอนหน้าถูก unmount เพื่อหยุด auto-refresh
+  // --------------------------------------------------------------------------
+  function destroy() {
+    if (_refreshTimer) {
+      clearInterval(_refreshTimer);
+      _refreshTimer = null;
+    }
+    if (_chart) { _chart.destroy(); _chart = null; }
+    if (_durChart) { _durChart.destroy(); _durChart = null; }
+    if (_errChart) { _errChart.destroy(); _errChart = null; }
+  }
+
+  // --------------------------------------------------------------------------
+  // Public API
+  // --------------------------------------------------------------------------
+  return { init, load, destroy, setTimeFilter };
+
+})();
+
+// --------------------------------------------------------------------------
+// ลงทะเบียนกับ Router ของโปรเจกต์
+// --------------------------------------------------------------------------
+Router.register('page-monitor', {
+  onShow: () => {
+    Monitor.init();
+  },
+  onHide: () => {
+    Monitor.destroy();
+  }
+});
+</script>

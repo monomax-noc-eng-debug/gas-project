@@ -18,27 +18,28 @@
   <div class="flex-1 overflow-y-auto custom-scrollbar pt-2 pb-6">
     <ul class="menu w-full gap-0.5 px-3">
       <li class="mt-4 mb-2">
-        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3">Main</span>
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3">Dashboard</span>
       </li>
 
       <li>
-        <details id="menu-main" class="group" open>
+        <details id="menu-dashboard" class="group" open>
           <summary
             class="rounded-lg py-2.5 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 list-none [&::-webkit-details-marker]:hidden">
-            <i class="fas fa-layer-group w-5 text-center text-indigo-500 px-1"></i>
-            <span class="font-medium text-[13px] ml-1">เมนูหลัก (Main)</span>
+            <i class="fas fa-th-large w-5 text-center text-indigo-500 px-1"></i>
+            <span class="font-medium text-[13px] ml-1">แดชบอร์ด</span>
           </summary>
           <ul class="mt-1 border-l border-gray-200 ml-4 pl-0 py-1 space-y-0.5">
             <li>
               <a class="rounded-lg py-2 ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50"
-                data-target="page-vendor-status"><i
-                  class="fas fa-globe w-4 text-center opacity-40 text-[11px]"></i><span class="text-[13px]">Vendor
-                  Status</span></a>
+                data-target="page-monitor"><i
+                  class="fas fa-server w-4 text-center opacity-40 text-[11px]"></i><span
+                  class="text-[13px]">Monitor</span></a>
             </li>
             <li>
               <a class="rounded-lg py-2 ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50"
-                data-target="page-dashboard"><i class="fas fa-th-large w-4 text-center opacity-40 text-[11px]"></i><span
-                  class="text-[13px]">เปิดรับสัญญาณ</span></a>
+                data-target="page-vendor-status"><i
+                  class="fas fa-globe w-4 text-center opacity-40 text-[11px]"></i><span
+                  class="text-[13px]">Vendor Status</span></a>
             </li>
           </ul>
         </details>
@@ -54,6 +55,11 @@
             <span class="font-medium text-[13px] ml-1">ศูนย์รวมงานประจำวัน</span>
           </summary>
           <ul class="mt-1 border-l border-gray-200 ml-4 pl-0 py-1 space-y-0.5">
+            <li>
+              <a class="rounded-lg py-2 ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50"
+                data-target="page-dashboard"><i class="fas fa-desktop w-4 text-center opacity-40 text-[11px]"></i><span
+                  class="text-[13px]">เปิดรับสัญญาณ</span></a>
+            </li>
             <li>
               <a class="rounded-lg py-2 ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50"
                 data-target="page-ticket"><i class="fas fa-ticket-alt w-4 text-center opacity-40 text-[11px]"></i><span
@@ -138,6 +144,12 @@
                 data-target="page-settings-checklist"><i
                   class="fas fa-clipboard-list w-4 text-center text-teal-500 text-[11px]"></i><span
                   class="text-[13px]">ตั้งค่ารายการ</span></a>
+            </li>
+            <li>
+              <a class="rounded-lg py-2 ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50"
+                data-target="page-settings-monitor"><i
+                   class="fas fa-bell w-4 text-center text-rose-500 text-[11px]"></i><span
+                   class="text-[13px]">ตั้งค่า Monitor</span></a>
             </li>
             <li>
               <a class="rounded-lg py-2 ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50/50"

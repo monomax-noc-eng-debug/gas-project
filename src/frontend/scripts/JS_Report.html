@@ -374,7 +374,7 @@
           .finally(() => show("loader-ticket", false));
       },
 
-      fetchMatches: function () {
+      fetchMatches: function (force = false) {
         var dateVal = el("inputDate").value;
         show("verify-loader", true);
         el("verification-tbody").innerHTML = "";
@@ -382,6 +382,7 @@
         return Server.call(
           { func: "getVerificationReport", silent: true },
           dateVal,
+          force // ส่งค่า force ไปให้ Backend เพื่อเคลียร์ Cache
         )
           .then((res) => {
             if (res && res.success) {

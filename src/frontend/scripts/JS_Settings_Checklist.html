@@ -9,12 +9,10 @@
       const loader = document.getElementById("cl-loader");
       const empty = document.getElementById("cl-empty");
       const tbody = document.getElementById("cl-tbody");
-      const spinner = document.getElementById("spinner-refresh-checklist");
-      const icon = document.getElementById("icon-refresh-checklist");
+      const btnRefresh = document.getElementById("btn-refresh-checklist");
 
       if (force && loader) loader.classList.remove("hidden");
-      if (force && spinner) spinner.classList.remove("hidden");
-      if (force && icon) icon.classList.add("hidden");
+      if (force && btnRefresh) btnRefresh.classList.add("is-loading");
       if (force && tbody) tbody.innerHTML = "";
       if (force && empty) empty.classList.add("hidden");
 
@@ -35,8 +33,7 @@
         })
         .finally(() => {
           if (force && loader) loader.classList.add("hidden");
-          if (force && spinner) spinner.classList.add("hidden");
-          if (force && icon) icon.classList.remove("hidden");
+          if (force && btnRefresh) btnRefresh.classList.remove("is-loading");
         });
     };
 

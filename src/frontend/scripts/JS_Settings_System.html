@@ -7,11 +7,8 @@
     const el = id => document.getElementById(id);
 
     function _activeTabStyle() {
-      const isRoutine = _tab === 'routines';
-      const btnAdd = el('sys-btn-add');
-      const btnSave = el('sys-btn-save');
-      if (btnAdd) btnAdd.classList.remove('hidden'); // Always show add button
-      if (btnSave) btnSave.classList.toggle('hidden', isRoutine);
+      const tableCont = el('sys-table-container');
+      if (tableCont) tableCont.classList.remove('hidden');
 
       document.querySelectorAll('.sys-tab-btn').forEach(b => {
         b.classList.remove('tab-active');
@@ -397,7 +394,13 @@
 
       saveAll() {
         UIManager.showLoading("กำลังบันทึก...");
-        const payload = { ..._full, types: _config.types, statuses: _config.statuses, severities: _config.severities, categories: _config.categories };
+        const payload = { 
+          ..._full, 
+          types: _config.types, 
+          statuses: _config.statuses, 
+          severities: _config.severities, 
+          categories: _config.categories
+        };
         Server.call({ func: "apiSaveAllSettings", silent: true }, payload)
           .then(r => { if (r.success) UIManager.showToast("บันทึกสำเร็จ", "success"); else UIManager.showToast(r.message || "Error", "error"); })
           .catch(() => UIManager.showToast("Connection Error", "error"))

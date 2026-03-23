@@ -114,6 +114,15 @@ const SettingController = (() => {
             { CategoryName: "Hardware" }
           ]);
 
+          ensureSheet(ss, "SYS_Monitor_Settings", ["Key", "Value"], [
+            { Key: "MON_CHECK_INTERVAL_MIN", Value: "5" },
+            { Key: "MON_ALERT_THROTTLE_MIN", Value: "15" },
+            { Key: "MON_THRESHOLD_ELB_SEC", Value: "0.5" },
+            { Key: "MON_THRESHOLD_WWW_5XX_PCT", Value: "5.0" },
+            { Key: "MON_THRESHOLD_VOD_5XX_PCT", Value: "5.0" },
+            { Key: "MON_THRESHOLD_VOD_4XX_PCT", Value: "5.0" }
+          ]);
+
           return Response.success({ message: "ล้างและตั้งค่าชีทใหม่ทั้งหมดเรียบร้อย" });
         }
       } catch (e) {
@@ -150,11 +159,13 @@ const SettingController = (() => {
         const profsData = parseData(ss.getSheetByName("SYS_Email_Profiles"));
         const tmplsData = parseData(ss.getSheetByName("SYS_Email_Templates"));
         const tagsData = parseData(ss.getSheetByName("SYS_Handover_Tags"));
+        const monitorSettingsData = parseData(ss.getSheetByName("SYS_Monitor_Settings"));
 
         const config = {
           staff: [], assignees: [], types: [], statuses: [], severities: [],
           categories: {}, handoverTags: [], emailProfiles: [], emailDrafts: [], mailDrafts: [], staffUsers: [],
-          playbookCategories: []
+          playbookCategories: [],
+          monitorSettings: {}
         };
 
         const addUnique = (arr, val) => {
@@ -234,6 +245,10 @@ const SettingController = (() => {
           addUnique(config.playbookCategories, c.CategoryName);
         });
 
+        monitorSettingsData.forEach(m => {
+          if (m.Key) config.monitorSettings[m.Key] = m.Value;
+        });
+
         // Deduplicate simple arrays
         config.staff = [...new Set(config.staff)];
         config.assignees = [...new Set(config.assignees)];
@@ -309,6 +324,14 @@ const SettingController = (() => {
 
           const playbookCatsRow = (config.playbookCategories || []).map(c => ({ CategoryName: c }));
           saveData(ss, "SYS_Playbook_Categories", ["CategoryName"], playbookCatsRow);
+
+          const monitorSettingsRow = [];
+          if (config.monitorSettings) {
+             for (const key in config.monitorSettings) {
+                monitorSettingsRow.push({ Key: key, Value: config.monitorSettings[key] });
+             }
+          }
+          saveData(ss, "SYS_Monitor_Settings", ["Key", "Value"], monitorSettingsRow);
 
           try { CacheService.getScriptCache().remove("GLOBAL_APP_SETTINGS_V1"); } catch (e) { }
 

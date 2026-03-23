@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Monomax Monitor",
+  "version": "1.0.0",
+  "description": "ตรวจสอบสถานะ Tomcat ทุก 5 นาที และดึงข้อมูลจาก Grafana",
+  "permissions": ["alarms", "storage"],
+  "host_permissions": [
+    "http://192.168.13.13:8080/*",
+    "https://script.google.com/*",
+    "https://*.mono.co.th/*",
+    "https://grafana-max.mthcdn.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.mono.co.th/*",
+        "https://grafana-max.mthcdn.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Monomax Monitor"
+  }
+}

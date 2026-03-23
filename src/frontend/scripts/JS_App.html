@@ -44,6 +44,8 @@
         EmailSendManager.init();
       if (typeof SysSettings !== "undefined" && SysSettings.init)
         SysSettings.init();
+      if (typeof MonitorSettings !== "undefined" && MonitorSettings.init)
+        MonitorSettings.init();
       if (typeof ChecklistSettings !== "undefined" && ChecklistSettings.init)
         ChecklistSettings.init();
       if (typeof UsrSettings !== "undefined" && UsrSettings.init)
